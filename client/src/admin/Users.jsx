@@ -91,7 +91,7 @@ export default function Users() {
                 const errorData = await resp.json().catch(() => ({ error: { message: 'An unknown error occurred' } }));
                 throw new Error(errorData.error?.message || 'Failed to create user');
             }
-            await load(); // Refresh user list
+            await loadData(); // Refresh user list
             setCreateForm({ email: '', password: '', role: 'user' }); // Reset form
         }).finally(() => setCreating(false));
     };

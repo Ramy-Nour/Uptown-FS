@@ -269,7 +269,8 @@ router.post('/reset-password', async (req, res) => {
 router.get('/me', authMiddleware, async (req, res) => {
   try {
     const result = await pool.query('SELECT id, email, role FROM users WHERE id=$1', [req.user.id])
-    if (result.rows.length === 0) return res.status(404).json({ error: { message: 'User not found' } })
+    // If the token is valid but the user no longer exists, treat as unauthorized to trigger client logout/refresh.
+    if (result.rows.length === 0) return res.status(401).json({ error: { message: 'User not found' } })
     return res.json({ ok: true, user: result.rows[0] })
   } catch (e) {
     console.error('GET /api/auth/me error:', e)

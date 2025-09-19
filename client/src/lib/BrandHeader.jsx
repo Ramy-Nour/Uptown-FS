@@ -97,26 +97,32 @@ export default function BrandHeader({ title, onLogout }) {
   // API health check banner
   useEffect(() => {
     let t
-    async function check() {
+    const ctrl = new AbortController()
+    const check = async () => {
       try {
         const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
-        const resp = await fetch(`${API_URL}/api/health`, { cache: 'no-store' })
+        const resp = await fetch(`${API_URL}/api/health`, { cache: 'no-store', signal: ctrl.signal })
         if (!resp.ok) {
-          setApiHealthy(false)
-          setApiHealthMsg(`API responded with ${resp.status}`)
+          // only update if changed
+          setApiHealthy(h => (h === false ? h : false))
+          setApiHealthMsg(m => (m === `API responded with ${resp.status}` ? m : `API responded with ${resp.status}`))
         } else {
-          setApiHealthy(true)
-          setApiHealthMsg('')
+          setApiHealthy(h => (h === true ? h : true))
+          setApiHealthMsg(m => (m === '' ? m : ''))
         }
       } catch (e) {
-        setApiHealthy(false)
-        setApiHealthMsg('Failed to reach API')
+        if (ctrl.signal.aborted) return
+        setApiHealthy(h => (h === false ? h : false))
+        setApiHealthMsg(m => (m === 'Failed to reach API' ? m : 'Failed to reach API'))
       } finally {
         t = setTimeout(check, 30000)
       }
     }
     check()
-    return () => t && clearTimeout(t)
+    return () => {
+      ctrl.abort()
+      t && clearTimeout(t)
+    }
   }, [])
 
   const navForRole = (role) => {

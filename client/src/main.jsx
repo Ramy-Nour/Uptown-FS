@@ -205,7 +205,7 @@ createRoot(document.getElementById('root')).render(
         <Route
           path="/admin/workflow-logs"
           element={
-            <RoleBasedRoute allowedRoles={['ceo', 'chairman', 'vicechairman', 'superadmin', 'sales_manager', 'contract_manager']}>
+            <RoleBasedRoute allowedRoles={['ceo', 'chairman', 'vice_chairman', 'superadmin', 'sales_manager', 'contract_manager']}>
               <WorkflowLogs />
             </RoleBasedRoute>
           }

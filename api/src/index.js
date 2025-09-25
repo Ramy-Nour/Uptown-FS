@@ -7,6 +7,7 @@ import http from 'http';
 import { initSocket } from './socket.js';
 
 const PORT = process.env.PORT || 3000;
+const SKIP_MIGRATIONS = String(process.env.SKIP_MIGRATIONS || '').trim() === '1';
 
 app.use(morgan('dev')); // Add Morgan logging middleware
 
@@ -24,7 +25,11 @@ async function cleanupExpiredTokens() {
 async function start() {
   try {
     await initDb();
-    await runMigrations();
+    if (SKIP_MIGRATIONS) {
+      console.warn('Skipping migrations due to SKIP_MIGRATIONS=1');
+    } else {
+      await runMigrations();
+    }
 
     const server = http.createServer(app);
     initSocket(server);

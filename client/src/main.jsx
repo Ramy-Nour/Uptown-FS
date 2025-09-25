@@ -23,6 +23,7 @@ import RejectedPricings from './admin/RejectedPricings.jsx';
 import HoldsFM from './admin/HoldsFM.jsx'
 import HoldsCEO from './admin/HoldsCEO.jsx'
 import WorkflowLogs from './admin/WorkflowLogs.jsx'
+import UnitLinkRequests from './admin/UnitLinkRequests.jsx'
 
 function RoleBasedRoute({ children, allowedRoles }) {
   const token = localStorage.getItem('auth_token');
@@ -247,7 +248,15 @@ createRoot(document.getElementById('root')).render(
             </RoleBasedRoute>
           }
         />
-        <Route path="/" element={<HomeRedirect />} />
+        <Route
+          path="/admin/unit-link-requests"
+          element={
+            <RoleBasedRoute allowedRoles={['financial_manager']}>
+              <UnitLinkRequests />
+            </RoleBasedRoute>
+          }
+        />
+        <Route path="/" element={<HomeRedirect />} />
         <Route path="*" element={<Navigate to="/deals" replace />} />
       </Routes>
     </BrowserRouter>

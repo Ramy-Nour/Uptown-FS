@@ -135,6 +135,7 @@ export default function BrandHeader({ title, onLogout }) {
           { label: 'Finance Team', href: '/admin/finance-team' },
           { label: 'Standard Pricing', href: '/admin/standard-pricing' },
           { label: 'Unit Models', href: '/admin/unit-models' },
+          { label: 'Inventory Link Requests', href: '/admin/unit-link-requests' },
           { label: 'Holds', href: '/admin/holds' }
         ]
       case 'financial_admin':

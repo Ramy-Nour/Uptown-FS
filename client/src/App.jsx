@@ -317,7 +317,7 @@ export default function App(props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unitInfo.unit_type])
 
-function TypeAndUnitPicker({ unitInfo, setUnitInfo, setStdPlan, setInputs, setCurrency, setFeeSchedule, setUnitPricingBreakdown })
+function TypeAndUnitPicker({ unitInfo, setUnitInfo, setStdPlan, setInputs, setCurrency, setFeeSchedule, setUnitPricingBreakdown }) {
   const [types, setTypes] = useState([])
   const [selectedTypeId, setSelectedTypeId] = useState('')
   const [units, setUnits] = useState([])

@@ -37,6 +37,7 @@ export default function UnitModels() {
   const [editingId, setEditingId] = useState(0)
   const [form, setForm] = useState({
     model_name: '',
+    model_code: '',
     area: '',
     orientation: 'left',
     has_garden: false,
@@ -54,6 +55,7 @@ export default function UnitModels() {
   function resetForm() {
     setForm({
       model_name: '',
+      model_code: '',
       area: '',
       orientation: 'left',
       has_garden: false,
@@ -103,6 +105,7 @@ export default function UnitModels() {
       setSaving(true)
       const body = {
         model_name: (form.model_name || '').trim(),
+        model_code: (form.model_code || '').trim() || null,
         area: Number(form.area) || 0,
         orientation: form.orientation || 'left',
         has_garden: !!form.has_garden,

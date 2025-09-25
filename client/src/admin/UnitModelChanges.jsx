@@ -124,7 +124,16 @@ export default function UnitModelChanges() {
                   <td style={td}>{ch.created_at ? new Date(ch.created_at).toLocaleString() : ''}</td>
                   <td style={td}>{ch.updated_at ? new Date(ch.updated_at).toLocaleString() : ''}</td>
                   <td style={{ ...td, fontFamily: 'monospace', fontSize: 12, whiteSpace: 'pre-wrap' }}>
-                    {JSON.stringify(ch.payload || {}, null, 2)}
+                    {(() => {
+                      const src = ch.payload || {}
+                      const cleaned = {}
+                      for (const [k, v] of Object.entries(src)) {
+                        if (k === 'garage_standard_code') continue
+                        if (v === null || v === undefined || v === '') continue
+                        cleaned[k] = v
+                      }
+                      return JSON.stringify(cleaned, null, 2)
+                    })()}
                   </td>
                   {status === 'pending_approval' && isTop ? (
                     <td style={td}>

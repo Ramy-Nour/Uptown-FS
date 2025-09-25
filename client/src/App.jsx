@@ -325,7 +325,7 @@ function TypeAndUnitPicker({ unitInfo, setUnitInfo, setStdPlan, setInputs, setCu
   const [loadingUnits, setLoadingUnits] = useState(false)
 
   useEffect(() => {
-    async function loadTypes() {
+    const loadTypes = async () => {
       try {
         setLoadingTypes(true)
         const resp = await fetchWithAuth(`${API_URL}/api/inventory/types`)
@@ -339,7 +339,7 @@ function TypeAndUnitPicker({ unitInfo, setUnitInfo, setStdPlan, setInputs, setCu
   }, [])
 
   useEffect(() => {
-    async function loadUnits() {
+    const loadUnits = async () => {
       if (!selectedTypeId) { setUnits([]); return }
       try {
         setLoadingUnits(true)

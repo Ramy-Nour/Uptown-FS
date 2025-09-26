@@ -357,17 +357,48 @@ router.get('/types', authMiddleware, requireRole(['admin','superadmin','sales_ma
 router.get('/units', authMiddleware, requireRole(['admin','superadmin','sales_manager','property_consultant','financial_manager','financial_admin','ceo','chairman','vice_chairman']), async (req, res) => {
   try {
     const typeId = num(req.query.unit_type_id)
-    const clauses = ['available = TRUE', "unit_status='AVAILABLE'", 'model_id IS NOT NULL']
+    const clauses = ['u.available = TRUE', "u.unit_status='AVAILABLE'", 'u.model_id IS NOT NULL']
     const params = []
-    if (typeId) { const idx = params.push(typeId); clauses.push(`unit_type_id = ${idx}`) }
+    if (typeId) { const idx = params.push(typeId); clauses.push(`u.unit_type_id = ${idx}`) }
     const where = `WHERE ${clauses.join(' AND ')}`
+
     const r = await pool.query(
-      `SELECT id, code, description, unit_type, unit_type_id, base_price, currency, model_id,
-              area, orientation, has_garden, garden_area, has_roof, roof_area,
-              maintenance_price, garage_price, garden_price, roof_price, storage_price
-       FROM units
+      `SELECT
+          u.id,
+          u.code,
+          u.description,
+          u.unit_type,
+          u.unit_type_id,
+          ut.name AS unit_type_name,
+          u.base_price,
+          u.currency,
+          u.model_id,
+          u.area,
+          u.orientation,
+          u.has_garden,
+          u.garden_area,
+          u.has_roof,
+          u.roof_area,
+          u.maintenance_price,
+          u.garage_price,
+          u.garden_price,
+          u.roof_price,
+          u.storage_price,
+          -- availability flags for components
+          (COALESCE(u.has_garden, FALSE) AND COALESCE(u.garden_area, 0) > 0) AS garden_available,
+          (COALESCE(u.roof_area, 0) > 0 AND COALESCE(u.has_roof, FALSE)) AS roof_available,
+          (COALESCE(u.garage_area, 0) > 0) AS garage_available,
+          -- totals
+          (COALESCE(u.base_price,0)
+           + COALESCE(u.maintenance_price,0)
+           + COALESCE(u.garage_price,0)
+           + COALESCE(u.garden_price,0)
+           + COALESCE(u.roof_price,0)
+           + COALESCE(u.storage_price,0)) AS total_price
+       FROM units u
+       LEFT JOIN unit_types ut ON ut.id = u.unit_type_id
        ${where}
-       ORDER BY id DESC
+       ORDER BY u.id DESC
        LIMIT 200`,
       params
     )

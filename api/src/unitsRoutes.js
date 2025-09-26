@@ -28,10 +28,44 @@ router.get('/', authMiddleware, async (req, res) => {
     const limitIdx = params.push(pageSize)
     const offsetIdx = params.push(offset)
     const listSql = `
-      SELECT *
-      FROM units
+      SELECT
+        u.id,
+        u.code,
+        u.description,
+        u.unit_type,
+        u.unit_type_id,
+        ut.name AS unit_type_name,
+        u.base_price,
+        u.currency,
+        u.model_id,
+        u.area,
+        u.orientation,
+        u.has_garden,
+        u.garden_area,
+        u.has_roof,
+        u.roof_area,
+        u.maintenance_price,
+        u.garage_price,
+        u.garden_price,
+        u.roof_price,
+        u.storage_price,
+        u.available,
+        u.unit_status,
+        -- availability flags for components
+        (COALESCE(u.has_garden, FALSE) AND COALESCE(u.garden_area, 0) > 0) AS garden_available,
+        (COALESCE(u.roof_area, 0) > 0 AND COALESCE(u.has_roof, FALSE)) AS roof_available,
+        (COALESCE(u.garage_area, 0) > 0) AS garage_available,
+        -- totals
+        (COALESCE(u.base_price,0)
+         + COALESCE(u.maintenance_price,0)
+         + COALESCE(u.garage_price,0)
+         + COALESCE(u.garden_price,0)
+         + COALESCE(u.roof_price,0)
+         + COALESCE(u.storage_price,0)) AS total_price
+      FROM units u
+      LEFT JOIN unit_types ut ON ut.id = u.unit_type_id
       ${whereSql}
-      ORDER BY id DESC
+      ORDER BY u.id DESC
       LIMIT ${limitIdx} OFFSET ${offsetIdx}
     `
     const rows = await pool.query(listSql, params)

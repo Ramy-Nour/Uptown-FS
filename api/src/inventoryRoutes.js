@@ -366,8 +366,6 @@ router.get('/units', authMiddleware, requireRole(['admin','superadmin','sales_ma
       `SELECT
           u.id,
           u.code,
-          u.description,
-          u.unit_type,
           u.unit_type_id,
           ut.name AS unit_type_name,
           u.base_price,

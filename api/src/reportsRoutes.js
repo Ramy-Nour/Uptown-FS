@@ -10,7 +10,7 @@ function bad(res, code, message, details) {
 function ok(res, payload) { return res.json({ ok: true, ...payload }) }
 function toNum(v) { const n = Number(v); return Number.isFinite(n) ? n : null }
 
-router.get('/workflow-logs', authMiddleware, requireRole(['ceo', 'chairman', 'vicechairman', 'admin', 'superadmin']), async (req, res) => {
+router.get('/workflow-logs', authMiddleware, requireRole(['ceo', 'chairman', 'vice_chairman', 'admin', 'superadmin']), async (req, res) => {
   try {
     const { startDate, endDate, type, consultant_id, manager_id } = req.query || {}
     const start = startDate ? new Date(startDate) : null
@@ -18,13 +18,14 @@ router.get('/workflow-logs', authMiddleware, requireRole(['ceo', 'chairman', 'vi
     const cid = consultant_id ? toNum(consultant_id) : null
     const mid = manager_id ? toNum(manager_id) : null
 
-    // Build where clauses per entity
-    const dateClause = (col) => {
+    // Build where clauses per entity with positional parameters
+    const dateClause = (col, baseParamsCount = 0) => {
       const parts = []
       const params = []
-      if (start) { params.push(start.toISOString()); parts.push(`${col} >= ${params.length}`) }
-      if (end) { params.push(end.toISOString()); parts.push(`${col} <= ${params.length}`) }
-      return { sql: parts.length ? ` AND ${parts.join(' AND ')}` : '', params }
+      if (start) { params.push(start.toISOString()); parts.push(`${col} >= ${baseParamsCount + params.length}`) }
+      if (end) { params.push(end.toISOString()); parts.push(`${col} <= ${baseParamsCount + params.length}`) }
+      const prefix = parts.length ? (baseParamsCount > 0 ? ' AND ' : ' WHERE ') : ''
+      return { sql: prefix + parts.join(' AND '), params }
     }
 
     // Offers (payment_plans)
@@ -40,8 +41,8 @@ router.get('/workflow-logs', authMiddleware, requireRole(['ceo', 'chairman', 'vi
         params.push(mid)
         baseWhere.push(`pp.created_by IN (SELECT consultant_user_id FROM sales_team_members WHERE manager_user_id=${params.length} AND active=TRUE)`)
       }
-      const d = dateClause('pp.created_at')
-      const where = (baseWhere.length ? `WHERE ${baseWhere.join(' AND ')}` : '') + d.sql
+      const whereSql = baseWhere.length ? `WHERE ${baseWhere.join(' AND ')}` : ''
+      const d = dateClause('pp.created_at', params.length + (whereSql ? 0 : 0))
       const q = `
         SELECT pp.id, pp.deal_id, pp.status, pp.version, pp.accepted, pp.created_at, pp.updated_at,
                pp.created_by,
@@ -56,7 +57,7 @@ router.get('/workflow-logs', authMiddleware, requireRole(['ceo', 'chairman', 'vi
                          0) AS total_nominal
         FROM payment_plans pp
         LEFT JOIN users u ON u.id = pp.created_by
-        ${where}
+        ${whereSql}${d.sql}
         ORDER BY pp.id DESC`
       const rows = await pool.query(q, params.concat(d.params))
       offers = rows.rows
@@ -75,8 +76,8 @@ router.get('/workflow-logs', authMiddleware, requireRole(['ceo', 'chairman', 'vi
         params.push(mid)
         baseWhere.push(`pp.created_by IN (SELECT consultant_user_id FROM sales_team_members WHERE manager_user_id=${params.length} AND active=TRUE)`)
       }
-      const d = dateClause('rf.created_at')
-      const where = (baseWhere.length ? `WHERE ${baseWhere.join(' AND ')}` : '') + d.sql
+      const whereSql = baseWhere.length ? `WHERE ${baseWhere.join(' AND ')}` : ''
+      const d = dateClause('rf.created_at', params.length + (whereSql ? 0 : 0))
       const q = `
         SELECT rf.id, rf.payment_plan_id, rf.status, rf.created_at, rf.updated_at,
                pp.created_by,
@@ -91,7 +92,7 @@ router.get('/workflow-logs', authMiddleware, requireRole(['ceo', 'chairman', 'vi
         FROM reservation_forms rf
         JOIN payment_plans pp ON pp.id = rf.payment_plan_id
         LEFT JOIN users u ON u.id = pp.created_by
-        ${where}
+        ${whereSql}${d.sql}
         ORDER BY rf.id DESC`
       const rows = await pool.query(q, params.concat(d.params))
       reservations = rows.rows
@@ -110,8 +111,8 @@ router.get('/workflow-logs', authMiddleware, requireRole(['ceo', 'chairman', 'vi
         params.push(mid)
         baseWhere.push(`pp.created_by IN (SELECT consultant_user_id FROM sales_team_members WHERE manager_user_id=${params.length} AND active=TRUE)`)
       }
-      const d = dateClause('c.created_at')
-      const where = (baseWhere.length ? `WHERE ${baseWhere.join(' AND ')}` : '') + d.sql
+      const whereSql = baseWhere.length ? `WHERE ${baseWhere.join(' AND ')}` : ''
+      const d = dateClause('c.created_at', params.length + (whereSql ? 0 : 0))
       const q = `
         SELECT c.id, c.reservation_form_id, c.status, c.created_at, c.updated_at,
                pp.created_by,
@@ -127,7 +128,7 @@ router.get('/workflow-logs', authMiddleware, requireRole(['ceo', 'chairman', 'vi
         JOIN reservation_forms rf ON rf.id = c.reservation_form_id
         JOIN payment_plans pp ON pp.id = rf.payment_plan_id
         LEFT JOIN users u ON u.id = pp.created_by
-        ${where}
+        ${whereSql}${d.sql}
         ORDER BY c.id DESC`
       const rows = await pool.query(q, params.concat(d.params))
       contracts = rows.rows

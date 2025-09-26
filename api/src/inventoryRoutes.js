@@ -422,9 +422,9 @@ router.get('/units', authMiddleware, requireRole(['admin','superadmin','sales_ma
     )
 
     // Paged rows
-    const limitPlaceholder = `${placeholderCount++}`
-    const offsetPlaceholder = `${placeholderCount++}`
-    params.push(ps, off)
+    const limitPlaceholder = `$${placeholderCount++}`
+    const offsetPlaceholder = `$${placeholderCount++}`
+    params.push(ps, _codeofnewf</)
 
     const r = await pool.query(
       `SELECT

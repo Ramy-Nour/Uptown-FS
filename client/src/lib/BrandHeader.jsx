@@ -182,7 +182,7 @@ export default function BrandHeader({ title, onLogout }) {
           ...baseWithoutCalc,
           { label: 'Unit Model Queue', href: '/deals/queues' },
           { label: 'Pricing Queue', href: '/admin/standard-pricing-approvals' },
-          { label: 'Payment Thresholds', href: '/admin/payment-thresholds-approvals' },
+          { label: 'Payment Thresholds', href: '/admin/payment-thresholds' },
           { label: 'Workflow Logs', href: '/admin/workflow-logs' },
           { label: 'Hold Approvals', href: '/admin/hold-approvals' }
         ]

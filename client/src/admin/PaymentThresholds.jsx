@@ -4,6 +4,7 @@ import { fetchWithAuth, API_URL } from '../lib/apiClient.js'
 export default function PaymentThresholds() {
   const user = JSON.parse(localStorage.getItem('auth_user') || '{}')
   const role = user?.role
+  const isTopMgmt = ['ceo', 'chairman', 'vice_chairman', 'top_management'].includes(role)
 
   const [thresholds, setThresholds] = useState({
     firstYearPercentMin: '',
@@ -21,6 +22,10 @@ export default function PaymentThresholds() {
   const [proposals, setProposals] = useState([])
   const [proposalsLoading, setProposalsLoading] = useState(false)
   const [proposalMsg, setProposalMsg] = useState('')
+
+  const [history, setHistory] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyMsg, setHistoryMsg] = useState('')
 
   async function loadActive() {
     const resp = await fetchWithAuth(`${API_URL}/api/config/payment-thresholds`)
@@ -53,6 +58,32 @@ export default function PaymentThresholds() {
     }
   }
 
+  async function loadHistory() {
+    setHistoryLoading(true)
+    setHistoryMsg('')
+    try {
+      // canonical endpoint
+      let resp = await fetchWithAuth(`${API_URL}/api/config/payment-thresholds/history`)
+      let data = await resp.json().catch(() => ({}))
+      if (!resp.ok) {
+        // fallback: if server exposes history via proposals with status filter
+        resp = await fetchWithAuth(`${API_URL}/api/config/payment-thresholds/proposals?status=approved`)
+        data = await resp.json().catch(() => ({}))
+      }
+      if (resp.ok) {
+        const items = data.history || data.items || data.proposals || []
+        setHistory(items)
+      } else {
+        setHistory([])
+        setHistoryMsg(data?.error?.message || 'Could not load approvals history')
+      }
+    } catch (e) {
+      setHistoryMsg(e.message || String(e))
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
   useEffect(() => {
     let mounted = true
     ;(async () => {
@@ -64,9 +95,10 @@ export default function PaymentThresholds() {
       } finally {
         setLoading(false)
       }
-      // Load proposals for FM and top management roles
+      // Load proposals and history for FM and top management roles
       if (['financial_manager', 'ceo', 'chairman', 'vice_chairman', 'top_management'].includes(role)) {
         loadProposals().catch(() => {})
+        loadHistory().catch(() => {})
       }
     })()
     return () => { mounted = false }
@@ -135,33 +167,40 @@ export default function PaymentThresholds() {
       {error ? <p style={{ color: '#e11d48' }}>{error}</p> : null}
       {success ? <p style={{ color: '#10b981' }}>{success}</p> : null}
 
-      <h3 style={{ marginTop: 16 }}>Active Thresholds</h3>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, maxWidth: 640 }}>
-        <div>
-          <label>First Year Min (%)</label>
-          <input type="number" step="0.01" value={thresholds.firstYearPercentMin} onChange={onChange('firstYearPercentMin')} style={inputStyle} disabled={role !== 'financial_manager'} />
-        </div>
-        <div>
-          <label>First Year Max (%)</label>
-          <input type="number" step="0.01" value={thresholds.firstYearPercentMax} onChange={onChange('firstYearPercentMax')} style={inputStyle} disabled={role !== 'financial_manager'} />
-        </div>
-        <div>
-          <label>Second Year Min (%)</label>
-          <input type="number" step="0.01" value={thresholds.secondYearPercentMin} onChange={onChange('secondYearPercentMin')} style={inputStyle} disabled={role !== 'financial_manager'} />
-        </div>
-        <div>
-          <label>Second Year Max (%)</label>
-          <input type="number" step="0.01" value={thresholds.secondYearPercentMax} onChange={onChange('secondYearPercentMax')} style={inputStyle} disabled={role !== 'financial_manager'} />
-        </div>
-        <div>
-          <label>Handover Min (%)</label>
-          <input type="number" step="0.01" value={thresholds.handoverPercentMin} onChange={onChange('handoverPercentMin')} style={inputStyle} disabled={role !== 'financial_manager'} />
-        </div>
-        <div>
-          <label>Handover Max (%)</label>
-          <input type="number" step="0.01" value={thresholds.handoverPercentMax} onChange={onChange('handoverPercentMax')} style={inputStyle} disabled={role !== 'financial_manager'} />
-        </div>
-      </div>
+      {/* For Top Management: hide the editable/active thresholds section entirely.
+          They should only see Pending Proposals and Approvals History. */}
+      {!isTopMgmt && (
+        <>
+          <h3 style={{ marginTop: 16 }}>Active Thresholds</h3>
+          {/* Financial Manager and others: keep inputs (only FM can edit/submit) */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, maxWidth: 640 }}>
+            <div>
+              <label>First Year Min (%)</label>
+              <input type="number" step="0.01" value={thresholds.firstYearPercentMin} onChange={onChange('firstYearPercentMin')} style={inputStyle} disabled={role !== 'financial_manager'} />
+            </div>
+            <div>
+              <label>First Year Max (%)</label>
+              <input type="number" step="0.01" value={thresholds.firstYearPercentMax} onChange={onChange('firstYearPercentMax')} style={inputStyle} disabled={role !== 'financial_manager'} />
+            </div>
+            <div>
+              <label>Second Year Min (%)</label>
+              <input type="number" step="0.01" value={thresholds.secondYearPercentMin} onChange={onChange('secondYearPercentMin')} style={inputStyle} disabled={role !== 'financial_manager'} />
+            </div>
+            <div>
+              <label>Second Year Max (%)</label>
+              <input type="number" step="0.01" value={thresholds.secondYearPercentMax} onChange={onChange('secondYearPercentMax')} style={inputStyle} disabled={role !== 'financial_manager'} />
+            </div>
+            <div>
+              <label>Handover Min (%)</label>
+              <input type="number" step="0.01" value={thresholds.handoverPercentMin} onChange={onChange('handoverPercentMin')} style={inputStyle} disabled={role !== 'financial_manager'} />
+            </div>
+            <div>
+              <label>Handover Max (%)</label>
+              <input type="number" step="0.01" value={thresholds.handoverPercentMax} onChange={onChange('handoverPercentMax')} style={inputStyle} disabled={role !== 'financial_manager'} />
+            </div>
+          </div>
+        </>
+      )}
 
       {role === 'financial_manager' && (
         <div style={{ marginTop: 16 }}>
@@ -187,7 +226,7 @@ export default function PaymentThresholds() {
                     <th style={th}>Proposed By</th>
                     <th style={th}>Date</th>
                     <th style={th}>Summary</th>
-                    {['ceo', 'chairman', 'vice_chairman', 'top_management'].includes(role) && <th style={th}>Actions</th>}
+                    {isTopMgmt && <th style={th}>Actions</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -201,12 +240,51 @@ export default function PaymentThresholds() {
                         SY: {p.thresholds.secondYearPercentMin ?? '-'}–{p.thresholds.secondYearPercentMax ?? '-'}%,
                         HO: {p.thresholds.handoverPercentMin ?? '-'}–{p.thresholds.handoverPercentMax ?? '-'}%
                       </td>
-                      {['ceo', 'chairman', 'vice_chairman', 'top_management'].includes(role) && (
+                      {isTopMgmt && (
                         <td style={td}>
                           <button onClick={() => actOnProposal(p.id, 'approve')} style={btnGreen}>Approve</button>
                           <button onClick={() => actOnProposal(p.id, 'reject')} style={btnRed}>Reject</button>
                         </td>
                       )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Approvals History for FM and Top Management */}
+      {['financial_manager', 'ceo', 'chairman', 'vice_chairman', 'top_management'].includes(role) && (
+        <div style={{ marginTop: 24 }}>
+          <h3 style={{ marginTop: 0 }}>Approvals History</h3>
+          {historyLoading ? <p>Loading history...</p> : null}
+          {historyMsg ? <p style={{ color: '#e11d48' }}>{historyMsg}</p> : null}
+          {(!history || history.length === 0) ? (
+            <p style={{ color: '#64748b' }}>No approved threshold records.</p>
+          ) : (
+            <div style={{ border: '1px solid #e6eaf0', borderRadius: 10, overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr>
+                    <th style={th}>ID</th>
+                    <th style={th}>Approved By</th>
+                    <th style={th}>Approved At</th>
+                    <th style={th}>Summary</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map(h => (
+                    <tr key={h.id || `${h.approved_at}-${h.approved_by || ''}`}>
+                      <td style={td}>{h.id ?? '-'}</td>
+                      <td style={td}>{h.approved_by || h.actor || '-'}</td>
+                      <td style={td}>{h.approved_at ? new Date(h.approved_at).toLocaleString() : (h.date ? new Date(h.date).toLocaleString() : '')}</td>
+                      <td style={td}>
+                        FY: {(h.thresholds?.firstYearPercentMin ?? h.firstYearPercentMin) ?? '-'}–{(h.thresholds?.firstYearPercentMax ?? h.firstYearPercentMax) ?? '-'}%,
+                        SY: {(h.thresholds?.secondYearPercentMin ?? h.secondYearPercentMin) ?? '-'}–{(h.thresholds?.secondYearPercentMax ?? h.secondYearPercentMax) ?? '-'}%,
+                        HO: {(h.thresholds?.handoverPercentMin ?? h.handoverPercentMin) ?? '-'}–{(h.thresholds?.handoverPercentMax ?? h.handoverPercentMax) ?? '-'}%
+                      </td>
                     </tr>
                   ))}
                 </tbody>

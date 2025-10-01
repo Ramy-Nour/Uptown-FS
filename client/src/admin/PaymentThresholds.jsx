@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import { fetchWithAuth, API_URL } from '../lib/apiClient.js'
 import BrandHeader from '../lib/BrandHeader.jsx'
 
@@ -7,6 +7,12 @@ export default function PaymentThresholds() {
   const role = user?.role
   const isTopMgmt = ['ceo', 'chairman', 'vice_chairman', 'top_management'].includes(role)
   const headerTitle = isTopMgmt ? 'Payment Threshold Approvals' : 'Payment Thresholds'
+  const [selectedTab, setSelectedTab] = useState(isTopMgmt ? 'proposals' : 'active')
+  const tabs = useMemo(() => ([
+    { key: 'active', label: 'Active', disabled: isTopMgmt },
+    { key: 'proposals', label: 'Proposals', disabled: false },
+    { key: 'history', label: 'History', disabled: false }
+  ]), [isTopMgmt])
 
   const [thresholds, setThresholds] = useState({
     firstYearPercentMin: '',
@@ -187,6 +193,31 @@ export default function PaymentThresholds() {
         <p style={{ color: '#64748b' }}>
           Financial Manager proposes thresholds. Top Management approves or rejects. Active thresholds are shown and used by the calculator.
         </p>
+        <div style={{ marginTop: 12, borderBottom: '1px solid #e6eaf0', display: 'flex', gap: 8 }}>
+          {tabs.map(t => {
+            const active = selectedTab === t.key
+            const disabled = t.disabled
+            const btnStyle = {
+              padding: '8px 12px',
+              border: 'none',
+              background: active ? '#f6efe3' : 'transparent',
+              color: disabled ? '#94a3b8' : (active ? '#5b4630' : '#475569'),
+              borderBottom: active ? '3px solid #A97E34' : '3px solid transparent',
+              cursor: disabled ? 'not-allowed' : 'pointer',
+              fontWeight: active ? 700 : 500
+            }
+            return (
+              <button
+                key={t.key}
+                style={btnStyle}
+                onClick={() => !disabled && setSelectedTab(t.key)}
+                disabled={disabled}
+              >
+                {t.label}
+              </button>
+            )
+          })}
+        </div>
 
       {loading ? <p>Loading...</p> : null}
       {error ? <p style={{ color: '#e11d48' }}>{error}</p> : null}
@@ -194,7 +225,7 @@ export default function PaymentThresholds() {
 
       {/* For Top Management: hide the editable/active thresholds section entirely.
           They should only see Pending Proposals and Approvals History. */}
-      {!isTopMgmt && (
+      {!isTopMgmt && selectedTab === 'active' && (
         <>
           <h3 style={{ marginTop: 16 }}>Active Thresholds</h3>
           {/* Financial Manager and others: keep inputs (only FM can edit/submit) */}
@@ -227,7 +258,7 @@ export default function PaymentThresholds() {
         </>
       )}
 
-      {role === 'financial_manager' && (
+      {role === 'financial_manager' && selectedTab === 'active' && (
         <div style={{ marginTop: 16 }}>
           <button onClick={submitProposal} disabled={saving} style={btnPrimaryStyle}>
             {saving ? 'Submitting...' : 'Submit for Approval'}
@@ -235,7 +266,7 @@ export default function PaymentThresholds() {
         </div>
       )}
 
-      {['financial_manager', 'ceo', 'chairman', 'vice_chairman', 'top_management'].includes(role) && (
+      {selectedTab === 'proposals' && ['financial_manager', 'ceo', 'chairman', 'vice_chairman', 'top_management'].includes(role) && (
         <div style={{ marginTop: 24 }}>
           <h3 style={{ marginTop: 0 }}>Pending Proposals</h3>
           {proposalsLoading ? <p>Loading proposals...</p> : null}
@@ -281,7 +312,7 @@ export default function PaymentThresholds() {
       )}
 
       {/* Approvals History for FM and Top Management */}
-      {['financial_manager', 'ceo', 'chairman', 'vice_chairman', 'top_management'].includes(role) && (
+      {selectedTab === 'history' && ['financial_manager', 'ceo', 'chairman', 'vice_chairman', 'top_management'].includes(role) && (
         <div style={{ marginTop: 24 }}>
           <h3 style={{ marginTop: 0 }}>Approvals History</h3>
           {historyLoading ? <p>Loading history...</p> : null}

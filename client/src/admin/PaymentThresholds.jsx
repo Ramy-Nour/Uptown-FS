@@ -9,7 +9,7 @@ export default function PaymentThresholds() {
   const headerTitle = isTopMgmt ? 'Payment Threshold Approvals' : 'Payment Thresholds'
   const [selectedTab, setSelectedTab] = useState(isTopMgmt ? 'proposals' : 'active')
   const tabs = useMemo(() => ([
-    { key: 'active', label: 'Active', disabled: isTopMgmt },
+    { key: 'active', label: 'Active', disabled: false },
     { key: 'proposals', label: 'Proposals', disabled: false },
     { key: 'history', label: 'History', disabled: false }
   ]), [isTopMgmt])
@@ -197,11 +197,13 @@ export default function PaymentThresholds() {
           {tabs.map(t => {
             const active = selectedTab === t.key
             const disabled = t.disabled
+            const muted = isTopMgmt && t.key === 'active'
             const btnStyle = {
               padding: '8px 12px',
               border: 'none',
               background: active ? '#f6efe3' : 'transparent',
-              color: disabled ? '#94a3b8' : (active ? '#5b4630' : '#475569'),
+              color: muted ? '#94a3b8' : (active ? '#5b4630' : '#475569'),
+              opacity: muted ? 0.8 : 1,
               borderBottom: active ? '3px solid #A97E34' : '3px solid transparent',
               cursor: disabled ? 'not-allowed' : 'pointer',
               fontWeight: active ? 700 : 500
@@ -223,36 +225,39 @@ export default function PaymentThresholds() {
       {error ? <p style={{ color: '#e11d48' }}>{error}</p> : null}
       {success ? <p style={{ color: '#10b981' }}>{success}</p> : null}
 
-      {/* For Top Management: hide the editable/active thresholds section entirely.
-          They should only see Pending Proposals and Approvals History. */}
-      {!isTopMgmt && selectedTab === 'active' && (
+      {/* Active tab: always visible. Non-FM sees read-only (greyed) current status. */}
+      {selectedTab === 'active' && (
         <>
           <h3 style={{ marginTop: 16 }}>Active Thresholds</h3>
-          {/* Financial Manager and others: keep inputs (only FM can edit/submit) */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, maxWidth: 640 }}>
+          <p style={{ color: '#64748b', marginTop: 0 }}>
+            {role === 'financial_manager'
+              ? 'Edit values and then switch to the Proposals tab to submit for approval.'
+              : 'Read-only view of current active thresholds.'}
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, maxWidth: 640, opacity: role === 'financial_manager' ? 1 : 0.8 }}>
             <div>
               <label>First Year Min (%)</label>
-              <input type="number" step="0.01" value={thresholds.firstYearPercentMin} onChange={onChange('firstYearPercentMin')} style={inputStyle} disabled={role !== 'financial_manager'} />
+              <input type="number" step="0.01" value={thresholds.firstYearPercentMin} onChange={onChange('firstYearPercentMin')} style={{...inputStyle, background: role === 'financial_manager' ? '#fff' : '#f8fafc', color: role === 'financial_manager' ? '#111827' : '#94a3b8'}} disabled={role !== 'financial_manager'} />
             </div>
             <div>
               <label>First Year Max (%)</label>
-              <input type="number" step="0.01" value={thresholds.firstYearPercentMax} onChange={onChange('firstYearPercentMax')} style={inputStyle} disabled={role !== 'financial_manager'} />
+              <input type="number" step="0.01" value={thresholds.firstYearPercentMax} onChange={onChange('firstYearPercentMax')} style={{...inputStyle, background: role === 'financial_manager' ? '#fff' : '#f8fafc', color: role === 'financial_manager' ? '#111827' : '#94a3b8'}} disabled={role !== 'financial_manager'} />
             </div>
             <div>
               <label>Second Year Min (%)</label>
-              <input type="number" step="0.01" value={thresholds.secondYearPercentMin} onChange={onChange('secondYearPercentMin')} style={inputStyle} disabled={role !== 'financial_manager'} />
+              <input type="number" step="0.01" value={thresholds.secondYearPercentMin} onChange={onChange('secondYearPercentMin')} style={{...inputStyle, background: role === 'financial_manager' ? '#fff' : '#f8fafc', color: role === 'financial_manager' ? '#111827' : '#94a3b8'}} disabled={role !== 'financial_manager'} />
             </div>
             <div>
               <label>Second Year Max (%)</label>
-              <input type="number" step="0.01" value={thresholds.secondYearPercentMax} onChange={onChange('secondYearPercentMax')} style={inputStyle} disabled={role !== 'financial_manager'} />
+              <input type="number" step="0.01" value={thresholds.secondYearPercentMax} onChange={onChange('secondYearPercentMax')} style={{...inputStyle, background: role === 'financial_manager' ? '#fff' : '#f8fafc', color: role === 'financial_manager' ? '#111827' : '#94a3b8'}} disabled={role !== 'financial_manager'} />
             </div>
             <div>
               <label>Handover Min (%)</label>
-              <input type="number" step="0.01" value={thresholds.handoverPercentMin} onChange={onChange('handoverPercentMin')} style={inputStyle} disabled={role !== 'financial_manager'} />
+              <input type="number" step="0.01" value={thresholds.handoverPercentMin} onChange={onChange('handoverPercentMin')} style={{...inputStyle, background: role === 'financial_manager' ? '#fff' : '#f8fafc', color: role === 'financial_manager' ? '#111827' : '#94a3b8'}} disabled={role !== 'financial_manager'} />
             </div>
             <div>
               <label>Handover Max (%)</label>
-              <input type="number" step="0.01" value={thresholds.handoverPercentMax} onChange={onChange('handoverPercentMax')} style={inputStyle} disabled={role !== 'financial_manager'} />
+              <input type="number" step="0.01" value={thresholds.handoverPercentMax} onChange={onChange('handoverPercentMax')} style={{...inputStyle, background: role === 'financial_manager' ? '#fff' : '#f8fafc', color: role === 'financial_manager' ? '#111827' : '#94a3b8'}} disabled={role !== 'financial_manager'} />
             </div>
           </div>
         </>
@@ -269,6 +274,18 @@ export default function PaymentThresholds() {
       {selectedTab === 'proposals' && ['financial_manager', 'ceo', 'chairman', 'vice_chairman', 'top_management'].includes(role) && (
         <div style={{ marginTop: 24 }}>
           <h3 style={{ marginTop: 0 }}>Pending Proposals</h3>
+          {role === 'financial_manager' && (
+            <div style={{ margin: '8px 0 16px 0', padding: '10px 12px', border: '1px dashed #ead9bd', borderRadius: 10, background: '#fbfaf7' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <div style={{ color: '#5b4630' }}>
+                  Review and submit the Active tab values for approval.
+                </div>
+                <button onClick={submitProposal} disabled={saving} style={btnPrimaryStyle}>
+                  {saving ? 'Submitting...' : 'Submit for Approval'}
+                </button>
+              </div>
+            </div>
+          )}
           {proposalsLoading ? <p>Loading proposals...</p> : null}
           {proposalMsg ? <p style={{ color: '#e11d48' }}>{proposalMsg}</p> : null}
           {proposals.length === 0 ? (

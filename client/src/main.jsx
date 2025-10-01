@@ -139,7 +139,7 @@ createRoot(document.getElementById('root')).render(
          <Route
            path="/admin/payment-thresholds"
            element={
-             <RoleBasedRoute allowedRoles={['admin', 'superadmin', 'financial_manager', 'ceo', 'chairman', 'vice_chairman', 'top_management']}>
+             <RoleBasedRoute allowedRoles={['financial_manager', 'ceo', 'chairman', 'vice_chairman', 'top_management']}>
                <PaymentThresholds />
              </RoleBasedRoute>
            }

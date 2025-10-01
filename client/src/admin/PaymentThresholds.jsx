@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react'
 import { fetchWithAuth, API_URL } from '../lib/apiClient.js'
+import BrandHeader from '../lib/BrandHeader.jsx'
 
 export default function PaymentThresholds() {
   const user = JSON.parse(localStorage.getItem('auth_user') || '{}')
   const role = user?.role
   const isTopMgmt = ['ceo', 'chairman', 'vice_chairman', 'top_management'].includes(role)
+  const headerTitle = isTopMgmt ? 'Payment Threshold Approvals' : 'Payment Thresholds'
 
   const [thresholds, setThresholds] = useState({
     firstYearPercentMin: '',
@@ -157,11 +159,34 @@ export default function PaymentThresholds() {
   }
 
   return (
-    <div style={{ padding: 20 }}>
-      <h2 style={{ marginTop: 0 }}>Payment Thresholds</h2>
-      <p style={{ color: '#64748b' }}>
-        Financial Manager proposes thresholds. Top Management approves or rejects. Active thresholds are shown and used by the calculator.
-      </p>
+    <>
+      <div style={{ marginBottom: 16 }}>
+        <BrandHeader
+          title={headerTitle}
+          onLogout={async () => {
+            try {
+              const rt = localStorage.getItem('refresh_token')
+              if (rt) {
+                await fetch(`${API_URL}/api/auth/logout`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ refreshToken: rt })
+                }).catch(() => {})
+              }
+            } finally {
+              localStorage.removeItem('auth_token')
+              localStorage.removeItem('refresh_token')
+              localStorage.removeItem('auth_user')
+              window.location.href = '/login'
+            }
+          }}
+        />
+      </div>
+      <div style={{ padding: 20 }}>
+        <h2 style={{ marginTop: 0 }}>{headerTitle}</h2>
+        <p style={{ color: '#64748b' }}>
+          Financial Manager proposes thresholds. Top Management approves or rejects. Active thresholds are shown and used by the calculator.
+        </p>
 
       {loading ? <p>Loading...</p> : null}
       {error ? <p style={{ color: '#e11d48' }}>{error}</p> : null}

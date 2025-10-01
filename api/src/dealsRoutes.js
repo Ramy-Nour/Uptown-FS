@@ -15,6 +15,90 @@ async function logHistory(dealId, userId, action, notes = null) {
   )
 }
 
+// Helper: read active payment thresholds (latest row)
+async function readActivePaymentThresholds(client) {
+  const r = await client.query('SELECT * FROM payment_thresholds ORDER BY id DESC LIMIT 1')
+  if (r.rows.length === 0) {
+    return {
+      first_year_percent_min: 10,
+      first_year_percent_max: null,
+      second_year_percent_min: 15,
+      second_year_percent_max: null,
+      handover_percent_min: null,
+      handover_percent_max: 5
+    }
+  }
+  return r.rows[0]
+}
+
+// Compute acceptability flags from a saved calculator snapshot and active thresholds
+function evaluateAcceptability(snapshot, thresholdsRow) {
+  try {
+    const schedule = Array.isArray(snapshot?.generatedPlan?.schedule) ? snapshot.generatedPlan.schedule : []
+    const totalNominal = Number(snapshot?.generatedPlan?.totals?.totalNominal) || schedule.reduce((s, r) => s + (Number(r?.amount) || 0), 0)
+    if (totalNominal <= 0 || schedule.length === 0) {
+      return { hasPlan: false }
+    }
+
+    // Sum by year buckets and handover
+    const inputs = snapshot?.inputs || snapshot?.generatedPlan?.inputs || {}
+    const handoverYear = Number(inputs?.handoverYear) || 0
+    const handoverMonth = handoverYear > 0 ? handoverYear * 12 : null
+
+    let y1 = 0
+    let y2 = 0
+    let hand = 0
+    for (const row of schedule) {
+      const m = Number(row?.month) || 0
+      const amt = Number(row?.amount) || 0
+      if (m <= 12) y1 += amt // include DP at month 0 in Y1
+      if (m > 12 && m <= 24) y2 += amt
+      const label = String(row?.label || '')
+      if ((handoverMonth && m === handoverMonth) || /handover/i.test(label)) {
+        hand += amt
+      }
+    }
+
+    const pct = (v) => (totalNominal > 0 ? (v / totalNominal) * 100 : 0)
+    const y1Pct = pct(y1)
+    const y2Pct = pct(y2)
+    const handPct = pct(hand)
+
+    const within = (value, min, max) => {
+      if (min != null && isFinite(Number(min)) && value < Number(min) - 1e-9) return false
+      if (max != null && isFinite(Number(max)) && value > Number(max) + 1e-9) return false
+      return true
+    }
+
+    const acceptable_first_year = within(
+      y1Pct,
+      thresholdsRow?.first_year_percent_min,
+      thresholdsRow?.first_year_percent_max
+    )
+    const acceptable_second_year = within(
+      y2Pct,
+      thresholdsRow?.second_year_percent_min,
+      thresholdsRow?.second_year_percent_max
+    )
+    const acceptable_handover = within(
+      handPct,
+      thresholdsRow?.handover_percent_min,
+      thresholdsRow?.handover_percent_max
+    )
+
+    // PV acceptability not defined in thresholds; mark true by default if present
+    const acceptable_pv = true
+
+    return {
+      hasPlan: true,
+      flags: { acceptable_pv, acceptable_first_year, acceptable_second_year, acceptable_handover },
+      percents: { firstYearPercent: y1Pct, secondYearPercent: y2Pct, handoverPercent: handPct }
+    }
+  } catch (e) {
+    return { hasPlan: false }
+  }
+}
+
 // Helper: update acceptability flags on a deal (optional, from client-calculated values)
 async function setAcceptabilityFlags(id, flags, user) {
   if (!flags || typeof flags !== 'object') return null
@@ -311,7 +395,41 @@ router.post('/:id/submit', authMiddleware, async (req, res) => {
     if (!isOwner && !isAdmin) return res.status(403).json({ error: { message: 'Forbidden' } })
     if (deal.status !== 'draft') return res.status(400).json({ error: { message: 'Deal must be draft to submit' } })
 
-    // Optional: acceptability flags passed by client to persist
+    // Ensure a generated plan is saved in deal details
+    const snapshot = (deal?.details && deal.details.calculator) ? deal.details.calculator : null
+    if (!snapshot || !Array.isArray(snapshot?.generatedPlan?.schedule) || snapshot.generatedPlan.schedule.length === 0) {
+      return res.status(400).json({ error: { message: 'Please generate and save a payment plan before submitting.' } })
+    }
+
+    // Evaluate thresholds from active configuration and persist acceptability flags
+    try {
+      const client = await pool.connect()
+      try {
+        const thresholds = await readActivePaymentThresholds(client)
+        client.release()
+        const evaluation = evaluateAcceptability(snapshot, thresholds)
+        if (evaluation?.hasPlan && evaluation?.flags) {
+          await setAcceptabilityFlags(id, evaluation.flags, req.user)
+          const anyUnacceptable = !evaluation.flags.acceptable_first_year || !evaluation.flags.acceptable_second_year || !evaluation.flags.acceptable_handover || !evaluation.flags.acceptable_pv
+          if (anyUnacceptable) {
+            await pool.query(`UPDATE deals SET needs_override=TRUE, updated_at=now() WHERE id=$1`, [id])
+          }
+          const tnote = {
+            event: 'thresholds_evaluated',
+            by: { id: req.user.id, role: req.user.role },
+            percents: evaluation.percents,
+            flags: evaluation.flags,
+            needs_override: anyUnacceptable,
+            at: new Date().toISOString()
+          }
+          await logHistory(id, req.user.id, 'thresholds_evaluated', JSON.stringify(tnote))
+        }
+      } catch (e) {
+        try { client.release() } catch {}
+      }
+    } catch {}
+
+    // Optional: acceptability flags passed by client to persist (takes precedence)
     if (req.body?.acceptability) {
       await setAcceptabilityFlags(id, req.body.acceptability, req.user)
     }

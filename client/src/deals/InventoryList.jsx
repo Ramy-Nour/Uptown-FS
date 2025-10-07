@@ -17,6 +17,7 @@ export default function InventoryList() {
   const [loading, setLoading] = useState(false)
   const [layout, setLayout] = useState('table') // 'table' | 'grid'
   const [gridMode, setGridMode] = useState('compact') // 'compact' | 'expanded'
+  const [tableMode, setTableMode] = useState('expanded') // 'compact' | 'expanded'
 
   useEffect(() => {
     async function loadTypes() {
@@ -76,7 +77,7 @@ export default function InventoryList() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gap: 8, marginBottom: 12, gridTemplateColumns: layout === 'grid' ? '1fr 1fr 1fr auto auto' : '1fr 1fr 1fr 1fr auto' }}>
+      <div style={{ display: 'grid', gap: 8, marginBottom: 12, gridTemplateColumns: layout === 'grid' ? '1fr 1fr 1fr auto auto' : '1fr 1fr 1fr auto auto' }}>
         <input placeholder="Search code/description…" value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} style={ctrl} />
         <select value={typeId} onChange={e => { setTypeId(e.target.value); setPage(1) }} style={ctrl}>
           <option value="">All types</option>
@@ -87,8 +88,13 @@ export default function InventoryList() {
           <option value={20}>20</option>
           <option value={50}>50</option>
         </select>
-        {layout === 'grid' && (
+        {layout === 'grid' ? (
           <select value={gridMode} onChange={e => setGridMode(e.target.value)} style={ctrl}>
+            <option value="compact">Compact</option>
+            <option value="expanded">Expanded</option>
+          </select>
+        ) : (
+          <select value={tableMode} onChange={e => setTableMode(e.target.value)} style={ctrl}>
             <option value="compact">Compact</option>
             <option value="expanded">Expanded</option>
           </select>
@@ -103,6 +109,7 @@ export default function InventoryList() {
           loading={loading}
           onCreateOffer={(u) => navigate(`/deals/create?unit_id=${u.id}`)}
           styles={{ th, td, btn }}
+          mode={tableMode}
         />
       ) : (
         <UnitCardsGrid

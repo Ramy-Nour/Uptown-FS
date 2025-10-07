@@ -4,6 +4,7 @@ import { fetchWithAuth, API_URL } from '../lib/apiClient.js'
 import { buildPlanRequest, generatePlan } from '../lib/calculatorApi.js'
 import CalculatorApp from '../App.jsx'
 import FullPageLoader from '../components/FullPageLoader.jsx'
+import { useCalculatorSnapshot } from '../lib/useCalculatorSnapshot.js'
 
 export default function CreateDeal() {
   const [error, setError] = useState('')
@@ -43,7 +44,7 @@ export default function CreateDeal() {
   const [calcResult, setCalcResult] = useState(null)
 
   const navigate = useNavigate()
-
+  const { ready, getSnap, applyClient, apply
   // Fetch global standard plan on mount
   useEffect(() => {
     ;(async () => {
@@ -95,47 +96,44 @@ export default function CreateDeal() {
 
         // Prefill embedded calculator via exposed bridge and sync local UI
         try {
-          const applyPrefill = window.__uptown_calc_applyUnitPrefill
-          if (typeof applyPrefill === 'function') {
-            applyPrefill({
-              unitInfo: {
-                unit_type: u.unit_type || u.unit_type_name || '',
-                unit_code: u.code || '',
-                description: u.description || '',
-                unit_number: u.unit_number || '',
-                floor: u.floor || '',
-                building_number: u.building_number || '',
-                block_sector: u.block_sector || '',
-                zone: u.zone || '',
-                garden_details: u.garden_details || '',
-                area: u.area || '',
-                orientation: u.orientation || '',
-                has_garden: u.has_garden || false,
-                garden_area: u.garden_area || '',
-                has_roof: u.has_roof || false,
-                roof_area: u.roof_area || '',
-                garage_area: u.garage_area || '',
-                unit_id: u.id
-              },
-              stdPlan: {
-                totalPrice: stdTotal,
-                base_price: stdBase,
-                maintenance_price: stdMaintenance,
-                financialDiscountRate: Number(standardPlan?.std_financial_rate_percent) || 0,
-                calculatedPV: 0
-              },
-              unitPricingBreakdown: {
-                base: stdBase,
-                garden: stdGarden,
-                roof: stdRoof,
-                storage: stdStorage,
-                garage: stdGarage,
-                maintenance: stdMaintenance,
-                totalExclMaintenance: stdTotal
-              },
-              currency: u.currency || 'EGP'
-            })
-          }
+          applyPrefill({
+            unitInfo: {
+              unit_type: u.unit_type || u.unit_type_name || '',
+              unit_code: u.code || '',
+              description: u.description || '',
+              unit_number: u.unit_number || '',
+              floor: u.floor || '',
+              building_number: u.building_number || '',
+              block_sector: u.block_sector || '',
+              zone: u.zone || '',
+              garden_details: u.garden_details || '',
+              area: u.area || '',
+              orientation: u.orientation || '',
+              has_garden: u.has_garden || false,
+              garden_area: u.garden_area || '',
+              has_roof: u.has_roof || false,
+              roof_area: u.roof_area || '',
+              garage_area: u.garage_area || '',
+              unit_id: u.id
+            },
+            stdPlan: {
+              totalPrice: stdTotal,
+              base_price: stdBase,
+              maintenance_price: stdMaintenance,
+              financialDiscountRate: Number(standardPlan?.std_financial_rate_percent) || 0,
+              calculatedPV: 0
+            },
+            unitPricingBreakdown: {
+              base: stdBase,
+              garden: stdGarden,
+              roof: stdRoof,
+              storage: stdStorage,
+              garage: stdGarage,
+              maintenance: stdMaintenance,
+              totalExclMaintenance: stdTotal
+            },
+            currency: u.currency || 'EGP'
+          })
           setUnitForm({
             unit_type: u.unit_type || u.unit_type_name || '',
             unit_code: u.code || '',
@@ -187,7 +185,7 @@ export default function CreateDeal() {
 
     // Sync from calculator snapshot if available
     try {
-      const getSnap = window.__uptown_calc_getSnapshot
+      const snapnap = window.__uptown_calc_getSnapshot
       if (typeof getSnap === 'function') {
         const snap = getSnap()
         const ui = snap?.unitInfo || {}
@@ -229,11 +227,10 @@ export default function CreateDeal() {
   }, [reviewFields])
 
   async function buildPayloadFromSnapshot() {
-    const snapFn = window.__uptown_calc_getSnapshot
-    if (typeof snapFn !== 'function') {
+    const snap = getSnap()
+    if (!snap) {
       throw new Error('Calculator not ready yet. Please try again in a moment.')
     }
-    const snap = snapFn()
     // Build title, amount, unit type from snapshot
     const titleParts = []
     if (snap?.clientInfo?.buyer_name) titleParts.push(snap.clientInfo.buyer_name)
@@ -364,8 +361,7 @@ export default function CreateDeal() {
   }
 
   function applyToForm() {
-    const applyFn = window.__uptown_calc_applyClientInfo
-    if (typeof applyFn !== 'function') {
+    if (!ready) {
       setOcrError('Form not ready to accept data. Please try again.')
       return
     }
@@ -377,7 +373,7 @@ export default function CreateDeal() {
     if (reviewFields.nationalId && !/\D/.test(reviewFields.nationalId)) {
       updates.nationality = 'Egyptian'
     }
-    applyFn(updates)
+    applyClient(updates)
   }
 
   // Trigger server calculation using new backend engine

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { fetchWithAuth, API_URL } from '../lib/apiClient.js'
 import { useNavigate } from 'react-router-dom'
 import UnitDetailsTable from '../components/UnitDetailsTable.jsx'
+import { UnitCardsGrid } from '../components/UnitDetailsCard.jsx'
 
 export default function InventoryList() {
   const navigate = useNavigate()
@@ -14,6 +15,7 @@ export default function InventoryList() {
   const [pageSize, setPageSize] = useState(20)
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
+  const [layout, setLayout] = useState('table') // 'table' | 'grid'
 
   useEffect(() => {
     async function loadTypes() {
@@ -64,8 +66,12 @@ export default function InventoryList() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <h2 style={{ marginTop: 0 }}>Inventory</h2>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button onClick={() => navigate('/deals/create')} style={btnPrimary}>Go to Calculator</button>
+          <div style={{ display: 'inline-flex', gap: 6, marginLeft: 8 }}>
+            <button onClick={() => setLayout('table')} style={{ ...btn, ...(layout === 'table' ? { background: '#f9fbfd' } : {}) }}>Table</button>
+            <button onClick={() => setLayout('grid')} style={{ ...btn, ...(layout === 'grid' ? { background: '#f9fbfd' } : {}) }}>Grid</button>
+          </div>
         </div>
       </div>
 
@@ -84,12 +90,19 @@ export default function InventoryList() {
       </div>
 
       {error ? <p style={{ color: '#e11d48' }}>{error}</p> : null}
-      <UnitDetailsTable
-        units={units}
-        loading={loading}
-        onCreateOffer={(u) => navigate(`/deals/create?unit_id=${u.id}`)}
-        styles={{ th, td, btn }}
-      />
+      {layout === 'table' ? (
+        <UnitDetailsTable
+          units={units}
+          loading={loading}
+          onCreateOffer={(u) => navigate(`/deals/create?unit_id=${u.id}`)}
+          styles={{ th, td, btn }}
+        />
+      ) : (
+        <UnitCardsGrid
+          units={units}
+          onCreateOffer={(u) => navigate(`/deals/create?unit_id=${u.id}`)}
+        />
+      )}
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
         <span style={{ color: '#64748b', fontSize: 12 }}>

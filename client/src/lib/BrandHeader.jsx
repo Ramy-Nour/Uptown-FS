@@ -108,11 +108,12 @@ export default function BrandHeader({ title, onLogout }) {
   }, [])
 
   const navForRole = (role) => {
-    const base = [{ label: 'Calculator', href: '/deals/create' }, { label: 'Deals', href: '/deals' }]
-    const baseWithoutCalc = [{ label: 'Deals', href: '/deals' }]
-    const queuesLink = { label: `Queues${queueCount ? ` (${queueCount})` : ''}`, href: '/deals/queues' }
-    switch (role) {
-      case 'superadmin':
+    // Remove legacy "Calculator" shortcut from header for all roles.
+    const base = [{ label: 'Deals', href: '/deals' }]
+    const baseWithoutCalc = base
+    const queuesLink = { label: `Queues${queueCount ? ` (${queueCount})` : ''}`, href: '/deals/queues' }
+    switch (role) {
+      case 'superadmin':
         return [
           { label: 'Users', href: '/admin/users' },
           { label: 'Sales Team', href: '/admin/sales' },
@@ -129,7 +130,7 @@ export default function BrandHeader({ title, onLogout }) {
           { label: 'Finance Team', href: '/admin/finance-team' },
           { label: 'Payment Thresholds', href: '/admin/payment-thresholds' }
         ]
-      case 'financial_manager':
+      case 'financial_manager':
         return [
           ...base,
           queuesLink,
@@ -141,38 +142,38 @@ export default function BrandHeader({ title, onLogout }) {
           { label: 'Holds', href: '/admin/holds' },
           { label: 'Payment Thresholds', href: '/admin/payment-thresholds' },
        ]
-      case 'financial_admin':
+      case 'financial_admin':
         return [
           ...base,
           { label: 'Inventory', href: '/admin/inventory' },
           { label: 'Standard Pricing', href: '/admin/standard-pricing' },
           { label: 'My Proposals', href: '/deals/my-proposals' }
         ]
-      case 'sales_manager':
-        return [
-          ...base,
-          queuesLink,
-          { label: 'Sales Team', href: '/admin/sales-team' },
-          { label: 'Team Proposals', href: '/deals/team-proposals' },
-          { label: 'Holds', href: '/admin/holds' },
-          { label: 'Workflow Logs', href: '/admin/workflow-logs' }
-        ]
-      case 'property_consultant':
-        return [
-          ...base,
-          { label: 'My Proposals', href: '/deals/my-proposals' }
-        ]
-      case 'contract_person':
-        return [
-          ...baseWithoutCalc
-        ]
-      case 'contract_manager':
-        return [
-          ...baseWithoutCalc,
-          { label: 'Contracts Team', href: '/admin/contracts-team' },
-          { label: 'Workflow Logs', href: '/admin/workflow-logs' },
-          { label: 'Hold Approvals', href: '/admin/hold-approvals' }
-        ]
+      case 'sales_manager':
+        return [
+          ...base,
+          queuesLink,
+          { label: 'Sales Team', href: '/admin/sales-team' },
+          { label: 'Team Proposals', href: '/deals/team-proposals' },
+          { label: 'Holds', href: '/admin/holds' },
+          { label: 'Workflow Logs', href: '/admin/workflow-logs' }
+        ]
+      case 'property_consultant':
+        return [
+          ...base,
+          { label: 'My Proposals', href: '/deals/my-proposals' }
+        ]
+      case 'contract_person':
+        return [
+          ...baseWithoutCalc
+        ]
+      case 'contract_manager':
+        return [
+          ...baseWithoutCalc,
+          { label: 'Contracts Team', href: '/admin/contracts-team' },
+          { label: 'Workflow Logs', href: '/admin/workflow-logs' },
+          { label: 'Hold Approvals', href: '/admin/hold-approvals' }
+        ]
       // --- THIS SECTION IS MODIFIED ---
       case 'ceo':
       case 'chairman':
@@ -187,10 +188,10 @@ export default function BrandHeader({ title, onLogout }) {
           { label: 'Hold Approvals', href: '/admin/hold-approvals' }
         ]
       // --- END OF MODIFICATION ---
-      default:
-        return base
-    }
-  }
+      default:
+        return base
+    }
+  }
 
   const shortcuts = navForRole(user?.role)
   const pathname = useMemo(() => (typeof window !== 'undefined' ? window.location.pathname : ''), [])

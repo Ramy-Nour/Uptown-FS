@@ -388,9 +388,7 @@ export default function CreateDeal() {
       if (!selectedUnit) {
         throw new Error('Please select a unit from the inventory first.')
       }
-      if (!standardPlan) {
-        throw new Error('Standard plan not loaded yet. Please try again in a moment.')
-      }
+      // Proceed even if global standard plan isn't loaded; we'll fall back to defaults below.
       const snapFn = window.__uptown_calc_getSnapshot
       if (typeof snapFn !== 'function') {
         throw new Error('Calculator snapshot not ready. Please try again.')
@@ -415,8 +413,16 @@ export default function CreateDeal() {
         garagePaymentAmount: Number(snap?.feeSchedule?.garagePaymentAmount) || 0,
         garagePaymentMonth: Number(snap?.feeSchedule?.garagePaymentMonth) || 0
       }
-      const body = { unit: selectedUnit, standardPlan, proposal }
-      const resp = await fetchWithAuth(`${API_URL}/api/calculate`, {
+      // Build a minimal standardPlan if not available, using defaults and unit model pricing as baseline
+      const sp = standardPlan || {
+        std_financial_rate_percent: 0,
+        plan_duration_years: proposal.planDurationYears || 5,
+        installment_frequency: proposal.installmentFrequency || 'monthly',
+        npv_tolerance_percent: 70
+      }
+      const body = { unit: selectedUnit, standardPlan: sp, proposal }
+      // Use legacy acceptance evaluator route explicitly
+      const resp = await fetchWithAuth(`${API_URL}/api/legacy/calculate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)

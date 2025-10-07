@@ -467,32 +467,61 @@ app.post('/api/calculate', validate(calculateSchema), async (req, res) => {
 
     if (standardPricingId || unitId) {
       // Load approved standard by id or unit id
-      const clauses = ["status='approved'"]
-      const params = []
+      let row = null
       if (standardPricingId) {
-        params.push(Number(standardPricingId))
-        clauses.push(`id = $${params.length}`)
+        const r = await pool.query(
+          `SELECT price, std_financial_rate_percent, plan_duration_years, installment_frequency
+           FROM standard_pricing
+           WHERE status='approved' AND id=$1
+           ORDER BY id DESC
+           LIMIT 1`,
+          [Number(standardPricingId)]
+        )
+        row = r.rows[0] || null
+      } else if (unitId) {
+        // Prefer latest approved pricing from unit_model_pricing via the unit's model_id
+        const r = await pool.query(
+          `SELECT p.price, p.maintenance_price, p.garage_price, p.garden_price, p.roof_price, p.storage_price
+           FROM units u
+           JOIN unit_model_pricing p ON p.model_id = u.model_id
+           WHERE u.id=$1 AND p.status='approved'
+           ORDER BY p.id DESC
+           LIMIT 1`,
+          [Number(unitId)]
+        )
+        row = r.rows[0] || null
+        // If not found, fall back to legacy standard_pricing table if present
+        if (!row) {
+          const r2 = await pool.query(
+            `SELECT price, std_financial_rate_percent, plan_duration_years, installment_frequency
+             FROM standard_pricing
+             WHERE status='approved' AND unit_id=$1
+             ORDER BY id DESC
+             LIMIT 1`,
+            [Number(unitId)]
+          )
+          row = r2.rows[0] || null
+        }
       }
-      if (unitId) {
-        params.push(Number(unitId))
-        clauses.push(`unit_id = $${params.length}`)
+      if (!row) {
+        return bad(res, 404, 'Approved standard price not found for the selected unit/model')
       }
-      const where = 'WHERE ' + clauses.join(' AND ')
-      const q = `SELECT price, std_financial_rate_percent, plan_duration_years, installment_frequency FROM standard_pricing ${where} ORDER BY id DESC LIMIT 1`
-      const r = await pool.query(q, params)
-      if (r.rows.length === 0) {
-        return bad(res, 404, 'Approved standard data not found for given identifier(s)')
-      }
-      const row = r.rows[0]
+      // Build effective standard plan from available fields
+      const totalPrice = Number(row.price) || 0
+      const stdRate = Number(row.std_financial_rate_percent) || 0
       effectiveStdPlan = {
-        totalPrice: Number(row.price) || 0,
-        financialDiscountRate: Number(row.std_financial_rate_percent) || 0,
-        calculatedPV: Number(row.price) || 0 // baseline PV equals nominal when rate is zero; algorithm uses target PV for some modes
+        totalPrice,
+        financialDiscountRate: Number.isFinite(stdRate) ? stdRate : 0,
+        calculatedPV: totalPrice
       }
-      // Default inputs fields from standard if not provided
+      // Default inputs fields from standard if not provided (when available)
       if (!isObject(req.body.inputs)) req.body.inputs = {}
-      if (req.body.inputs.planDurationYears == null) req.body.inputs.planDurationYears = row.plan_duration_years
-      if (!req.body.inputs.installmentFrequency) req.body.inputs.installmentFrequency = row.installment_frequency
+      if (row.plan_duration_years != null && req.body.inputs.planDurationYears == null) {
+        req.body.inputs.planDurationYears = row.plan_duration_years
+      }
+      if (row.installment_frequency && !req.body.inputs.installmentFrequency) {
+        req.body.inputs.installmentFrequency = row.installment_frequency
+      }
     } else {
       if (!isObject(stdPlan)) {
         return bad(res, 400, 'Provide either standardPricingId/unitId or stdPlan object')
@@ -560,30 +589,52 @@ app.post('/api/generate-plan', validate(generatePlanSchema), async (req, res) =>
     const effInputs = req.body.inputs || inputs || {}
 
     if (standardPricingId || unitId) {
-      const clauses = ["status='approved'"]
-      const params = []
+      let row = null
       if (standardPricingId) {
-        params.push(Number(standardPricingId))
-        clauses.push(`id = $${params.length}`)
+        const r = await pool.query(
+          `SELECT price, std_financial_rate_percent, plan_duration_years, installment_frequency
+           FROM standard_pricing
+           WHERE status='approved' AND id=$1
+           ORDER BY id DESC
+           LIMIT 1`,
+          [Number(standardPricingId)]
+        )
+        row = r.rows[0] || null
+      } else if (unitId) {
+        // Prefer latest approved pricing from unit_model_pricing via the unit's model_id
+        const r = await pool.query(
+          `SELECT p.price, p.maintenance_price, p.garage_price, p.garden_price, p.roof_price, p.storage_price
+           FROM units u
+           JOIN unit_model_pricing p ON p.model_id = u.model_id
+           WHERE u.id=$1 AND p.status='approved'
+           ORDER BY p.id DESC
+           LIMIT 1`,
+          [Number(unitId)]
+        )
+        row = r.rows[0] || null
+        // Fallback to legacy table if present
+        if (!row) {
+          const r2 = await pool.query(
+            `SELECT price, std_financial_rate_percent, plan_duration_years, installment_frequency
+             FROM standard_pricing
+             WHERE status='approved' AND unit_id=$1
+             ORDER BY id DESC
+             LIMIT 1`,
+            [Number(unitId)]
+          )
+          row = r2.rows[0] || null
+        }
       }
-      if (unitId) {
-        params.push(Number(unitId))
-        clauses.push(`unit_id = $${params.length}`)
+      if (!row) {
+        return bad(res, 404, 'Approved standard price not found for the selected unit/model')
       }
-      const where = 'WHERE ' + clauses.join(' AND ')
-      const q = `SELECT price, std_financial_rate_percent, plan_duration_years, installment_frequency FROM standard_pricing ${where} ORDER BY id DESC LIMIT 1`
-      const r = await pool.query(q, params)
-      if (r.rows.length === 0) {
-        return bad(res, 404, 'Approved standard data not found for given identifier(s)')
-      }
-      const row = r.rows[0]
       effectiveStdPlan = {
         totalPrice: Number(row.price) || 0,
         financialDiscountRate: Number(row.std_financial_rate_percent) || 0,
         calculatedPV: Number(row.price) || 0
       }
-      if (effInputs.planDurationYears == null) effInputs.planDurationYears = row.plan_duration_years
-      if (!effInputs.installmentFrequency) effInputs.installmentFrequency = row.installment_frequency
+      if (effInputs.planDurationYears == null && row.plan_duration_years != null) effInputs.planDurationYears = row.plan_duration_years
+      if (!effInputs.installmentFrequency && row.installment_frequency) effInputs.installmentFrequency = row.installment_frequency
     } else {
       if (!isObject(stdPlan) || !isObject(effInputs)) {
         return bad(res, 400, 'Provide either standardPricingId/unitId or stdPlan with inputs')

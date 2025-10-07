@@ -15,9 +15,22 @@ export default function InventoryList() {
   const [pageSize, setPageSize] = useState(20)
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
-  const [layout, setLayout] = useState('table') // 'table' | 'grid'
-  const [gridMode, setGridMode] = useState('compact') // 'compact' | 'expanded'
-  const [tableMode, setTableMode] = useState('expanded') // 'compact' | 'expanded'
+
+  // Role-based defaults:
+  const role = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('auth_user') || '{}')?.role || ''
+    } catch {
+      return ''
+    }
+  })()
+  const initialLayout = (role === 'property_consultant' || role === 'sales_manager') ? 'grid' : 'table'
+  const initialGridMode = (role === 'property_consultant' || role === 'sales_manager') ? 'compact' : 'expanded'
+  const initialTableMode = (role === 'financial_manager' || role === 'financial_admin' || role === 'admin' || role === 'superadmin') ? 'expanded' : 'compact'
+
+  const [layout, setLayout] = useState(initialLayout) // 'table' | 'grid'
+  const [gridMode, setGridMode] = useState(initialGridMode) // 'compact' | 'expanded'
+  const [tableMode, setTableMode] = useState(initialTableMode) // 'compact' | 'expanded'
 
   useEffect(() => {
     async function loadTypes() {

@@ -388,50 +388,52 @@ export default function CreateDeal() {
       if (!selectedUnit) {
         throw new Error('Please select a unit from the inventory first.')
       }
-      // Proceed even if global standard plan isn't loaded; we'll fall back to defaults below.
       const snapFn = window.__uptown_calc_getSnapshot
       if (typeof snapFn !== 'function') {
         throw new Error('Calculator snapshot not ready. Please try again.')
       }
       const snap = snapFn()
-      const proposalInputs = snap?.inputs || {}
-      const proposal = {
-        salesDiscountPercent: Number(proposalInputs.salesDiscountPercent) || 0,
-        dpType: proposalInputs.dpType || 'amount',
-        downPaymentValue: Number(proposalInputs.downPaymentValue) || 0,
-        planDurationYears: Number(proposalInputs.planDurationYears) || Number(standardPlan.plan_duration_years) || 1,
-        installmentFrequency: proposalInputs.installmentFrequency || standardPlan.installment_frequency || 'monthly',
-        additionalHandoverPayment: Number(proposalInputs.additionalHandoverPayment) || 0,
-        handoverYear: Number(proposalInputs.handoverYear) || 0,
-        splitFirstYearPayments: !!proposalInputs.splitFirstYearPayments,
-        firstYearPayments: Array.isArray(snap?.firstYearPayments) ? snap.firstYearPayments : [],
-        subsequentYears: Array.isArray(snap?.subsequentYears) ? snap.subsequentYears : [],
-        // Base date for absolute due dates if available in embedded form
-        baseDate: snap?.contractInfo?.contract_date || snap?.contractInfo?.reservation_form_date || null,
-        maintenancePaymentAmount: Number(snap?.feeSchedule?.maintenancePaymentAmount) || 0,
-        maintenancePaymentMonth: Number(snap?.feeSchedule?.maintenancePaymentMonth) || 0,
-        garagePaymentAmount: Number(snap?.feeSchedule?.garagePaymentAmount) || 0,
-        garagePaymentMonth: Number(snap?.feeSchedule?.garagePaymentMonth) || 0
+      const inputs = snap?.inputs || {}
+      const mode = snap?.mode || 'calculateForTargetPV'
+      // Use modern engine with unitId so server resolves approved standard automatically
+      const genBody = {
+        mode,
+        unitId: Number(selectedUnit.id),
+        inputs: {
+          salesDiscountPercent: Number(inputs.salesDiscountPercent) || 0,
+          dpType: inputs.dpType || 'amount',
+          downPaymentValue: Number(inputs.downPaymentValue) || 0,
+          planDurationYears: Number(inputs.planDurationYears) || 5,
+          installmentFrequency: inputs.installmentFrequency || 'monthly',
+          additionalHandoverPayment: Number(inputs.additionalHandoverPayment) || 0,
+          handoverYear: Number(inputs.handoverYear) || 0,
+          splitFirstYearPayments: !!inputs.splitFirstYearPayments,
+          firstYearPayments: Array.isArray(snap?.firstYearPayments) ? snap.firstYearPayments : [],
+          subsequentYears: Array.isArray(snap?.subsequentYears) ? snap.subsequentYears : [],
+          baseDate: snap?.contractInfo?.contract_date || snap?.contractInfo?.reservation_form_date || null,
+          maintenancePaymentAmount: Number(snap?.feeSchedule?.maintenancePaymentAmount) || 0,
+          maintenancePaymentMonth: Number(snap?.feeSchedule?.maintenancePaymentMonth) || 0,
+          garagePaymentAmount: Number(snap?.feeSchedule?.garagePaymentAmount) || 0,
+          garagePaymentMonth: Number(snap?.feeSchedule?.garagePaymentMonth) || 0
+        },
+        language: snap?.language || 'en',
+        currency: snap?.currency || 'EGP'
       }
-      // Build a minimal standardPlan if not available, using defaults and unit model pricing as baseline
-      const sp = standardPlan || {
-        std_financial_rate_percent: 0,
-        plan_duration_years: proposal.planDurationYears || 5,
-        installment_frequency: proposal.installmentFrequency || 'monthly',
-        npv_tolerance_percent: 70
-      }
-      const body = { unit: selectedUnit, standardPlan: sp, proposal }
-      // Use legacy acceptance evaluator route explicitly
-      const resp = await fetchWithAuth(`${API_URL}/api/legacy/calculate`, {
+      const resp = await fetchWithAuth(`${API_URL}/api/generate-plan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        body: JSON.stringify(genBody)
       })
       const data = await resp.json()
       if (!resp.ok) {
         throw new Error(data?.error?.message || 'Calculation failed')
       }
-      setCalcResult(data.result || null)
+      setCalcResult({
+        schedule: data.schedule || [],
+        totals: data.totals || {},
+        offerPV: Number(data?.meta?.calculatedPV || 0),
+        meta: data.meta || {}
+      })
     } catch (e) {
       setCalcError(e.message || String(e))
     } finally {
@@ -611,32 +613,15 @@ export default function CreateDeal() {
         </div>
         {calcError ? <p style={{ color: '#e11d48' }}>{calcError}</p> : null}
         {!calcResult ? (
-          <small style={{ color: '#64748b' }}>Click \"Calculate (Server)\" to compute PV and conditions using the backend engine.</small>
+          <small style={{ color: '#64748b' }}>Click \"Calculate (Server)\" to generate a schedule using the backend engine.</small>
         ) : (
           <div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              <div style={{ border: '1px dashed #dfe5ee', borderRadius: 10, padding: 10 }}>
-                <strong>Proposed Plan PV:</strong>
-                <div>{Number(calcResult.proposedPlanPV || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-              </div>
-              <div style={{ border: '1px dashed #dfe5ee', borderRadius: 10, padding: 10 }}>
-                <strong>Standard Plan PV:</strong>
-                <div>{Number(calcResult.standardPlanPV || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-              </div>
-            </div>
-            <div style={{ marginTop: 8, padding: 8, border: '1px solid #eef2f7', borderRadius: 10 }}>
-              <strong>Decision:</strong> {calcResult.decision || ''}
-              <div>PV Difference: {Number(calcResult.difference || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-            </div>
-            <div style={{ marginTop: 8 }}>
-              <h4 style={{ marginTop: 0 }}>Acceptance Conditions</h4>
-              <ul style={{ margin: 0, paddingLeft: 16 }}>
-                {(calcResult.conditions || []).map((c, idx) => (
-                  <li key={idx}>
-                    <span style={{ fontWeight: 600 }}>{c.label}:</span> {c.pass ? 'Pass' : 'Fail'}
-                  </li>
-                ))}
-              </ul>
+            <div style={{ border: '1px dashed #dfe5ee', borderRadius: 10, padding: 10, marginBottom: 8 }}>
+              <strong>Offer PV:</strong>
+              <div>{Number(calcResult.offerPV || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+              {calcResult.meta?.npvWarning ? (
+                <div style={{ color: '#b45309', marginTop: 6 }}>Warning: NPV below tolerance.</div>
+              ) : null}
             </div>
             <div style={{ marginTop: 8 }}>
               <h4 style={{ marginTop: 0 }}>Payment Schedule</h4>
@@ -652,7 +637,7 @@ export default function CreateDeal() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(calcResult.proposalSchedule || []).map((row, i) => (
+                    {(calcResult.schedule || []).map((row, i) => (
                       <tr key={i}>
                         <td style={td}>{i + 1}</td>
                         <td style={td}>{row.month}</td>
@@ -661,7 +646,7 @@ export default function CreateDeal() {
                         <td style={{ ...td, textAlign: 'right' }}>{Number(row.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                       </tr>
                     ))}
-                    {(calcResult.proposalSchedule || []).length === 0 && (
+                    {(calcResult.schedule || []).length === 0 && (
                       <tr><td style={td} colSpan={5}>No schedule.</td></tr>
                     )}
                   </tbody>

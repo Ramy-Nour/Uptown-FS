@@ -108,8 +108,10 @@ export default function BrandHeader({ title, onLogout }) {
   }, [])
 
   const navForRole = (role) => {
-    // Remove legacy "Calculator" shortcut from header for all roles.
+    // Base without calculator
     const base = [{ label: 'Deals', href: '/deals' }]
+    // Base with calculator shortcut
+    const baseWithCalc = [{ label: 'Calculator', href: '/deals/create' }, ...base]
     const baseWithoutCalc = base
     const queuesLink = { label: `Queues${queueCount ? ` (${queueCount})` : ''}`, href: '/deals/queues' }
     switch (role) {
@@ -132,7 +134,7 @@ export default function BrandHeader({ title, onLogout }) {
         ]
       case 'financial_manager':
         return [
-          ...base,
+          ...baseWithCalc,
           queuesLink,
           { label: 'Inventory Drafts', href: '/admin/inventory-drafts' },
           { label: 'Rejected Requests', href: '/admin/rejected-pricings' },
@@ -144,14 +146,14 @@ export default function BrandHeader({ title, onLogout }) {
        ]
       case 'financial_admin':
         return [
-          ...base,
+          ...baseWithCalc,
           { label: 'Inventory', href: '/admin/inventory' },
           { label: 'Standard Pricing', href: '/admin/standard-pricing' },
           { label: 'My Proposals', href: '/deals/my-proposals' }
         ]
       case 'sales_manager':
         return [
-          ...base,
+          ...baseWithCalc,
           queuesLink,
           { label: 'Sales Team', href: '/admin/sales-team' },
           { label: 'Team Proposals', href: '/deals/team-proposals' },
@@ -160,7 +162,7 @@ export default function BrandHeader({ title, onLogout }) {
         ]
       case 'property_consultant':
         return [
-          ...base,
+          ...baseWithCalc,
           { label: 'My Proposals', href: '/deals/my-proposals' }
         ]
       case 'contract_person':

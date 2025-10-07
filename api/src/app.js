@@ -139,7 +139,9 @@ app.use('/api/reports', reportsRoutes)
 app.use('/api/pricing', pricingRoutes) // THIS LINE IS NEW
 app.use('/api/config', configRoutes)
 app.use('/api/standard-plan', standardPlanRoutes) // NEW
-app.use('/api', calculateRoutes) // NEW calculation engine (POST /api/calculate)
+// Mount the legacy acceptance evaluator under a non-conflicting path.
+// The main calculation endpoints are defined below as POST /api/calculate and /api/generate-plan.
+app.use('/api/legacy', calculateRoutes) // legacy engine (POST /api/legacy/calculate)
 
 // NEW ROUTE REGISTRATIONS - Add these
 app.use('/api/roles', roleManagementRoutes)

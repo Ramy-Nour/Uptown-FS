@@ -10,12 +10,13 @@ function InfoRow({ label, value }) {
 }
 
 /**
- * UnitCard — shows a single unit with compact details and pricing breakdown.
+ * UnitCard — shows a single unit with compact or expanded details.
  * Props:
  * - unit
+ * - mode: 'compact' | 'expanded'
  * - onCreateOffer: (unit) => void
  */
-export function UnitCard({ unit, onCreateOffer }) {
+export function UnitCard({ unit, mode = 'compact', onCreateOffer }) {
   const box = {
     border: '1px solid #e6eaf0',
     borderRadius: 12,
@@ -53,20 +54,27 @@ export function UnitCard({ unit, onCreateOffer }) {
           {totalExclMaint} {unit.currency || 'EGP'}
         </div>
       </div>
+
+      {/* Core facts */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
         <InfoRow label="Area" value={unit.area ? `${Number(unit.area).toLocaleString()} m²` : '-'} />
         <InfoRow label="Orientation" value={unit.orientation || '-'} />
         <InfoRow label="Garden" value={gardenLabel} />
         <InfoRow label="Roof" value={roofLabel} />
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
-        <InfoRow label="Base" value={Number(unit.base_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} />
-        <InfoRow label="Garden" value={Number(unit.garden_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} />
-        <InfoRow label="Roof" value={Number(unit.roof_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} />
-        <InfoRow label="Storage" value={Number(unit.storage_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} />
-        <InfoRow label="Garage" value={Number(unit.garage_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} />
-        <InfoRow label="Maintenance" value={Number(unit.maintenance_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} />
-      </div>
+
+      {/* Expanded: price breakdown */}
+      {mode === 'expanded' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+          <InfoRow label="Base" value={Number(unit.base_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} />
+          <InfoRow label="Garden" value={Number(unit.garden_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} />
+          <InfoRow label="Roof" value={Number(unit.roof_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} />
+          <InfoRow label="Storage" value={Number(unit.storage_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} />
+          <InfoRow label="Garage" value={Number(unit.garage_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} />
+          <InfoRow label="Maintenance" value={Number(unit.maintenance_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} />
+        </div>
+      )}
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={sub}>Status: {unit.unit_status}</span>
         {typeof onCreateOffer === 'function' ? (
@@ -82,8 +90,9 @@ export function UnitCard({ unit, onCreateOffer }) {
  * Props:
  * - units
  * - onCreateOffer
+ * - mode: 'compact' | 'expanded'
  */
-export function UnitCardsGrid({ units, onCreateOffer }) {
+export function UnitCardsGrid({ units, onCreateOffer, mode = 'compact' }) {
   const grid = {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
@@ -92,7 +101,7 @@ export function UnitCardsGrid({ units, onCreateOffer }) {
   return (
     <div style={grid}>
       {(units || []).map(u => (
-        <UnitCard key={u.id} unit={u} onCreateOffer={onCreateOffer} />
+        <UnitCard key={u.id} unit={u} onCreateOffer={onCreateOffer} mode={mode} />
       ))}
       {(units || []).length === 0 && (
         <div style={{ color: '#6b7280', fontSize: 12 }}>No units found.</div>

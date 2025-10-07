@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { fetchWithAuth, API_URL } from '../lib/apiClient.js'
+import { buildPlanRequest, generatePlan } from '../lib/calculatorApi.js'
 import CalculatorApp from '../App.jsx'
 import FullPageLoader from '../components/FullPageLoader.jsx'
 
@@ -393,41 +394,8 @@ export default function CreateDeal() {
         throw new Error('Calculator snapshot not ready. Please try again.')
       }
       const snap = snapFn()
-      const inputs = snap?.inputs || {}
-      const mode = snap?.mode || 'calculateForTargetPV'
-      // Use modern engine with unitId so server resolves approved standard automatically
-      const genBody = {
-        mode,
-        unitId: Number(selectedUnit.id),
-        inputs: {
-          salesDiscountPercent: Number(inputs.salesDiscountPercent) || 0,
-          dpType: inputs.dpType || 'amount',
-          downPaymentValue: Number(inputs.downPaymentValue) || 0,
-          planDurationYears: Number(inputs.planDurationYears) || 5,
-          installmentFrequency: inputs.installmentFrequency || 'monthly',
-          additionalHandoverPayment: Number(inputs.additionalHandoverPayment) || 0,
-          handoverYear: Number(inputs.handoverYear) || 0,
-          splitFirstYearPayments: !!inputs.splitFirstYearPayments,
-          firstYearPayments: Array.isArray(snap?.firstYearPayments) ? snap.firstYearPayments : [],
-          subsequentYears: Array.isArray(snap?.subsequentYears) ? snap.subsequentYears : [],
-          baseDate: snap?.contractInfo?.contract_date || snap?.contractInfo?.reservation_form_date || null,
-          maintenancePaymentAmount: Number(snap?.feeSchedule?.maintenancePaymentAmount) || 0,
-          maintenancePaymentMonth: Number(snap?.feeSchedule?.maintenancePaymentMonth) || 0,
-          garagePaymentAmount: Number(snap?.feeSchedule?.garagePaymentAmount) || 0,
-          garagePaymentMonth: Number(snap?.feeSchedule?.garagePaymentMonth) || 0
-        },
-        language: snap?.language || 'en',
-        currency: snap?.currency || 'EGP'
-      }
-      const resp = await fetchWithAuth(`${API_URL}/api/generate-plan`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(genBody)
-      })
-      const data = await resp.json()
-      if (!resp.ok) {
-        throw new Error(data?.error?.message || 'Calculation failed')
-      }
+      const genBody = buildPlanRequest(snap, Number(selectedUnit.id))
+      const data = await generatePlan(genBody)
       setCalcResult({
         schedule: data.schedule || [],
         totals: data.totals || {},

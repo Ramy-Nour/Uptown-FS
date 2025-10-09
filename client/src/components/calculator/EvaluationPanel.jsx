@@ -1,5 +1,5 @@
 import React from 'react'
-import { ui } from '../../lib/ui.js'
+import * as ui from '../../lib/ui.js'
 
 export default function EvaluationPanel({ evaluation, role, dealId, API_URL }) {
   if (!evaluation) return null

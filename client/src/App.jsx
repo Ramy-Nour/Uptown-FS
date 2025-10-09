@@ -170,7 +170,7 @@ export default function App(props) {
   const role = authUser?.role
 
   // Lock certain fields when a unit is selected (use server-approved standard)
-  const rateLocked = Number(unitInfo?.unit_id) > 0
+  // Moved below unitInfo initialization
 
   // Dynamic arrays
   const [firstYearPayments, setFirstYearPayments] = useState([])
@@ -198,6 +198,7 @@ export default function App(props) {
     zone: '',
     garden_details: ''
   })
+  const rateLocked = Number(unitInfo?.unit_id) > 0
   const [unitPricingBreakdown, setUnitPricingBreakdown] = useState({
     base: 0,
     garden: 0,
@@ -206,7 +207,8 @@ export default function App(props) {
     garage: 0,
     maintenance: 0,
     totalExclMaintenance: 0
-  })
+_code  new}</)
+)
   // Units catalog (typeahead)
   const [unitsCatalog, setUnitsCatalog] = useState([])
   const [unitQuery, setUnitQuery] = useState('')

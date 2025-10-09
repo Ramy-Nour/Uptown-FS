@@ -208,10 +208,9 @@ export default function App(props) {
     garage: 0,
     maintenance: 0,
     totalExclMaintenance: 0
-_code  new}</)
-)
+  })
   // Units catalog (typeahead)
-  const [unitsCatalog, setUnitsCatalog] = useState([])
+  const [unitsCatalog, setUnitsCatalog] = useState_codeseState([])
   const [unitQuery, setUnitQuery] = useState('')
   const [unitSearchLoading, setUnitSearchLoading] = useState(false)
   const [unitDropdownOpen, setUnitDropdownOpen] = useState(false)

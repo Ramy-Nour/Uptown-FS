@@ -78,6 +78,7 @@ const styles = {
     resize: 'vertical'
   }),
   metaText: { color: '#6b7280', fontSize: 12, marginTop: 4 },
+  arInline: { color: '#6b7280', fontSize: 12, fontStyle: 'italic' },
   btn: {
     display: 'inline-flex',
     alignItems: 'center',

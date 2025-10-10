@@ -210,7 +210,7 @@ export default function App(props) {
     totalExclMaintenance: 0
   })
   // Units catalog (typeahead)
-  const [unitsCatalog, setUnitsCatalog] = useState_codeseState([])
+  const [unitsCatalog, setUnitsCatalog] = useState([])
   const [unitQuery, setUnitQuery] = useState('')
   const [unitSearchLoading, setUnitSearchLoading] = useState(false)
   const [unitDropdownOpen, setUnitDropdownOpen] = useState(false)

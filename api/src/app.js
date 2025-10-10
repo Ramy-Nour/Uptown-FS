@@ -350,7 +350,10 @@ app.get('/api/schema-check', requireRole(['admin','superadmin']), async (req, re
 // Enforce auth on all /api routes except /api/auth/*
 import { authMiddleware, requireRole } from './authRoutes.js'
 app.use((req, res, next) => {
+  // Public endpoints: allow without auth
   if (req.path.startsWith('/api/auth')) return next()
+  if (req.path === '/api/health' || req.path === '/api/message' || req.path === '/api/metrics') return next()
+  // Protect all other /api routes
   if (req.path.startsWith('/api/')) return authMiddleware(req, res, next)
   return next()
 })

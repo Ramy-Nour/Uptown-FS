@@ -7,6 +7,7 @@ import SkeletonRow from '../components/SkeletonRow.jsx'
 import { notifyError, notifySuccess } from '../lib/notifications.js'
 import ConfirmModal from '../components/ConfirmModal.jsx'
 import PromptModal from '../components/PromptModal.jsx'
+import UnitDetailsDrawer from '../components/UnitDetailsDrawer.jsx'
 
 function renderPayload(p) {
   try {
@@ -32,6 +33,8 @@ export default function InventoryChanges() {
   const [busyId, setBusyId] = useState(0)
   const [promptRejectId, setPromptRejectId] = useState(0)
   const [status, setStatus] = useState('pending_approval')
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const [detailsUnit, setDetailsUnit] = useState(null)
 
   const handleLogout = async () => {
     try {
@@ -151,6 +154,14 @@ export default function InventoryChanges() {
                   <td style={td}>{(ch.created_at || '').replace('T',' ').replace('Z','')}</td>
                   <td style={td}>{renderPayload(ch.payload)}</td>
                   <td style={td}>
+                    <LoadingButton
+                      onClick={() => {
+                        setDetailsUnit({ id: ch.unit_id, code: ch.unit_code || `#${ch.unit_id}`, unit_status: ch.unit_status })
+                        setDetailsOpen(true)
+                      }}
+                    >
+                      Details
+                    </LoadingButton>
                     <LoadingButton disabled={busyId === ch.id} onClick={() => approve(ch.id)} loading={busyId === ch.id} variant="primary">Approve</LoadingButton>
                     <LoadingButton disabled={busyId === ch.id} onClick={() => setPromptRejectId(ch.id)} loading={busyId === ch.id} style={btn}>Reject</LoadingButton>
                   </td>
@@ -176,6 +187,7 @@ export default function InventoryChanges() {
         onSubmit={(val) => { const id = promptRejectId; setPromptRejectId(0); reject(id, val || '') }}
         onCancel={() => setPromptRejectId(0)}
       />
+      <UnitDetailsDrawer unit={detailsUnit} open={detailsOpen} onClose={() => setDetailsOpen(false)} />
     </div>
   )
 }

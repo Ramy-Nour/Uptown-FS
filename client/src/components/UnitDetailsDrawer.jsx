@@ -33,6 +33,7 @@ function renderPayload(p) {
 export default function UnitDetailsDrawer({ unit, open, onClose }) {
   const [full, setFull] = useState(null)
   const [history, setHistory] = useState([])
+  const [modelAudit, setModelAudit] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -46,18 +47,31 @@ export default function UnitDetailsDrawer({ unit, open, onClose }) {
         // Unit details via admin route (works for any status)
         const uResp = await fetchWithAuth(`${API_URL}/api/units/${unit.id}`)
         const uData = await uResp.json()
+        let effectiveUnit = null
         if (uResp.ok) {
-          if (!abort) setFull(uData.unit || null)
+          effectiveUnit = uData.unit || null
+          if (!abort) setFull(effectiveUnit)
         } else {
           // Fallback to inventory lookup if unavailable
           const iv = await fetchWithAuth(`${API_URL}/api/inventory/units/${unit.id}`)
           const j = await iv.json().catch(() => ({}))
-          if (!abort) setFull(j.unit || null)
+          effectiveUnit = j.unit || null
+          if (!abort) setFull(effectiveUnit)
         }
         // History (all statuses) for this unit
         const hResp = await fetchWithAuth(`${API_URL}/api/inventory/units/changes?status=all&unit_id=${unit.id}`)
         const hData = await hResp.json()
         if (!abort) setHistory(hResp.ok ? (hData.changes || []) : [])
+
+        // Model audit if model_id is present
+        const mid = effectiveUnit?.model_id || effectiveUnit?.model?.id
+        if (mid) {
+          const aResp = await fetchWithAuth(`${API_URL}/api/inventory/unit-models/${mid}/audit`)
+          const aData = await aResp.json()
+          if (!abort) setModelAudit(aResp.ok ? (aData.audit || []) : [])
+        } else {
+          if (!abort) setModelAudit([])
+        }
       } catch (e) {
         if (!abort) {
           setError(e.message || String(e))
@@ -115,7 +129,7 @@ export default function UnitDetailsDrawer({ unit, open, onClose }) {
           )}
         </section>
 
-        <section>
+        <section style={{ marginBottom: 12 }}>
           <h4 style={{ marginTop: 0 }}>Change History</h4>
           <div style={tableWrap}>
             <table style={table}>
@@ -161,6 +175,49 @@ export default function UnitDetailsDrawer({ unit, open, onClose }) {
           </div>
           <div style={{ marginTop: 8 }}>
             <span style={metaText}>History includes edit and delete requests related to this unit, with final decisions.</span>
+          </div>
+        </section>
+
+        <section>
+          <h4 style={{ marginTop: 0 }}>Model Audit</h4>
+          <div style={tableWrap}>
+            <table style={table}>
+              <thead>
+                <tr>
+                  <th style={th}>ID</th>
+                  <th style={th}>Action</th>
+                  <th style={th}>Changed By</th>
+                  <th style={th}>At</th>
+                  <th style={th}>Details</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading && (
+                  <>
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <SkeletonRow key={i} widths={['sm','sm','lg','lg','xl']} tdStyle={td} />
+                    ))}
+                  </>
+                )}
+                {!loading && modelAudit.map(a => (
+                  <tr key={a.id}>
+                    <td style={td}>{a.id}</td>
+                    <td style={td}>{a.action}</td>
+                    <td style={td}>{a.changed_by_email || a.changed_by || '-'}</td>
+                    <td style={td}>{(a.created_at || '').replace('T',' ').replace('Z','')}</td>
+                    <td style={td}>{renderPayload(a.details)}</td>
+                  </tr>
+                ))}
+                {!loading && modelAudit.length === 0 && (
+                  <tr>
+                    <td style={td} colSpan={5}>No model audit records.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ marginTop: 8 }}>
+            <span style={metaText}>Model audit reflects create/update/delete events on the associated unit model.</span>
           </div>
         </section>
       </div>

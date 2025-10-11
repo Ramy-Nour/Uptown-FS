@@ -47,6 +47,7 @@ export default function Units() {
     garden_details: ''
   })
   const [editingId, setEditingId] = useState(0)
+  const [editingStatus, setEditingStatus] = useState('')
   const [saving, setSaving] = useState(false)
 
   // Removed inline link-request state: link requests are disabled; units are created already linked to a model
@@ -121,26 +122,46 @@ export default function Units() {
       let createdOrEditedId = editingId
 
       if (role === 'financial_admin') {
-        // FA: draft creation or draft update
+        // FA: draft creation, draft update, or change-request for approved units
         if (editingId) {
-          // Update allowed fields on draft
-          const body = {
-            code: String(form.code || '').trim(),
-            unit_number: form.unit_number || null,
-            floor: form.floor || null,
-            building_number: form.building_number || null,
-            block_sector: form.block_sector || null,
-            zone: form.zone || null
+          if (editingStatus && editingStatus !== 'INVENTORY_DRAFT') {
+            // Request change for approved unit
+            const payload = {
+              code: String(form.code || '').trim(),
+              unit_number: form.unit_number || null,
+              floor: form.floor || null,
+              building_number: form.building_number || null,
+              block_sector: form.block_sector || null,
+              zone: form.zone || null
+            }
+            resp = await fetchWithAuth(`${API_URL}/api/inventory/units/${editingId}/change-request`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'update', payload })
+            })
+            const data = await resp.json()
+            if (!resp.ok) throw new Error(data?.error?.message || 'Request failed')
+            notifySuccess('Edit request submitted to Financial Manager.')
+          } else {
+            // Update allowed fields on draft
+            const body = {
+              code: String(form.code || '').trim(),
+              unit_number: form.unit_number || null,
+              floor: form.floor || null,
+              building_number: form.building_number || null,
+              block_sector: form.block_sector || null,
+              zone: form.zone || null
+            }
+            resp = await fetchWithAuth(`${API_URL}/api/inventory/units/${editingId}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(body)
+            })
+            const data = await resp.json()
+            if (!resp.ok) throw new Error(data?.error?.message || 'Save failed')
+            createdOrEditedId = editingId
+            notifySuccess('Draft updated')
           }
-          resp = await fetchWithAuth(`${API_URL}/api/inventory/units/${editingId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
-          })
-          const data = await resp.json()
-          if (!resp.ok) throw new Error(data?.error?.message || 'Save failed')
-          createdOrEditedId = editingId
-          notifySuccess('Draft updated')
         } else {
           // Create draft linked to a model (required)
           if (!form.model_id) {
@@ -204,6 +225,7 @@ export default function Units() {
 
   async function edit(u) {
     setEditingId(u.id)
+    setEditingStatus(u.unit_status || '')
     setForm({
       code: u.code || '',
       description: u.description || '',
@@ -428,7 +450,28 @@ export default function Units() {
                             </LoadingButton>
                           </>
                         ) : (
-                          <span style={{ color: '#64748b', fontSize: 12 }}>Approved units cannot be edited by FA</span>
+                          <>
+                            <LoadingButton onClick={() => edit(unit)}>Request Edit</LoadingButton>
+                            <LoadingButton
+                              onClick={async () => {
+                                try {
+                                  const resp = await fetchWithAuth(`${API_URL}/api/inventory/units/${unit.id}/change-request`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ action: 'delete' })
+                                  })
+                                  const data = await resp.json()
+                                  if (!resp.ok) throw new Error(data?.error?.message || 'Request failed')
+                                  notifySuccess('Delete request submitted to Financial Manager.')
+                                } catch (e) {
+                                  notifyError(e, 'Delete request failed')
+                                }
+                              }}
+                              style={{ ...btn, border: '1px solid #dc262#dc2626' }}
+                            >
+                              Request Delete
+                            </LoadingButton>
+                          </>
                         )}
                       </>
                     ) : (

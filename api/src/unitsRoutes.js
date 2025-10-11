@@ -17,7 +17,7 @@ router.get('/', authMiddleware, async (req, res) => {
     let placeholderCount = 1
 
     if (search) {
-      const searchPlaceholder = `$${placeholderCount++}`
+      const searchPlaceholder = `${placeholderCount++}`
       where.push(`(LOWER(u.code) LIKE ${searchPlaceholder} OR LOWER(u.description) LIKE ${searchPlaceholder})`)
       params.push(`%${search}%`)
     }
@@ -26,8 +26,8 @@ router.get('/', authMiddleware, async (req, res) => {
     const countRes = await pool.query(`SELECT COUNT(*)::int AS c FROM units u ${whereSql}`, params)
     const total = countRes.rows[0]?.c || 0
 
-    const limitPlaceholder = `$${placeholderCount++}`
-    const offsetPlaceholder = `$${placeholderCount++}`
+    const limitPlaceholder = `${placeholderCount++}`
+    const offsetPlaceholder = `${placeholderCount++}`
     params.push(pageSize)
     params.push(offset)
 
@@ -38,6 +38,7 @@ router.get('/', authMiddleware, async (req, res) => {
         u.has_garden, u.garden_area, u.has_roof, u.roof_area,
         u.maintenance_price, u.garage_price, u.garden_price, u.roof_price, u.storage_price,
         u.available, u.unit_status,
+        u.unit_number, u.floor, u.building_number, u.block_sector, u.zone, u.garden_details,
         (COALESCE(u.has_garden, FALSE) AND COALESCE(u.garden_area, 0) > 0) AS garden_available,
         (COALESCE(u.has_roof, FALSE) AND COALESCE(u.roof_area, 0) > 0) AS roof_available,
         (COALESCE(u.garage_area, 0) > 0) AS garage_available,
@@ -193,6 +194,12 @@ router.patch('/:id', authMiddleware, requireAdminLike, async (req, res) => {
     const r0 = await pool.query('SELECT * FROM units WHERE id=$1', [id])
     if (r0.rows.length === 0) return res.status(404).json({ error: { message: 'Unit not found' } })
     const u = r0.rows[0]
+
+    // Restrict Financial Admin to editing only drafts
+    if (role === 'financial_admin' && u.unit_status !== 'INVENTORY_DRAFT') {
+      return res.status(403).json({ error: { message: 'Financial Admin can only edit units in draft status.' } })
+    }
+
     const newCode = typeof code === 'string' && code.trim() ? code.trim() : u.code
     const newDesc = typeof description === 'string' ? description : u.description
     const newType = typeof unit_type === 'string' ? unit_type : u.unit_type
@@ -237,7 +244,15 @@ router.patch('/:id', authMiddleware, requireAdminLike, async (req, res) => {
 // Delete unit
 router.delete('/:id', authMiddleware, requireAdminLike, async (req, res) => {
   try {
+    const role = req.user?.role
     const id = Number(req.params.id)
+    const r0 = await pool.query('SELECT unit_status FROM units WHERE id=$1', [id])
+    if (r0.rows.length === 0) return res.status(404).json({ error: { message: 'Unit not found' } })
+
+    if (role === 'financial_admin' && r0.rows[0].unit_status !== 'INVENTORY_DRAFT') {
+      return res.status(403).json({ error: { message: 'Financial Admin can only delete units in draft status.' } })
+    }
+
     const r = await pool.query('DELETE FROM units WHERE id=$1 RETURNING id', [id])
     if (r.rows.length === 0) return res.status(404).json({ error: { message: 'Unit not found' } })
     return res.json({ ok: true, id })

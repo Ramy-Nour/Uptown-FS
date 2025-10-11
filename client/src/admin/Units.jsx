@@ -121,31 +121,52 @@ export default function Units() {
       let createdOrEditedId = editingId
 
       if (role === 'financial_admin') {
-        // FA: require model selection and create unit already linked to model (draft)
-        if (!form.model_id) {
-          throw new Error('Please select a unit model to link. It is required.')
+        // FA: draft creation or draft update
+        if (editingId) {
+          // Update allowed fields on draft
+          const body = {
+            code: String(form.code || '').trim(),
+            unit_number: form.unit_number || null,
+            floor: form.floor || null,
+            building_number: form.building_number || null,
+            block_sector: form.block_sector || null,
+            zone: form.zone || null
+          }
+          resp = await fetchWithAuth(`${API_URL}/api/inventory/units/${editingId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          })
+          const data = await resp.json()
+          if (!resp.ok) throw new Error(data?.error?.message || 'Save failed')
+          createdOrEditedId = editingId
+          notifySuccess('Draft updated')
+        } else {
+          // Create draft linked to a model (required)
+          if (!form.model_id) {
+            throw new Error('Please select a unit model to link. It is required.')
+          }
+          const faBody = {
+            code: String(form.code || '').trim(),
+            model_id: Number(form.model_id),
+            // include optional inventory metadata if provided
+            unit_number: form.unit_number || undefined,
+            floor: form.floor || undefined,
+            building_number: form.building_number || undefined,
+            block_sector: form.block_sector || undefined,
+            zone: form.zone || undefined
+          }
+          if (!faBody.code) throw new Error('Code is required')
+          resp = await fetchWithAuth(`${API_URL}/api/inventory/units`, { // Use inventory route
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(faBody)
+          })
+          const data = await resp.json()
+          if (!resp.ok) throw new Error(data?.error?.message || 'Save failed')
+          createdOrEditedId = data?.unit?.id
+          notifySuccess('Unit draft created and linked to model. Awaiting Financial Manager approval.')
         }
-        const faBody = {
-          code: String(form.code || '').trim(),
-          model_id: Number(form.model_id),
-          // include optional inventory metadata if provided
-          unit_number: form.unit_number || undefined,
-          floor: form.floor || undefined,
-          building_number: form.building_number || undefined,
-          block_sector: form.block_sector || undefined,
-          zone: form.zone || undefined,
-          garden_details: form.garden_details || undefined
-        }
-        if (!faBody.code) throw new Error('Code is required')
-        resp = await fetchWithAuth(`${API_URL}/api/inventory/units`, { // Use inventory route
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(faBody)
-        })
-        const data = await resp.json()
-        if (!resp.ok) throw new Error(data?.error?.message || 'Save failed')
-        createdOrEditedId = data?.unit?.id
-        notifySuccess('Unit draft created and linked to model. Awaiting Financial Manager approval.')
       } else { // Superadmin path
         const body = {
           ...form,
@@ -287,7 +308,6 @@ export default function Units() {
               <input placeholder="Building Number" value={form.building_number} onChange={e => setForm(s => ({ ...s, building_number: e.target.value }))} style={ctrl} />
               <input placeholder="Block/Sector" value={form.block_sector} onChange={e => setForm(s => ({ ...s, block_sector: e.target.value }))} style={ctrl} />
               <input placeholder="Zone" value={form.zone} onChange={e => setForm(s => ({ ...s, zone: e.target.value }))} style={ctrl} />
-              <input placeholder="Garden Details" value={form.garden_details} onChange={e => setForm(s => ({ ...s, garden_details: e.target.value }))} style={ctrl} />
             </>
           )}
           <div>
@@ -398,10 +418,27 @@ export default function Units() {
                   <td style={td}>{unit.currency}</td>
                   <td style={td}>{unit.unit_status}</td>
                   <td style={{ ...td, display: 'flex', gap: 8 }}>
-                    <LoadingButton onClick={() => edit(unit)}>Edit</LoadingButton>
-                    <LoadingButton onClick={() => setConfirmDeleteId(unit.id)} loading={deletingIds.has(unit.id)} style={{ ...btn, border: '1px solid #dc262#dc2626' }}>
-                      Delete
-                    </LoadingButton>
+                    {role === 'financial_admin' ? (
+                      <>
+                        {unit.unit_status === 'INVENTORY_DRAFT' ? (
+                          <>
+                            <LoadingButton onClick={() => edit(unit)}>Edit</LoadingButton>
+                            <LoadingButton onClick={() => setConfirmDeleteId(unit.id)} loading={deletingIds.has(unit.id)} style={{ ...btn, border: '1px solid #dc262#dc2626' }}>
+                              Delete
+                            </LoadingButton>
+                          </>
+                        ) : (
+                          <span style={{ color: '#64748b', fontSize: 12 }}>Approved units cannot be edited by FA</span>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <LoadingButton onClick={() => edit(unit)}>Edit</LoadingButton>
+                        <LoadingButton onClick={() => setConfirmDeleteId(unit.id)} loading={deletingIds.has(unit.id)} style={{ ...btn, border: '1px solid #dc262#dc2626' }}>
+                          Delete
+                        </LoadingButton>
+                      </>
+                    )}
                     {/* Link model UI removed: link requests are disabled; use model selection during creation */}
                   </td>
                 </tr>

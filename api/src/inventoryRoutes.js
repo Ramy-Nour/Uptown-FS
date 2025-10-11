@@ -1148,4 +1148,51 @@ router.post('/units/:id/link-request', authMiddleware, requireRole(['financial_a
 
 
 
+// --------------------
+// Financial Admin: update a draft unit's metadata (code and inventory metadata only)
+// --------------------
+router.patch('/units/:id', authMiddleware, requireRole(['financial_admin']), async (req, res) => {
+  try {
+    const id = Number(req.params.id)
+    if (!Number.isFinite(id) || id <= 0) return bad(res, 400, 'Invalid id')
+
+    // Only allow updates while in draft
+    const cur = await pool.query(
+      `SELECT id, unit_status FROM units WHERE id=$1`,
+      [id]
+    )
+    if (cur.rows.length === 0) return bad(res, 404, 'Unit not found')
+    if (cur.rows[0].unit_status !== 'INVENTORY_DRAFT') {
+      return bad(res, 403, 'Only draft units can be edited by Financial Admin')
+    }
+
+    const { code, unit_number, floor, building_number, block_sector, zone } = req.body || {}
+    const fields = []
+    const params = []
+    let c = 1
+
+    if (typeof code === 'string') { fields.push(`code=${c++}`); params.push(code.trim()) }
+    if (unit_number !== undefined) { fields.push(`unit_number=${c++}`); params.push(unit_number || null) }
+    if (floor !== undefined) { fields.push(`floor=${c++}`); params.push(floor || null) }
+    if (building_number !== undefined) { fields.push(`building_number=${c++}`); params.push(building_number || null) }
+    if (block_sector !== undefined) { fields.push(`block_sector=${c++}`); params.push(block_sector || null) }
+    if (zone !== undefined) { fields.push(`zone=${c++}`); params.push(zone || null) }
+
+    if (fields.length === 0) return bad(res, 400, 'No fields to update')
+
+    const idPh = `${c++}`
+    params.push(id)
+
+    const r = await pool.query(
+      `UPDATE units SET ${fields.join(', ')}, updated_at=now() WHERE id=${idPh} RETURNING *`,
+      params
+    )
+
+    return ok(res, { unit: r.rows[0] })
+  } catch (e) {
+    console.error('PATCH /api/inventory/units/:id error:', e)
+    return bad(res, 500, 'Internal error')
+  }
+})
+
 export default router

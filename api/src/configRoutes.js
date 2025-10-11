@@ -171,17 +171,38 @@ router.patch('/payment-thresholds', requireRole(['admin', 'superadmin']), async 
  * Proposals workflow
  */
 
-// List proposals (FM sees own pending; TM sees all pending)
+// List proposals (supports status filter). 
+// - FM: pending proposals they created when no status is provided; with status=approved, shows their approved proposals.
+// - TM: pending proposals (default); with status=approved, shows all approved proposals.
 router.get('/payment-thresholds/proposals', async (req, res) => {
   try {
     const user = req.user
     const role = user?.role
+    const status = String(req.query.status || 'pending').toLowerCase()
+    const allowedStatus = ['pending', 'approved', 'rejected']
+    const effectiveStatus = allowedStatus.includes(status) ? status : 'pending'
+
     let rows = []
     if (role === 'financial_manager') {
-      const q = await pool.query('SELECT * FROM payment_threshold_proposals WHERE status=$1 AND proposed_by=$2 ORDER BY proposed_at DESC', ['pending', user.id])
-      rows = q.rows
+      if (effectiveStatus === 'pending') {
+        const q = await pool.query(
+          'SELECT * FROM payment_threshold_proposals WHERE status=$1 AND proposed_by=$2 ORDER BY proposed_at DESC',
+          ['pending', user.id]
+        )
+        rows = q.rows
+      } else {
+        const q = await pool.query(
+          'SELECT * FROM payment_threshold_proposals WHERE status=$1 AND proposed_by=$2 ORDER BY approved_at DESC, proposed_at DESC',
+          [effectiveStatus, user.id]
+        )
+        rows = q.rows
+      }
     } else if (['ceo', 'chairman', 'vice_chairman', 'top_management'].includes(role)) {
-      const q = await pool.query('SELECT * FROM payment_threshold_proposals WHERE status=$1 ORDER BY proposed_at ASC', ['pending'])
+      const order = effectiveStatus === 'pending' ? 'proposed_at ASC' : 'approved_at DESC, proposed_at DESC'
+      const q = await pool.query(
+        `SELECT * FROM payment_threshold_proposals WHERE status=$1 ORDER BY ${order}`,
+        [effectiveStatus]
+      )
       rows = q.rows
     } else {
       return res.status(403).json({ error: { message: 'Forbidden' } })
@@ -201,6 +222,9 @@ router.get('/payment-thresholds/proposals', async (req, res) => {
           firstYearPercentMax: r.first_year_percent_max == null ? null : Number(r.first_year_percent_max),
           secondYearPercentMin: r.second_year_percent_min == null ? null : Number(r.second_year_percent_min),
           secondYearPercentMax: r.second_year_percent_max == null ? null : Number(r.second_year_percent_max),
+          thirdYearPercentMin: r.third_year_percent_min == null ? null : Number(r.third_year_percent_min),
+          thirdYearPercentMax: r.third_year_percent_max == null ? null : Number(r.third_year_percent_max),
+          pvTolerancePercent: r.pv_tolerance_percent == null ? null : Number(r.pv_tolerance_percent),
           handoverPercentMin: r.handover_percent_min == null ? null : Number(r.handover_percent_min),
           handoverPercentMax: r.handover_percent_max == null ? null : Number(r.handover_percent_max),
         }
@@ -208,6 +232,51 @@ router.get('/payment-thresholds/proposals', async (req, res) => {
     })
   } catch (e) {
     console.error('GET /api/config/payment-thresholds/proposals error:', e)
+    return res.status(500).json({ error: { message: 'Internal error' } })
+  }
+})
+
+// Approvals history — TM and FM can view approved proposals
+router.get('/payment-thresholds/history', requireRole(['financial_manager', 'ceo', 'chairman', 'vice_chairman', 'top_management']), async (req, res) => {
+  try {
+    const role = req.user?.role
+    const isFM = role === 'financial_manager'
+    let rows = []
+    if (isFM) {
+      // FM sees their approved proposals
+      const q = await pool.query(
+        'SELECT * FROM payment_threshold_proposals WHERE status=$1 AND proposed_by=$2 ORDER BY approved_at DESC',
+        ['approved', req.user.id]
+      )
+      rows = q.rows
+    } else {
+      const q = await pool.query(
+        'SELECT * FROM payment_threshold_proposals WHERE status=$1 ORDER BY approved_at DESC',
+        ['approved']
+      )
+      rows = q.rows
+    }
+    return res.json({
+      ok: true,
+      history: rows.map(r => ({
+        id: r.id,
+        approved_by: r.approved_by,
+        approved_at: r.approved_at,
+        thresholds: {
+          firstYearPercentMin: r.first_year_percent_min == null ? null : Number(r.first_year_percent_min),
+          firstYearPercentMax: r.first_year_percent_max == null ? null : Number(r.first_year_percent_max),
+          secondYearPercentMin: r.second_year_percent_min == null ? null : Number(r.second_year_percent_min),
+          secondYearPercentMax: r.second_year_percent_max == null ? null : Number(r.second_year_percent_max),
+          thirdYearPercentMin: r.third_year_percent_min == null ? null : Number(r.third_year_percent_min),
+          thirdYearPercentMax: r.third_year_percent_max == null ? null : Number(r.third_year_percent_max),
+          pvTolerancePercent: r.pv_tolerance_percent == null ? null : Number(r.pv_tolerance_percent),
+          handoverPercentMin: r.handover_percent_min == null ? null : Number(r.handover_percent_min),
+          handoverPercentMax: r.handover_percent_max == null ? null : Number(r.handover_percent_max),
+        }
+      }))
+    })
+  } catch (e) {
+    console.error('GET /api/config/payment-thresholds/history error:', e)
     return res.status(500).json({ error: { message: 'Internal error' } })
   }
 })

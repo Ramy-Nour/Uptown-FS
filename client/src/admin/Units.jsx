@@ -31,7 +31,21 @@ export default function Units() {
   const role = JSON.parse(localStorage.getItem('auth_user') || '{}')?.role
 
   // form state
-  const [form, setForm] = useState({ code: '', description: '', unit_type: '', base_price: '', currency: 'EGP', model_id: '' })
+  const [form, setForm] = useState({
+    code: '',
+    description: '',
+    unit_type: '',
+    base_price: '',
+    currency: 'EGP',
+    model_id: '',
+    // Optional inventory metadata (FA can send these on create)
+    unit_number: '',
+    floor: '',
+    building_number: '',
+    block_sector: '',
+    zone: '',
+    garden_details: ''
+  })
   const [editingId, setEditingId] = useState(0)
   const [saving, setSaving] = useState(false)
 
@@ -82,7 +96,20 @@ export default function Units() {
   useEffect(() => { load(page) }, [page])
 
   function resetForm() {
-    setForm({ code: '', description: '', unit_type: '', base_price: '', currency: 'EGP', model_id: '' })
+    setForm({
+      code: '',
+      description: '',
+      unit_type: '',
+      base_price: '',
+      currency: 'EGP',
+      model_id: '',
+      unit_number: '',
+      floor: '',
+      building_number: '',
+      block_sector: '',
+      zone: '',
+      garden_details: ''
+    })
     setEditingId(0)
   }
 
@@ -98,7 +125,17 @@ export default function Units() {
         if (!form.model_id) {
           throw new Error('Please select a unit model to link. It is required.')
         }
-        const faBody = { code: String(form.code || '').trim(), model_id: Number(form.model_id) }
+        const faBody = {
+          code: String(form.code || '').trim(),
+          model_id: Number(form.model_id),
+          // include optional inventory metadata if provided
+          unit_number: form.unit_number || undefined,
+          floor: form.floor || undefined,
+          building_number: form.building_number || undefined,
+          block_sector: form.block_sector || undefined,
+          zone: form.zone || undefined,
+          garden_details: form.garden_details || undefined
+        }
         if (!faBody.code) throw new Error('Code is required')
         resp = await fetchWithAuth(`${API_URL}/api/inventory/units`, { // Use inventory route
           method: 'POST',
@@ -152,7 +189,13 @@ export default function Units() {
       unit_type: u.unit_type || '',
       base_price: String(u.base_price ?? ''),
       currency: u.currency || 'EGP',
-      model_id: u.model_id ? String(u.model_id) : ''
+      model_id: u.model_id ? String(u.model_id) : '',
+      unit_number: u.unit_number || '',
+      floor: u.floor || '',
+      building_number: u.building_number || '',
+      block_sector: u.block_sector || '',
+      zone: u.zone || '',
+      garden_details: u.garden_details || ''
     })
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -237,6 +280,16 @@ export default function Units() {
               </select>
             </>
           )}
+          {role === 'financial_admin' && (
+            <>
+              <input placeholder="Unit Number" value={form.unit_number} onChange={e => setForm(s => ({ ...s, unit_number: e.target.value }))} style={ctrl} />
+              <input placeholder="Floor" value={form.floor} onChange={e => setForm(s => ({ ...s, floor: e.target.value }))} style={ctrl} />
+              <input placeholder="Building Number" value={form.building_number} onChange={e => setForm(s => ({ ...s, building_number: e.target.value }))} style={ctrl} />
+              <input placeholder="Block/Sector" value={form.block_sector} onChange={e => setForm(s => ({ ...s, block_sector: e.target.value }))} style={ctrl} />
+              <input placeholder="Zone" value={form.zone} onChange={e => setForm(s => ({ ...s, zone: e.target.value }))} style={ctrl} />
+              <input placeholder="Garden Details" value={form.garden_details} onChange={e => setForm(s => ({ ...s, garden_details: e.target.value }))} style={ctrl} />
+            </>
+          )}
           <div>
             <LoadingButton type="submit" loading={saving} variant="primary">{saving ? 'Saving…' : (editingId ? 'Update' : 'Create')}</LoadingButton>
             {editingId ? <LoadingButton type="button" onClick={resetForm} style={btn}>Cancel</LoadingButton> : null}
@@ -294,6 +347,11 @@ export default function Units() {
               <tr>
                 <th style={th}>ID</th>
                 <th style={th}>Code</th>
+                <th style={th}>Unit No.</th>
+                <th style={th}>Floor</th>
+                <th style={th}>Building</th>
+                <th style={th}>Block/Sector</th>
+                <th style={th}>Zone</th>
                 <th style={th}>Unit Model</th>
                 <th style={th}>Area (m²)</th>
                 <th style={th}>Garden</th>
@@ -308,7 +366,7 @@ export default function Units() {
               {loading && (
                 <>
                   {Array.from({ length: pageSize }).map((_, i) => (
-                    <SkeletonRow key={i} widths={['sm','lg','lg','sm','sm','sm','lg','sm','sm','lg']} tdStyle={td} />
+                    <SkeletonRow key={i} widths={['sm','lg','md','sm','sm','md','sm','lg','sm','sm','sm','lg','sm','sm','lg']} tdStyle={td} />
                   ))}
                 </>
               )}
@@ -316,6 +374,11 @@ export default function Units() {
                 <tr key={unit.id}>
                   <td style={td}>{unit.id}</td>
                   <td style={td}>{unit.code}</td>
+                  <td style={td}>{unit.unit_number || '-'}</td>
+                  <td style={td}>{unit.floor || '-'}</td>
+                  <td style={td}>{unit.building_number || '-'}</td>
+                  <td style={td}>{unit.block_sector || '-'}</td>
+                  <td style={td}>{unit.zone || '-'}</td>
                   <td style={td}>
                     {(() => {
                       // Prefer fields returned directly from API
@@ -345,7 +408,7 @@ export default function Units() {
               ))}
               {units.length === 0 && !loading && (
                 <tr>
-                  <td style={td} colSpan={10}>No units found.</td>
+                  <td style={td} colSpan={15}>No units found.</td>
                 </tr>
               )}
             </tbody>

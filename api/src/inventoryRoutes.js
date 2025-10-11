@@ -1301,27 +1301,32 @@ router.post('/units/:id/change-request', authMiddleware, requireRole(['financial
 // --------------------
 router.get('/units/changes', authMiddleware, requireRole(['financial_manager','financial_admin']), async (req, res) => {
   try {
-    const { status = 'pending_approval', mine } = req.query || {}
+    const { status = 'pending_approval', mine, unit_id } = req.query || {}
     const role = req.user?.role
     const isFA = role === 'financial_admin'
-    const isFM = role === 'financial_manager'
-
-    // FA can only view their own when mine=1
-    if (isFA && String(mine) !== '1') {
-      return bad(res, 403, 'Financial Admin can only view their own change history (use mine=1)')
-    }
 
     const params = []
     let where = '1=1'
+
     // status filter
     if (String(status) !== 'all') {
-      where += ' AND c.status=$1'
+      where += ` AND c.status=${params.length + 1}`
       params.push(String(status))
     }
 
-    if (isFA) {
-      // restrict to requester
-      where += params.length ? ` AND c.requested_by=${params.length + 1}` : ' AND c.requested_by=$1'
+    const unitIdNum = unit_id ? Number(unit_id) : null
+    if (unitIdNum && Number.isFinite(unitIdNum) && unitIdNum > 0) {
+      // Filter by a specific unit
+      where += ` AND c.unit_id=${params.length + 1}`
+      params.push(unitIdNum)
+      // For FA: allow viewing all requests for this unit (audit purpose)
+      // no requester filter applied when unit_id filter is used
+    } else if (isFA) {
+      // Without unit filter: FA can only view their own when mine=1
+      if (String(mine) !== '1') {
+        return bad(res, 403, 'Financial Admin can only view their own change history (use mine=1) or provide unit_id')
+      }
+      where += ` AND c.requested_by=${params.length + 1}`
       params.push(req.user.id)
     }
 

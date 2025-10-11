@@ -6,6 +6,7 @@ import LoadingButton from '../components/LoadingButton.jsx'
 import SkeletonRow from '../components/SkeletonRow.jsx'
 import { notifyError, notifySuccess } from '../lib/notifications.js'
 import ConfirmModal from '../components/ConfirmModal.jsx'
+import UnitDetailsDrawer from '../components/UnitDetailsDrawer.jsx'
 
 export default function Units() {
   const [units, setUnits] = useState([])
@@ -244,6 +245,8 @@ export default function Units() {
   }
 
   const [confirmDeleteId, setConfirmDeleteId] = useState(0)
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const [detailsUnit, setDetailsUnit] = useState(null)
 
   async function performDelete(id) {
     // optimistic removal
@@ -440,6 +443,7 @@ export default function Units() {
                   <td style={td}>{unit.currency}</td>
                   <td style={td}>{unit.unit_status}</td>
                   <td style={{ ...td, display: 'flex', gap: 8 }}>
+                    <LoadingButton onClick={() => { setDetailsUnit(unit); setDetailsOpen(true) }}>Details</LoadingButton>
                     {role === 'financial_admin' ? (
                       <>
                         {unit.unit_status === 'INVENTORY_DRAFT' ? (
@@ -517,6 +521,7 @@ export default function Units() {
         onConfirm={() => { const id = confirmDeleteId; setConfirmDeleteId(0); performDelete(id) }}
         onCancel={() => setConfirmDeleteId(0)}
       />
+      <UnitDetailsDrawer unit={detailsUnit} open={detailsOpen} onClose={() => setDetailsOpen(false)} />
     </div>
   )
 }

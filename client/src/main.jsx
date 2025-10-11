@@ -28,6 +28,7 @@ import HoldsFM from './admin/HoldsFM.jsx'
 import HoldsCEO from './admin/HoldsCEO.jsx'
 import WorkflowLogs from './admin/WorkflowLogs.jsx'
 import PaymentThresholds from './admin/PaymentThresholds.jsx'
+import InventoryChanges from './admin/InventoryChanges.jsx'
 
 function RoleBasedRoute({ children, allowedRoles }) {
   const token = localStorage.getItem('auth_token');
@@ -171,6 +172,14 @@ createRoot(document.getElementById('root')).render(
             element={
               <RoleBasedRoute allowedRoles={['financial_manager']}>
                 <InventoryDrafts />
+              </RoleBasedRoute>
+            }
+          />
+          <Route
+            path="/admin/inventory-changes"
+            element={
+              <RoleBasedRoute allowedRoles={['financial_manager']}>
+                <InventoryChanges />
               </RoleBasedRoute>
             }
           />

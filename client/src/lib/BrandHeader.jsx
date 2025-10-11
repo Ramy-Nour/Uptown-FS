@@ -149,6 +149,7 @@ export default function BrandHeader({ title, onLogout }) {
         return [
           ...baseWithCalc,
           { label: 'Inventory', href: '/admin/inventory' },
+          { label: 'My Inventory Requests', href: '/admin/inventory-change-history' },
           { label: 'Standard Pricing', href: '/admin/standard-pricing' },
           { label: 'My Proposals', href: '/deals/my-proposals' }
         ]

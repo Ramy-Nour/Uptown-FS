@@ -29,6 +29,7 @@ import HoldsCEO from './admin/HoldsCEO.jsx'
 import WorkflowLogs from './admin/WorkflowLogs.jsx'
 import PaymentThresholds from './admin/PaymentThresholds.jsx'
 import InventoryChanges from './admin/InventoryChanges.jsx'
+import InventoryChangeHistory from './admin/InventoryChangeHistory.jsx'
 
 function RoleBasedRoute({ children, allowedRoles }) {
   const token = localStorage.getItem('auth_token');
@@ -164,6 +165,14 @@ createRoot(document.getElementById('root')).render(
             element={
               <RoleBasedRoute allowedRoles={['financial_admin', 'superadmin']}>
                 <Units />
+              </RoleBasedRoute>
+            }
+          />
+          <Route
+            path="/admin/inventory-change-history"
+            element={
+              <RoleBasedRoute allowedRoles={['financial_admin']}>
+                <InventoryChangeHistory />
               </RoleBasedRoute>
             }
           />

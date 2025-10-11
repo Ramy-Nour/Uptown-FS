@@ -1299,18 +1299,41 @@ router.post('/units/:id/change-request', authMiddleware, requireRole(['financial
 // --------------------
 // Financial Manager: list/approve/reject change requests
 // --------------------
-router.get('/units/changes', authMiddleware, requireRole(['financial_manager']), async (req, res) => {
+router.get('/units/changes', authMiddleware, requireRole(['financial_manager','financial_admin']), async (req, res) => {
   try {
-    const { status = 'pending_approval' } = req.query || {}
+    const { status = 'pending_approval', mine } = req.query || {}
+    const role = req.user?.role
+    const isFA = role === 'financial_admin'
+    const isFM = role === 'financial_manager'
+
+    // FA can only view their own when mine=1
+    if (isFA && String(mine) !== '1') {
+      return bad(res, 403, 'Financial Admin can only view their own change history (use mine=1)')
+    }
+
+    const params = []
+    let where = '1=1'
+    // status filter
+    if (String(status) !== 'all') {
+      where += ' AND c.status=$1'
+      params.push(String(status))
+    }
+
+    if (isFA) {
+      // restrict to requester
+      where += params.length ? ` AND c.requested_by=${params.length + 1}` : ' AND c.requested_by=$1'
+      params.push(req.user.id)
+    }
+
     const r = await pool.query(
       `SELECT c.*, u.code AS unit_code, u.unit_status, ru.email AS requested_by_email, au.email AS approved_by_email
        FROM unit_inventory_changes c
        LEFT JOIN units u ON u.id = c.unit_id
        LEFT JOIN users ru ON ru.id = c.requested_by
        LEFT JOIN users au ON au.id = c.approved_by
-       WHERE c.status=$1
+       WHERE ${where}
        ORDER BY c.id DESC`,
-      [String(status)]
+      params
     )
     return ok(res, { changes: r.rows })
   } catch (e) {

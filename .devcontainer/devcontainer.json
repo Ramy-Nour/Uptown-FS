@@ -23,5 +23,6 @@
         }
       }
     }
-  }
+  },
+  "postStartCommand": "docker compose up -d"
 }

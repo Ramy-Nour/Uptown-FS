@@ -202,6 +202,56 @@ API integration tests:
 
 ---
 
+## Calculator Modularity Audit
+
+Scope: review of calculator architecture, unused/broken files, and drift from modular design (no deletions performed).
+
+Summary
+- The calculator is intentionally modular (InputsForm, LivePreview, PaymentSchedule, UnitInfoSection, ClientInfoForm, ContractDetailsForm, EvaluationPanel).
+- App.jsx has accumulated too many responsibilities (validation, payload building, comparison metrics, some deal-bridging). It still works, but should be split into hooks/utilities to restore clean modularity.
+
+Findings — likely broken filename mismatches
+- client/src/components/UnitDetailsDrawer.jsx.jsx
+  - Imports expect ../components/UnitDetailsDrawer.jsx (single .jsx). This mismatch will break admin drawers.
+- client/src/admin/InventoryChangeHistory.jsx.jsx
+  - Router imports InventoryChangeHistory.jsx (single .jsx).
+- client/src/admin/InventoryChanges.jsx.jsx
+  - Router imports InventoryChanges.jsx (single .jsx).
+
+Findings — present but currently unused in routes
+- client/src/components/dashboards/SalesManagerDashboard.jsx
+- client/src/components/dashboards/SalesRepDashboard.jsx
+- client/src/components/notifications/NotificationCenter.jsx
+
+Back-end legacy/unused
+- api/server.js (compose and scripts run src/index.js). Keep as legacy starter, but it is not used by the dev stack.
+
+What works well
+- useCalculatorSnapshot and CreateDeal.jsx integration to prefill and extract calculator state.
+- Payment schedule export (CSV/XLSX) and checks-sheet generator.
+- Codespaces-compatible HMR and API URL wiring.
+
+Recommended actions (future task list)
+- File hygiene
+  - Rename the three double-extension files to single .jsx to match imports and prevent runtime errors.
+- Refactor App.jsx (behavior must remain identical)
+  - Extract buildPayload and validateForm into client/src/lib/calculatorHelpers.js.
+  - Extract comparison calculations into a hook: client/src/lib/useCalculatorComparison.js.
+  - Keep App.jsx focused on composing UI and delegating logic.
+- Optional wiring
+  - If dashboards are desired now, add routes and minimal API stubs; otherwise mark as “future” and leave untouched.
+  - Wire NotificationCenter to notifications API or keep as “future module.”
+- DX/Quality
+  - Add ESLint + Prettier to catch duplicate declarations and file mismatches earlier.
+  - Consider TypeScript for types on calculator payloads and API responses (incremental).
+- Documentation
+  - Maintain this section (Calculator Modularity Audit) and “Recent Fixes and Changes” for every session.
+  - When renaming files or refactoring, summarize exactly what moved and why.
+
+No deletions were done in this audit.
+
+---
+
 ## AI/Agent Contribution Rules
 
 Any automated agent (AI or script) committing changes MUST:

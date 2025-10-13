@@ -53,8 +53,12 @@ services:
       - "5173:5173"
     environment:
       - NODE_ENV=development
-      - VITE_API_URL=http://localhost:3000
-      # Ensure the browser connects HMR to the externally reachable host/port.
+      # When running in GitHub Codespaces, pass through Codespaces env so Vite can compute public URLs.
+      - CODESPACE_NAME=${CODESPACE_NAME}
+      - GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN=${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}
+      # Fallbacks for local dev
+      - VITE_API_URL=http://localhost:3001  # overridden to https://<codespace>-3001... inside vite.config.js when Codespaces vars exist
+      # Ensure the browser connects HMR to the externally reachable host/port (local fallback).
       - HMR_HOST=localhost
       - HMR_CLIENT_PORT=5173
     volumes:

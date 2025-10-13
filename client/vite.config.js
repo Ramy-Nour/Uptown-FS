@@ -7,13 +7,17 @@ const isCodespaces = Boolean(
 )
 
 // Compute the public hostnames that Codespaces assigns for forwarded ports.
-const codespaceHmrHost = isCodespaces
+const codespacePublicHost5173 = isCodespaces
   ? `${process.env.CODESPACE_NAME}-5173.${process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}`
   : (process.env.HMR_HOST || 'localhost')
 
+const codespacePublicHost3001 = isCodespaces
+  ? `${process.env.CODESPACE_NAME}-3001.${process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}`
+  : 'localhost'
+
 // Also set VITE_API_URL automatically in Codespaces so the app talks to the API through 3001.
 if (isCodespaces) {
-  process.env.VITE_API_URL = `https://${process.env.CODESPACE_NAME}-3001.${process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}`
+  process.env.VITE_API_URL = `https://${codespacePublicHost3001}`
 }
 
 export default defineConfig({
@@ -23,10 +27,12 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     hmr: {
-      // Use secure WebSocket and the public forwarded host in Codespaces
+      // IMPORTANT: In Codespaces, do not use localhost for HMR; use the forwarded host and wss on 443.
       protocol: isCodespaces ? 'wss' : 'ws',
-      host: codespaceHmrHost,
+      host: codespacePublicHost5173,
       clientPort: Number(isCodespaces ? 443 : (process.env.HMR_CLIENT_PORT || 5173))
-    }
+    },
+    // Ensure the origin for dev assets matches the forwarded hostname so imports resolve
+    origin: isCodespaces ? `https://${codespacePublicHost5173}` : undefined
   }
 })

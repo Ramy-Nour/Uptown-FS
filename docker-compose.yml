@@ -24,7 +24,7 @@ services:
       target: development
     container_name: app_api
     ports:
-      - "3000:3000"
+      - "3001:3000" # host:container – use 3001 on host to avoid conflicts
     env_file:
       - .env
     environment:

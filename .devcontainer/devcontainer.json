@@ -1,8 +1,8 @@
 {
   "name": "Uptown-FS",
-  "forwardPorts": [3000, 5173],
+  "forwardPorts": [3001, 5173],
   "portsAttributes": {
-    "3000": {
+    "3001": {
       "label": "API (Express)",
       "onAutoForward": "notify",
       "protocol": "http"
@@ -18,7 +18,7 @@
       "settings": {
         "remote.autoForwardPorts": true,
         "remote.portsAttributes": {
-          "3000": { "label": "API (Express)" },
+          "3001": { "label": "API (Express)" },
           "5173": { "label": "Client (Vite)" }
         }
       }

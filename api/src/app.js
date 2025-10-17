@@ -1105,34 +1105,7 @@ app.post('/api/generate-plan', validate(generatePlanSchema), async (req, res) =>
     const annualRate = Number(effectiveStdPlan.financialDiscountRate) || 0
     const monthlyRate = annualRate > 0 ? Math.pow(1 + annualRate / 100, 1 / 12) - 1 : 0
     let standardPV = Number(effectiveStdPlan.calculatedPV) || 0
-    if (!Number.isFinite(standardPV) || standardPV <= 0) {
-      // Prefer authoritative duration/frequency from global standard_plan when available
-      let stdCfg = null
-      try {
-        const pr = await pool.query(
-          `SELECT plan_duration_years, installment_frequency
-           FROM standard_plan
-           WHERE active=TRUE
-           ORDER BY id DESC
-           LIMIT 1`
-        )
-        stdCfg = pr.rows[0] || null
-      } catch {}
-
-      const durYears = Number(stdCfg?.plan_duration_years ?? effInputs.planDurationYears) || 1
-      const freq = normalizeFrequency(stdCfg?.installment_frequency || effInputs.installmentFrequency || 'monthly')
-      let perYear = 12
-      switch (freq) {
-        case Frequencies.Quarterly: perYear = 4; break
-        case Frequencies.BiAnnually: perYear = 2; break
-        case Frequencies.Annually: perYear = 1; break
-        case Frequencies.Monthly: default: perYear = 12; break
-      }
-      const n = durYears * perYear
-      const per = n > 0 ? (Number(effectiveStdPlan.totalPrice) || 0) / n : 0
-      const months = getPaymentMonths(n, freq, 0)
-      standardPV = months.reduce((pv, m) => pv + (per > 0 ? per / Math.pow(1 + monthlyRate, m) : 0), 0)
-    }
+    
 
     // ----- Proposed PV from calculation engine -----
     const proposedPV = Number(result.calculatedPV) || 0

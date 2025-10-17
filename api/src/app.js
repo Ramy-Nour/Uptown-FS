@@ -986,7 +986,7 @@ app.post('/api/generate-plan', validate(generatePlanSchema), async (req, res) =>
           'Per-pricing financial settings are required (std_financial_rate_percent, plan_duration_years, installment_frequency). Configure and approve them for the selected unit/model.'
         )
       } else {
-        // Fallback: FM stored PV
+        // Fallback: FM stored PV (if per-pricing terms are not available/valid)
         let fmPV = null
         try {
           if (unitId) {
@@ -1045,98 +1045,6 @@ app.post('/api/generate-plan', validate(generatePlanSchema), async (req, res) =>
             'Active standard plan is missing or invalid (rate/duration/frequency). Configure it under Top Management → Standard Plan. Alternatively, ensure FM Calculated PV exists for this unit model.'
           )
         }
-      } else {
-          // Fallback 2: use FM stored PV if available; else return 422
-          let fmPV = null
-          try {
-            if (unitId) {
-              try {
-                const q1 = await pool.query(
-                  `SELECT p.calculated_pv
-                   FROM units u
-                   JOIN unit_model_pricing p ON p.model_id = u.model_id
-                   WHERE u.id=$1 AND p.status='approved'
-                   ORDER BY p.id DESC
-                   LIMIT 1`,
-                  [Number(unitId)]
-                )
-                fmPV = Number(q1.rows[0]?.calculated_pv) || null
-              } catch (e) { /* ignore */ }
-
-              if (fmPV == null) {
-                try {
-                  const q2 = await pool.query(
-                    `SELECT calculated_pv
-                     FROM standard_pricing
-                     WHERE status='approved' AND unit_id=$1
-                     ORDER BY id DESC
-                     LIMIT 1`,
-                    [Number(unitId)]
-                  )
-                  fmPV = Number(q2.rows[0]?.calculated_pv) || null
-                } catch (e) { /* ignore */ }
-              }
-            } else if (standardPricingId) {
-              try {
-                const q3 = await pool.query(
-                  `SELECT calculated_pv
-                   FROM standard_pricing
-                   WHERE id=$1`,
-                  [Number(standardPricingId)]
-                )
-                fmPV = Number(q3.rows[0]?.calculated_pv) || null
-              } catch (e) { /* ignore */ }
-            }
-          } catch (e) { /* ignore */ }
-
-          if (fmPV != null && fmPV > 0) {
-            usedStoredFMpv = true
-            annualRateUsedMeta = Number(stdCfg?.std_financial_rate_percent) || null
-            durationYearsUsedMeta = Number(stdCfg?.plan_duration_years) || null
-            frequencyUsedMeta = freqCalc || null
-
-            effectiveStdPlan = {
-              totalPrice,
-              financialDiscountRate: annualRateUsedMeta,
-              calculatedPV: fmPV
-            }
-          } else {
-            return bad(res, 422,
-              'Active standard plan is missing or invalid (rate/duration/frequency). Configure it under Top Management → Standard Plan. Alternatively, ensure FM Calculated PV exists for this unit model.'
-            )
-          }
-        }
-      } else {
-        // Compute Standard PV baseline from totalPrice using authoritative rate/duration/frequency from global standard plan
-        const monthlyRateCalc = Math.pow(1 + effRate / 100, 1 / 12) - 1
-        let perYearCalc = 12
-        switch (freqCalc) {
-          case Frequencies.Quarterly: perYearCalc = 4; break
-          case Frequencies.BiAnnually: perYearCalc = 2; break
-          case Frequencies.Annually: perYearCalc = 1; break
-          case Frequencies.Monthly:
-          default: perYearCalc = 12; break
-        }
-        const nCalc = durYears * perYearCalc
-        const perPaymentCalc = nCalc > 0 ? (totalPrice / nCalc) : 0
-        const monthsCalc = getPaymentMonths(nCalc, freqCalc, 0)
-        let stdPVComputed = 0
-        if (monthlyRateCalc <= 0 || nCalc === 0) {
-          stdPVComputed = perPaymentCalc * nCalc
-          computedPVEqualsTotalNominal = true
-        } else {
-          for (const m of monthsCalc) stdPVComputed += perPaymentCalc / Math.pow(1 + monthlyRateCalc, m)
-          computedPVEqualsTotalNominal = false
-        }
-
-        effectiveStdPlan = {
-          totalPrice,
-          financialDiscountRate: effRate,
-          calculatedPV: Number(stdPVComputed.toFixed(2))
-        }
-        annualRateUsedMeta = effRate
-        durationYearsUsedMeta = durYears
-        frequencyUsedMeta = freqCalc
       }
 
       // Default inputs from stdCfg when not provided

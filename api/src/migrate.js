@@ -75,6 +75,7 @@ export async function runMigrations() {
     console.error('[migrations] Migration run failed:', e?.message || e)
     process.exitCode = 1
   } finally {
-    try { await pool.end() } catch {}
+    // Do NOT end the shared pool here; the API process reuses it.
+    // If you want to run migrations as a one-off script, set SKIP_MIGRATIONS=1 and invoke migrate separately.
   }
 })()

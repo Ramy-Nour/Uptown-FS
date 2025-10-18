@@ -20,6 +20,21 @@ function ClientInfoFormInner({ role, clientInfo, setClientInfo, styles, language
   const [lastFocusChangeAt, setLastFocusChangeAt] = useState(0)
   // Ref to the form section to check whether the browser focus is inside this form
   const formRef = useRef(null)
+  // Keep a ref of the last parent clientInfo we actually synced to local (for equality checks)
+  const lastSyncedRef = useRef(clientInfo)
+
+  // Shallow equality for plain objects
+  const shallowEqual = (a, b) => {
+    if (a === b) return true
+    if (!a || !b) return false
+    const ak = Object.keys(a)
+    const bk = Object.keys(b)
+    if (ak.length !== bk.length) return false
+    for (const k of ak) {
+      if (a[k] !== b[k]) return false
+    }
+    return true
+  }
 
   // Sync local buffer when parent clientInfo changes (e.g., OCR apply or snapshot load)
   useEffect(() => {
@@ -47,6 +62,11 @@ function ClientInfoFormInner({ role, clientInfo, setClientInfo, styles, language
         (!!activeEl && formRef.current.contains(activeEl) && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) ||
         !!anyFocusedEl)
 
+    // If parent clientInfo hasn't meaningfully changed, skip syncing altogether.
+    if (shallowEqual(clientInfo, lastSyncedRef.current)) {
+      return
+    }
+
     const shouldSkip = !!focusedKey || recentlyEditing || typing || isFocusedInForm || inFocusTransitionWindow
 
     if (shouldSkip) {
@@ -66,9 +86,9 @@ function ClientInfoFormInner({ role, clientInfo, setClientInfo, styles, language
     }
 
     // Selective merge: do not overwrite the actively focused field
+    let appliedCount = 0
     setLocal(prev => {
       const merged = { ...prev }
-      let appliedCount = 0
       for (const k of Object.keys(clientInfo || {})) {
         if (focusedKey && k === focusedKey) continue
         if (merged[k] !== clientInfo[k]) {
@@ -81,8 +101,13 @@ function ClientInfoFormInner({ role, clientInfo, setClientInfo, styles, language
         appliedCount,
         keysApplied: appliedCount > 0 ? Object.keys(clientInfo || {}).filter(k => (!focusedKey || k !== focusedKey) && prev[k] !== clientInfo[k]) : [],
       })
-      return merged
+      // Important: if nothing changed, return prev to avoid creating a new object and re-rendering during typing.
+      return appliedCount > 0 ? merged : prev
     })
+    // Update last synced ref only when we actually applied changes
+    if (appliedCount > 0) {
+      lastSyncedRef.current = { ...clientInfo }
+    }
   }, [clientInfo, focusedKey, lastEditAt, typing, lastFocusChangeAt])
 
   // Commit a single field to parent state
@@ -133,6 +158,8 @@ function ClientInfoFormInner({ role, clientInfo, setClientInfo, styles, language
     }
     setClientInfo(s => ({ ...s, ...sanitized }))
     setLocal(s => ({ ...s, ...sanitized }))
+    // Reflect latest synced parent state
+    lastSyncedRef.current = { ...clientInfo, ...sanitized }
     setOcrProcessing(false)
   }
   const handleOCRError = (msg) => {

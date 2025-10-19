@@ -361,7 +361,16 @@ export default function CreateDeal() {
             <h3 style={{ marginTop: 0, marginBottom: 8 }}>Selected Unit</h3>
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => navigate('/deals/inventory')} style={btnPlain}>Change Unit</button>
-              <button onClick={requestUnitBlock} style={btnPrimary}>Request Unit Block</button>
+              {(() => {
+                try {
+                  const u = JSON.parse(localStorage.getItem('auth_user') || '{}')
+                  // Only allow Consultants and Sales Managers to request a block
+                  if (u?.role === 'property_consultant' || u?.role === 'sales_manager') {
+                    return <button onClick={requestUnitBlock} style={btnPrimary}>Request Unit Block</button>
+                  }
+                } catch {}
+                return null
+              })()}
             </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>

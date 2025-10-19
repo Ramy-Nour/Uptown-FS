@@ -12,6 +12,7 @@ export default function BlockRequests() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [cancelling, setCancelling] = useState(new Set())
+  const [acting, setActing] = useState(new Set())
 
   const user = (() => {
     try { return JSON.parse(localStorage.getItem('auth_user') || '{}') } catch { return {} }
@@ -43,6 +44,8 @@ export default function BlockRequests() {
     return false
   }
 
+  const canApproveReject = role === 'financial_manager'
+
   async function cancelRequest(id) {
     try {
       setCancelling(s => new Set([...s, id]))
@@ -55,6 +58,29 @@ export default function BlockRequests() {
       notifyError(e, 'Unable to cancel request')
     } finally {
       setCancelling(s => {
+        const n = new Set(s); n.delete(id); return n
+      })
+    }
+  }
+
+  async function fmDecision(id, action) {
+    try {
+      const reason = window.prompt(`Enter ${action} reason (optional):`, '') || ''
+      setActing(s => new Set([...s, id]))
+      const resp = await fetchWithAuth(`${API_URL}/api/blocks/${id}/approve`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, reason })
+      })
+      const data = await resp.json().catch(() => ({}))
+      if (!resp.ok) throw new Error(data?.error?.message || `Failed to ${action}`)
+      notifySuccess(`Request ${action}ed`)
+      // Remove from list
+      setRows(rs => rs.filter(r => r.id !== id))
+    } catch (e) {
+      notifyError(e, `Unable to ${action} request`)
+    } finally {
+      setActing(s => {
         const n = new Set(s); n.delete(id); return n
       })
     }
@@ -94,16 +120,34 @@ export default function BlockRequests() {
                 <td style={td}>{r.duration_days}</td>
                 <td style={td}>{r.reason || '-'}</td>
                 <td style={td}>{r.created_at ? new Date(r.created_at).toLocaleString() : ''}</td>
-                <td style={{ ...td, display: 'flex', gap: 8 }}>
+                <td style={{ ...td, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {canApproveReject && (
+                    <>
+                      <LoadingButton
+                        onClick={() => fmDecision(r.id, 'approve')}
+                        loading={acting.has(r.id)}
+                        style={{ ...btn, border: '1px solid #16a34a', color: '#16a34a' }}
+                      >
+                        Approve
+                      </LoadingButton>
+                      <LoadingButton
+                        onClick={() => fmDecision(r.id, 'reject')}
+                        loading={acting.has(r.id)}
+                        style={{ ...btn, border: '1px solid #dc2626', color: '#dc2626' }}
+                      >
+                        Reject
+                      </LoadingButton>
+                    </>
+                  )}
                   {canCancelRow(r) ? (
                     <LoadingButton
                       onClick={() => cancelRequest(r.id)}
                       loading={cancelling.has(r.id)}
-                      style={{ ...btn, border: '1px solid #dc2626', color: '#dc2626' }}
+                      style={{ ...btn, border: '1px solid #9ca3af', color: '#374151' }}
                     >
                       Cancel
                     </LoadingButton>
-                  ) : <span style={{ color: '#64748b' }}>No actions</span>}
+                  ) : (!canApproveReject && <span style={{ color: '#64748b' }}>No actions</span>)}
                 </td>
               </tr>
             ))}

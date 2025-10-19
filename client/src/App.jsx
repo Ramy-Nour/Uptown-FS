@@ -1454,15 +1454,20 @@ export default function App(props) {
                   {t('generate_contract', language)}
                 </button>
               )}
-              <button type="button" onClick={exportScheduleXLSX} disabled={!schedule.length} style={styles.btn}>
-                {t('export_xlsx', language)}
-              </button>
-              <button type="button" onClick={generateChecksSheetXLSX} disabled={!schedule.length} style={styles.btn}>
-                {t('generate_checks_sheet', language)}
-              </button>
-              <button type="button" onClick={exportScheduleCSV} disabled={!schedule.length} style={styles.btn}>
-                {t('export_csv', language)}
-              </button>
+              {/* Exports (CSV/XLSX/Checks) — Financial Admin only */}
+              {authUser?.role === 'financial_admin' && (
+                <>
+                  <button type="button" onClick={exportScheduleXLSX} disabled={!schedule.length} style={styles.btn}>
+                    {t('export_xlsx', language)}
+                  </button>
+                  <button type="button" onClick={generateChecksSheetXLSX} disabled={!schedule.length} style={styles.btn}>
+                    {t('generate_checks_sheet', language)}
+                  </button>
+                  <button type="button" onClick={exportScheduleCSV} disabled={!schedule.length} style={styles.btn}>
+                    {t('export_csv', language)}
+                  </button>
+                </>
+              )}
             </div>
           </div>
           {/* Policy banner: require per-pricing financial settings for unit/model flows */}

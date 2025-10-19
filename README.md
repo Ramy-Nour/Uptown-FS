@@ -121,6 +121,16 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-10-19 04:15] Document templates and exports alignment:
+  - Verified templates under api/templates: 
+      • Pricing Form G.docx (used for pricing_form) 
+      • Uptown Residence Contract.docx (used for contract)
+    Reservation form template is missing (expected: reservation_form.docx). Generation will require adding this file or mapping to an existing one.
+  - Client buttons (Payment Schedule panel):
+      • Pricing Form visible to property_consultant only
+      • Reservation Form visible to financial_admin only
+      • Contract visible to contract_person only
+      • CSV/XLSX/Checks exports now visible to financial_admin only
 - [2025-10-19 04:05] Client-side route guard added:
   - New component client/src/components/RequireRole.jsx to enforce per-route role access. Unauthorized users are redirected to /deals (fallback configurable).
   - Applied to /deals/block-requests allowing roles: sales_manager, property_consultant, financial_manager.

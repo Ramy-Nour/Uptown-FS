@@ -18,7 +18,8 @@ async function createNotification(type, userId, refTable, refId, message) {
 }
 
 // Request unit block
-router.post('/blocks/request', authMiddleware, requireRole(['property_consultant']), validate(blockRequestSchema), async (req, res) => {
+// NOTE: Router is mounted at /api/blocks, so route paths here must NOT be prefixed with /blocks
+router.post('/request', authMiddleware, requireRole(['property_consultant']), validate(blockRequestSchema), async (req, res) => {
   const { unitId, durationDays, reason } = req.body || {}
   try {
     // Validate unit availability
@@ -63,7 +64,7 @@ router.post('/blocks/request', authMiddleware, requireRole(['property_consultant
 })
 
 // Approve/reject block request
-router.patch('/blocks/:id/approve', authMiddleware, requireRole(['financial_manager']), validate(blockApproveSchema), async (req, res) => {
+router.patch('/:id/approve', authMiddleware, requireRole(['financial_manager']), validate(blockApproveSchema), async (req, res) => {
   const { action, reason } = req.body || {} // action: 'approve' or 'reject'
   const blockId = Number(req.params.id)
   if (!Number.isFinite(blockId)) return res.status(400).json({ error: { message: 'Invalid block id' } })
@@ -123,7 +124,7 @@ router.patch('/blocks/:id/approve', authMiddleware, requireRole(['financial_mana
 })
 
 // Get current blocks
-router.get('/blocks/current', authMiddleware, async (req, res) => {
+router.get('/current', authMiddleware, async (req, res) => {
   try {
     let query = `
       SELECT 
@@ -159,7 +160,7 @@ router.get('/blocks/current', authMiddleware, async (req, res) => {
 })
 
 // Extend block duration
-router.patch('/blocks/:id/extend', authMiddleware, requireRole(['financial_manager']), validate(blockExtendSchema), async (req, res) => {
+router.patch('/:id/extend', authMiddleware, requireRole(['financial_manager']), validate(blockExtendSchema), async (req, res) => {
   const { additionalDays, reason } = req.body || {}
   const blockId = Number(req.params.id)
   if (!Number.isFinite(blockId)) return res.status(400).json({ error: { message: 'Invalid block id' } })

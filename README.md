@@ -121,6 +121,10 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-10-19 04:05] Client-side route guard added:
+  - New component client/src/components/RequireRole.jsx to enforce per-route role access. Unauthorized users are redirected to /deals (fallback configurable).
+  - Applied to /deals/block-requests allowing roles: sales_manager, property_consultant, financial_manager.
+  - Purpose: Begin enforcing UI-level access control consistently; server-side auth remains authoritative.
 - [2025-10-19 03:55] Sales Manager team scoping for pending Block Requests:
   - API: GET /api/blocks/pending now restricts Sales Manager view to requests initiated by consultants in their team, using sales_team_members (manager_user_id → consultant_user_id). Consultants see only their own; Financial Managers see all.
   - Purpose: Ensure SMs only manage requests from their direct team.

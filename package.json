@@ -10,7 +10,9 @@
   "scripts": {
     "dev": "docker compose up --build",
     "down": "docker compose down",
-    "logs": "docker compose logs -f"
+    "logs": "docker compose logs -f",
+    "db:backup": "bash scripts/db_volume_backup.sh",
+    "db:restore": "bash scripts/db_volume_restore.sh"
   },
   "repository": {
     "type": "git",

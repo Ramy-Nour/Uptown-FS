@@ -121,6 +121,10 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-10-19 05:15] DB backup/restore convenience commands:
+  - package.json: Added npm scripts `db:backup` and `db:restore` to run the volume backup and restore scripts without typing full paths.
+  - scripts/db_volume_restore.sh: If filename arg is omitted or incorrect, the script now lists available backups from backups/*.tar.gz and shows usage examples.
+  - README: Updated “Database Backup and Restore” with npm convenience commands and note about auto-listing backups on restore.
 - [2025-10-19 05:00] DB volume backup/restore scripts:
   - Added scripts/db_volume_backup.sh to archive the db_data Docker volume to backups/db_data-YYYYMMDD-HHMMSS.tar.gz (UTC timestamp).
   - Added scripts/db_volume_restore.sh to restore the db_data volume from a tar.gz archive. Documented usage and cautions (stop db before, version compatibility).
@@ -258,6 +262,11 @@ Important
   - docker compose stop db
 - After restore, start the db container:
   - docker compose up -d db
+
+Convenience commands (npm)
+- Backup: npm run db:backup
+- Restore: npm run db:restore -- backups/db_data-YYYYMMDD-HHMMSS.tar.gz
+  - If you omit the filename, the restore script will list available backups from backups/*.tar.gz.
 
 Create a volume backup (tar.gz)
 - scripts/db_volume_backup.sh

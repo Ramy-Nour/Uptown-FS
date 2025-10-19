@@ -121,6 +121,26 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-10-19 04:40] Server-rendered Client Offer PDF (Puppeteer):
+  - API: Added POST /api/documents/client-offer (role: property_consultant). Generates a PDF from server-rendered HTML with buyers[] (phones/emails), payment schedule, totals, dates, and optional unit info. Supports Arabic/English.
+  - Infra: Added puppeteer dependency and installed Chromium in API Dockerfile (development and production). Set PUPPETEER_EXECUTABLE_PATH; added fonts for Arabic rendering.
+  - Client: Added “Export Client Offer (PDF)” button in Calculator Payment Schedule panel for property_consultant only. It posts current buyers, schedule, totals, dates, and unit summary to the new endpoint and downloads the PDF.
+  - Note: Reservation Form remains mapped to Pricing Form G.docx (financial_admin); Contract uses Uptown Residence Contract.docx (contract_person). Exports (CSV/XLSX/Checks) remain visible only to financial_admin.
+- [2025-10-19 04:05] Client-side route guard added:
+  - New component client/src/components/RequireRole.jsx to enforce per-route role access. Unauthorized users are redirected to /deals (fallback configurable).
+  - Applied to /deals/block-requests allowing roles: sales_manager, property_consultant, financial_manager.
+  - Purpose: Begin enforcing UI-level access control consistently; server-side auth remains authoritative.
+- [2025-10-19 03:55] Sales Manager team scoping for pending Block Requests:
+  - API: GET /api/blocks/pending now restricts Sales Manager view to requests initiated by consultants in their team, using sales_team_members (manager_user_id → consultant_user_id). Consultants see only their own; Financial Managers see all.
+  - Purpose: Ensure SMs only manage requests from their direct team.
+- [2025-10-19 03:45] FM approval actions in Block Requests queue:
+  - UI: For Financial Managers, /deals/block-requests now shows Approve/Reject buttons per request (inline). It uses PATCH /api/blocks/:id/approve with action approve|reject and optional reason prompt. Requests are removed from the list after decision.
+  - Purpose: Allow FM to process unit block approvals directly from the queue.
+- [2025-10-19 03:35] Block Requests queue (Sales Manager/Consultant): 
+  - API: Added GET /api/blocks/pending (role-aware) and PATCH /api/blocks/:id/cancel (Consultant can cancel own; Sales Manager can cancel any pending). 
+  - UI: Added /deals/block-requests page listing pending block requests with Cancel action where allowed, and a “Block Requests” link in Deals Dashboard for Sales Manager/Consultant/FM.
+  - Purpose: Let Sales Managers monitor and manage pending unit block requests before FM approval.
+- [2025-10-19 03:10] Unit Block request endpoint fixed: Corrected API route prefix so client POST /api/blocks/request matches Express router. Previously, routes were registered under /api/blocks/blocks/* causing HTML/DOCTYPE errors when the client tried to parse JSON. Updated paths in api/src/blockManagement.js to remove the extra '/blocks' prefix (request, approve, current, extend). Also expanded requester roles to include Sales Manager so both Property Consultant and Sales Manager can initiate block requests; approvals remain by Financial Manager.
 - [2025-10-19 02:35] Buyers[] propagated to generate-plan: The /api/generate-plan request now includes a buyers array (1–4) built from ClientInfo, alongside existing payload fields. This enables the API (or downstream consumers) to consider multiple buyers if needed without breaking existing single-buyer logic. File: client/src/App.jsx.
 - [2025-10-19 02:20] Document generation buyers[] mapping: buildDocumentBody now includes a structured buyers array (1–4) built from ClientInfo fields, enabling templates to iterate over all buyers. The existing single-buyer placeholders remain unchanged for Buyer 1. File: client/src/App.jsx.
 - [2025-10-19 02:00] Client Info — multi-buyer support added: The minimal Client Info form now lets you select 1–4 buyers (clientInfo.number_of_buyers). For Buyers 2–4, identical fields open using suffixed keys (buyer_name_2, nationality_2, id_or_passport_2, id_issue_date_2, birth_date_2, address_2, phone_primary_2, phone_secondary_2, email_2). No OCR and no buffering; pure controlled inputs to keep typing stable. File: client/src/components/calculator/ClientInfoFormMin.jsx.
@@ -285,7 +305,17 @@ API integration tests:
 
 ## Roadmap (next sessions)
 
-- Next step: Reintroduce OCR into the Client Information flow incrementally (start from archived ClientInfoForm_OCR.jsx), keeping typing stability. Add explicit “Apply OCR” action with selective merge that never touches manual-only fields (phones, email).
+- Polish Client Offer PDF (server-rendered):
+  - Add branded header/logo, consistent typography, page headers/footers, and proper pagination (repeat table headers on page break).
+  - Improve RTL/Arabic typography and spacing; verify Noto Arabic fallback coverage.
+  - Add multi-language labels, currency formatting, optional unit summary block, and a configurable disclaimer.
+  - Source logo from VITE_COMPANY_LOGO_URL or client/public/logo/* with fallback.
+- Add UI-level access guards project-wide:
+  - Hide block/unblock related links, buttons, and pages from admin/superadmin across all screens (Dashboard, Create Deal, Inventory, queues, etc.).
+  - Keep server-side authorization as the source of truth; UI guards are UX hardening.
+  - Introduce a standard “Access Denied” page and wire RequireRole to render it as a fallback (instead of redirect) for unauthorized visits.
+  - Implement after current feature set is finalized, and test per role.
+- Reintroduce OCR into the Client Information flow incrementally (start from archived ClientInfoForm_OCR.jsx), keeping typing stability. Add explicit “Apply OCR” action with selective merge that never touches manual-only fields (phones, email).
 - Wire real inventory endpoints and types/units data model.
 - Implement authentication/authorization end‑to‑end (API issued tokens).
 - Persist thresholds and management controls (admin UI + API).

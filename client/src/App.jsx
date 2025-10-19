@@ -1019,7 +1019,7 @@ export default function App(props) {
       // Expect a file (pdf/docx). Get filename from Content-Disposition if available.
       const blob = await resp.blob()
       const cd = resp.headers.get('Content-Disposition') || ''
-      const match = /filename\*=UTF-8''([^;]+)|filename=\\"?([^\\";]+)\\"?/i.exec(cd)
+      const match = /filename\*=UTF-8''([^;]+)|filename=\\"?([^\\\";]+)\\"?/i.exec(cd)
       let filename = ''
       if (match) {
         filename = decodeURIComponent(match[1] || match[2] || '')
@@ -1028,6 +1028,67 @@ export default function App(props) {
         const ts = new Date().toISOString().replace(/[:.]/g, '-')
         filename = `${documentType}_${ts}.pdf`
       }
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      setDocError(e.message || String(e))
+    } finally {
+      setDocLoading(false)
+    }
+  }
+
+  async function exportClientOfferPdf() {
+    try {
+      setDocError('')
+      setDocLoading(true)
+      // Build buyers[] from clientInfo (up to 4)
+      const numBuyersRaw = Number(clientInfo.number_of_buyers)
+      const numBuyers = Math.min(Math.max(numBuyersRaw || 1, 1), 4)
+      const buyers = []
+      for (let i = 1; i <= numBuyers; i++) {
+        const sfx = i === 1 ? '' : `_${i}`
+        buyers.push({
+          buyer_name: clientInfo[`buyer_name${sfx}`] || '',
+          phone_primary: clientInfo[`phone_primary${sfx}`] || '',
+          phone_secondary: clientInfo[`phone_secondary${sfx}`] || '',
+          email: clientInfo[`email${sfx}`] || ''
+        })
+      }
+      const body = {
+        language,
+        currency,
+        buyers,
+        schedule: schedule,
+        totals: totals || { totalNominal: (schedule || []).reduce((s, e) => s + (Number(e.amount) || 0), 0) },
+        offer_date: inputs.offerDate || new Date().toISOString().slice(0, 10),
+        first_payment_date: inputs.firstPaymentDate || inputs.offerDate || new Date().toISOString().slice(0, 10),
+        unit: {
+          unit_code: unitInfo.unit_code || '',
+          unit_type: unitInfo.unit_type || ''
+        }
+      }
+      const resp = await fetchWithAuth(`${API_URL}/api/documents/client-offer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      })
+      if (!resp.ok) {
+        let errMsg = 'Failed to generate Client Offer PDF'
+        try {
+          const j = await resp.json()
+          errMsg = j?.error?.message || errMsg
+        } catch {}
+        throw new Error(errMsg)
+      }
+      const blob = await resp.blob()
+      const ts = new Date().toISOString().replace(/[:.]/g, '-')
+      const filename = `client_offer_${ts}.pdf`
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -1424,14 +1485,14 @@ export default function App(props) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h2 style={{ ...styles.sectionTitle, textAlign: isRTL(language) ? 'right' : 'left' }}>{t('payment_schedule', language)}</h2>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {/* Pricing Form — Property Consultant only */}
+              {/* Client Offer PDF — Property Consultant only */}
               {authUser?.role === 'property_consultant' && (
                 <button
                   type="button"
-                  onClick={() => generateDocument('pricing_form')}
+                  onClick={exportClientOfferPdf}
                   style={styles.btnPrimary}
                 >
-                  {t('generate_pricing_form', language)}
+                  {isRTL(language) ? 'تصدير عرض العميل (PDF)' : 'Export Client Offer (PDF)'}
                 </button>
               )}
               {/* Reservation Form — Financial Admin only */}
@@ -1454,15 +1515,20 @@ export default function App(props) {
                   {t('generate_contract', language)}
                 </button>
               )}
-              <button type="button" onClick={exportScheduleXLSX} disabled={!schedule.length} style={styles.btn}>
-                {t('export_xlsx', language)}
-              </button>
-              <button type="button" onClick={generateChecksSheetXLSX} disabled={!schedule.length} style={styles.btn}>
-                {t('generate_checks_sheet', language)}
-              </button>
-              <button type="button" onClick={exportScheduleCSV} disabled={!schedule.length} style={styles.btn}>
-                {t('export_csv', language)}
-              </button>
+              {/* Exports (CSV/XLSX/Checks) — Financial Admin only */}
+              {authUser?.role === 'financial_admin' && (
+                <>
+                  <button type="button" onClick={exportScheduleXLSX} disabled={!schedule.length} style={styles.btn}>
+                    {t('export_xlsx', language)}
+                  </button>
+                  <button type="button" onClick={generateChecksSheetXLSX} disabled={!schedule.length} style={styles.btn}>
+                    {t('generate_checks_sheet', language)}
+                  </button>
+                  <button type="button" onClick={exportScheduleCSV} disabled={!schedule.length} style={styles.btn}>
+                    {t('export_csv', language)}
+                  </button>
+                </>
+              )}
             </div>
           </div>
           {/* Policy banner: require per-pricing financial settings for unit/model flows */}

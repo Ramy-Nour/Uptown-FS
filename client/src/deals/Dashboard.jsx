@@ -283,6 +283,15 @@ export default function Dashboard() {
         <div style={{ display: 'flex', gap: 8 }}>
           <a href="/deals/inventory" style={{ ...btn, textDecoration: 'none', display: 'inline-block' }}>Browse Inventory</a>
           <a href="/deals/create" style={{ ...btn, textDecoration: 'none', display: 'inline-block' }}>Create Offer</a>
+          {(() => {
+            try {
+              const u = JSON.parse(localStorage.getItem('auth_user') || '{}')
+              if (['sales_manager','property_consultant','financial_manager'].includes(u?.role)) {
+                return <a href="/deals/block-requests" style={{ ...btn, textDecoration: 'none', display: 'inline-block' }}>Block Requests</a>
+              }
+            } catch {}
+            return null
+          })()}
         </div>
       </div>
 

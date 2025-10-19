@@ -9,6 +9,8 @@ import PaymentPlanQueues from './PaymentPlanQueues.jsx'
 import InventoryList from './InventoryList.jsx'
 import MyProposals from './MyProposals.jsx'
 import TeamProposals from './TeamProposals.jsx'
+import BlockRequests from './BlockRequests.jsx'
+import RequireRole from '../components/RequireRole.jsx'
 
 export default function DealsApp() {
   const handleLogout = async () => {
@@ -42,6 +44,14 @@ export default function DealsApp() {
           <Route path="inventory" element={<InventoryList />} />
           <Route path="my-proposals" element={<MyProposals />} />
           <Route path="team-proposals" element={<TeamProposals />} />
+          <Route
+            path="block-requests"
+            element={
+              <RequireRole allowed={['sales_manager','property_consultant','financial_manager']}>
+                <BlockRequests />
+              </RequireRole>
+            }
+          />
           <Route path=":id" element={<DealDetail />} />
           <Route path="*" element={<Navigate to="/deals" replace />} />
         </Routes>

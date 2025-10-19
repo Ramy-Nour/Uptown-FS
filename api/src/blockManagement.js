@@ -238,4 +238,71 @@ async function processBlockExpiry() {
 // Schedule the expiry job to run daily (approx cadence)
 setInterval(processBlockExpiry, 24 * 60 * 60 * 1000) // 24 hours
 
+// List pending block requests
+router.get('/pending', authMiddleware, async (req, res) => {
+  try {
+    // Pending means status='pending' in blocks table
+    // Return requester email and unit summary
+    const base = `
+      SELECT 
+        b.id, b.unit_id, b.duration_days, b.reason, b.status, b.blocked_until, b.created_at,
+        u.code AS unit_code, u.unit_type, u.model_id, u.available,
+        ru.id AS requested_by, ru.email AS requested_by_email, ru.role AS requested_by_role
+      FROM blocks b
+      JOIN units u ON u.id = b.unit_id
+      JOIN users ru ON ru.id = b.requested_by
+      WHERE b.status = 'pending'
+    `
+    const params = []
+    let where = ''
+    // Consultants: only see own
+    if (req.user.role === 'property_consultant') {
+      where = ' AND b.requested_by = $1'
+      params.push(req.user.id)
+    }
+    // Sales Managers and Financial Managers see all pending
+    const q = base + where + ' ORDER BY b.created_at DESC'
+    const r = await pool.query(q, params)
+    return res.json({ ok: true, requests: r.rows })
+  } catch (e) {
+    console.error('List pending blocks error:', e)
+    return res.status(500).json({ error: { message: 'Internal error' } })
+  }
+})
+
+// Cancel a pending block request
+router.patch('/:id/cancel', authMiddleware, async (req, res) => {
+  try {
+    const id = Number(req.params.id)
+    if (!Number.isFinite(id)) return res.status(400).json({ error: { message: 'Invalid id' } })
+
+    const r = await pool.query('SELECT id, requested_by, status FROM blocks WHERE id=$1', [id])
+    if (r.rows.length === 0) return res.status(404).json({ error: { message: 'Block request not found' } })
+    const row = r.rows[0]
+    if (row.status !== 'pending') return res.status(400).json({ error: { message: 'Only pending requests can be cancelled' } })
+
+    // Permission:
+    // - property_consultant: can cancel only their own
+    // - sales_manager: can cancel any pending
+    // - others: forbidden
+    const role = req.user.role
+    const isOwner = row.requested_by === req.user.id
+    const canCancel = (role === 'sales_manager') || (role === 'property_consultant' && isOwner)
+    if (!canCancel) return res.status(403).json({ error: { message: 'Forbidden' } })
+
+    await pool.query(
+      `UPDATE blocks 
+       SET status='rejected', rejected_by=$1, rejected_at=NOW(), rejection_reason=COALESCE($2, 'Cancelled by requester'), updated_at=NOW()
+       WHERE id=$3`,
+      [req.user.id, req.body?.reason || null, id]
+    )
+
+    await createNotification('block_cancelled', row.requested_by, 'blocks', id, 'Block request was cancelled')
+    return res.json({ ok: true })
+  } catch (e) {
+    console.error('Cancel block request error:', e)
+    return res.status(500).json({ error: { message: 'Internal error' } })
+  }
+})
+
 export default router

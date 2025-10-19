@@ -121,6 +121,10 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-10-19 03:35] Block Requests queue (Sales Manager/Consultant): 
+  - API: Added GET /api/blocks/pending (role-aware) and PATCH /api/blocks/:id/cancel (Consultant can cancel own; Sales Manager can cancel any pending). 
+  - UI: Added /deals/block-requests page listing pending block requests with Cancel action where allowed, and a “Block Requests” link in Deals Dashboard for Sales Manager/Consultant/FM.
+  - Purpose: Let Sales Managers monitor and manage pending unit block requests before FM approval.
 - [2025-10-19 03:10] Unit Block request endpoint fixed: Corrected API route prefix so client POST /api/blocks/request matches Express router. Previously, routes were registered under /api/blocks/blocks/* causing HTML/DOCTYPE errors when the client tried to parse JSON. Updated paths in api/src/blockManagement.js to remove the extra '/blocks' prefix (request, approve, current, extend). Also expanded requester roles to include Sales Manager so both Property Consultant and Sales Manager can initiate block requests; approvals remain by Financial Manager.
 - [2025-10-19 02:35] Buyers[] propagated to generate-plan: The /api/generate-plan request now includes a buyers array (1–4) built from ClientInfo, alongside existing payload fields. This enables the API (or downstream consumers) to consider multiple buyers if needed without breaking existing single-buyer logic. File: client/src/App.jsx.
 - [2025-10-19 02:20] Document generation buyers[] mapping: buildDocumentBody now includes a structured buyers array (1–4) built from ClientInfo fields, enabling templates to iterate over all buyers. The existing single-buyer placeholders remain unchanged for Buyer 1. File: client/src/App.jsx.

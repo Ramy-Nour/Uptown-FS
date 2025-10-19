@@ -303,6 +303,7 @@ API integration tests:
 - Add UI-level access guards project-wide:
   - Hide block/unblock related links, buttons, and pages from admin/superadmin across all screens (Dashboard, Create Deal, Inventory, queues, etc.).
   - Keep server-side authorization as the source of truth; UI guards are UX hardening.
+  - Introduce a standard “Access Denied” page and wire RequireRole to render it as a fallback (instead of redirect) for unauthorized visits.
   - Implement after current feature set is finalized, and test per role.
 - Reintroduce OCR into the Client Information flow incrementally (start from archived ClientInfoForm_OCR.jsx), keeping typing stability. Add explicit “Apply OCR” action with selective merge that never touches manual-only fields (phones, email).
 - Wire real inventory endpoints and types/units data model.

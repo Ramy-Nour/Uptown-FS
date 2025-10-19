@@ -19,7 +19,7 @@ async function createNotification(type, userId, refTable, refId, message) {
 
 // Request unit block
 // NOTE: Router is mounted at /api/blocks, so route paths here must NOT be prefixed with /blocks
-router.post('/request', authMiddleware, requireRole(['property_consultant']), validate(blockRequestSchema), async (req, res) => {
+router.post('/request', authMiddleware, requireRole(['property_consultant','sales_manager']), validate(blockRequestSchema), async (req, res) => {
   const { unitId, durationDays, reason } = req.body || {}
   try {
     // Validate unit availability

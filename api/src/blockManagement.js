@@ -241,6 +241,11 @@ setInterval(processBlockExpiry, 24 * 60 * 60 * 1000) // 24 hours
 // List pending block requests
 router.get('/pending', authMiddleware, async (req, res) => {
   try {
+    // Disallow admin/superadmin from block workflows per policy
+    if (req.user.role === 'admin' || req.user.role === 'superadmin') {
+      return res.status(403).json({ error: { message: 'Forbidden' } })
+    }
+
     // Pending means status='pending' in blocks table
     // Return requester email and unit summary
     const base = `

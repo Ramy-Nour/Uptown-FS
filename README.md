@@ -121,6 +121,13 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-10-19 02:35] Buyers[] propagated to generate-plan: The /api/generate-plan request now includes a buyers array (1–4) built from ClientInfo, alongside existing payload fields. This enables the API (or downstream consumers) to consider multiple buyers if needed without breaking existing single-buyer logic. File: client/src/App.jsx.
+- [2025-10-19 02:20] Document generation buyers[] mapping: buildDocumentBody now includes a structured buyers array (1–4) built from ClientInfo fields, enabling templates to iterate over all buyers. The existing single-buyer placeholders remain unchanged for Buyer 1. File: client/src/App.jsx.
+- [2025-10-19 02:00] Client Info — multi-buyer support added: The minimal Client Info form now lets you select 1–4 buyers (clientInfo.number_of_buyers). For Buyers 2–4, identical fields open using suffixed keys (buyer_name_2, nationality_2, id_or_passport_2, id_issue_date_2, birth_date_2, address_2, phone_primary_2, phone_secondary_2, email_2). No OCR and no buffering; pure controlled inputs to keep typing stable. File: client/src/components/calculator/ClientInfoFormMin.jsx.
+- [2025-10-19 01:40] Multi-buyer support (UI only): ClientInfoFormMin.jsx now includes a "Number of Buyers" selector (1–4). For buyers 2–4, the form opens additional sections with suffixed field keys (e.g., buyer_name_2, nationality_2, …). This keeps existing single-buyer keys intact while allowing up to four buyers without OCR or buffering.
+- [2025-10-19 01:25] Path alignment fix: App.jsx now imports client/src/components/calculator/ClientInfoFormMin.jsx (matching existing filesystem naming). Added ClientInfoFormMin.jsx as the minimal no-OCR template. This resolves Vite import-analysis failure due to filename mismatch.
+- [2025-10-19 01:10] Added a Minimal Client Information form (client/src/components/calculator/ClientInfoFormMinimal.jsx) patterned after InputsForm’s simple controlled inputs. App.jsx now imports the Minimal form to isolate typing/focus issues with the least complexity. The Basic form remains for reference; the OCR-enabled form persists under archive/ for future steps.
+- [2025-10-19 00:45] Removed legacy client/src/components/calculator/ClientInfoForm.jsx to avoid confusion. App.jsx now imports ClientInfoFormBasic.jsx. The OCR-enabled version is preserved at client/src/components/calculator/archive/ClientInfoForm_OCR.jsx for future reintroduction.
 - [2025-10-19 00:30] Introduced a basic Client Information form without OCR to isolate input focus/typing issues. The calculator now uses client/src/components/calculator/ClientInfoFormBasic.jsx, which retains buffered inputs and focus-aware sync but removes OCR mode and scanner entirely. The previous OCR-enabled form was archived at client/src/components/calculator/archive/ClientInfoForm_OCR.jsx for future reintroduction once stability is confirmed. App.jsx import updated to point to the Basic form.
 - [2025-10-18 03:35] Client Information input stability — guarded parent sync: Added lastSyncedRef and a shallow equality check to skip parent→local syncing when values haven’t changed, and adjusted the selective merge to return the previous state when no changes are applied. This prevents unnecessary re-renders during typing that could reset the cursor or appear to “lose” focus. OCR apply also updates lastSyncedRef. File: client/src/components/calculator/ClientInfoForm.jsx.
 - [2025-10-18 03:14] Lazy-loaded OCR module: ClientInfoForm now dynamically imports the OCR scanner with React.lazy + Suspense, reducing initial bundle size. File: client/src/components/calculator/ClientInfoForm.jsx.
@@ -278,6 +285,7 @@ API integration tests:
 
 ## Roadmap (next sessions)
 
+- Next step: Reintroduce OCR into the Client Information flow incrementally (start from archived ClientInfoForm_OCR.jsx), keeping typing stability. Add explicit “Apply OCR” action with selective merge that never touches manual-only fields (phones, email).
 - Wire real inventory endpoints and types/units data model.
 - Implement authentication/authorization end‑to‑end (API issued tokens).
 - Persist thresholds and management controls (admin UI + API).

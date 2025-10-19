@@ -820,10 +820,30 @@ export default function App(props) {
     setGenError('')
     setGenResult(null)
     try {
+      // Build buyers[] from clientInfo (supports up to 4 buyers via suffixed keys: _2, _3, _4)
+      const numBuyersRaw = Number(clientInfo.number_of_buyers)
+      const numBuyers = Math.min(Math.max(numBuyersRaw || 1, 1), 4)
+      const buyers = []
+      for (let i = 1; i <= numBuyers; i++) {
+        const sfx = i === 1 ? '' : `_${i}`
+        buyers.push({
+          buyer_name: clientInfo[`buyer_name${sfx}`] || '',
+          nationality: clientInfo[`nationality${sfx}`] || '',
+          id_or_passport: clientInfo[`id_or_passport${sfx}`] || '',
+          id_issue_date: clientInfo[`id_issue_date${sfx}`] || '',
+          birth_date: clientInfo[`birth_date${sfx}`] || '',
+          address: clientInfo[`address${sfx}`] || '',
+          phone_primary: clientInfo[`phone_primary${sfx}`] || '',
+          phone_secondary: clientInfo[`phone_secondary${sfx}`] || '',
+          email: clientInfo[`email${sfx}`] || ''
+        })
+      }
+
       const body = {
         ...payload,
         language,
         currency,
+        buyers,
         // base date for absolute due dates on schedule; require firstPaymentDate (fallback to offerDate or today)
         inputs: {
           ...payload.inputs,
@@ -884,9 +904,29 @@ export default function App(props) {
   function buildDocumentBody(documentType) {
     const { valid, payload } = validateForm()
     // Even if not valid, we still send what we have; but generally require valid to ensure server accepts
+
+    // Build buyers[] from clientInfo (supports up to 4 buyers via suffixed keys: _2, _3, _4)
+    const numBuyersRaw = Number(clientInfo.number_of_buyers)
+    const numBuyers = Math.min(Math.max(numBuyersRaw || 1, 1), 4)
+    const buyers = []
+    for (let i = 1; i <= numBuyers; i++) {
+      const sfx = i === 1 ? '' : `_${i}`
+      buyers.push({
+        buyer_name: clientInfo[`buyer_name${sfx}`] || '',
+        nationality: clientInfo[`nationality${sfx}`] || '',
+        id_or_passport: clientInfo[`id_or_passport${sfx}`] || '',
+        id_issue_date: clientInfo[`id_issue_date${sfx}`] || '',
+        birth_date: clientInfo[`birth_date${sfx}`] || '',
+        address: clientInfo[`address${sfx}`] || '',
+        phone_primary: clientInfo[`phone_primary${sfx}`] || '',
+        phone_secondary: clientInfo[`phone_secondary${sfx}`] || '',
+        email: clientInfo[`email${sfx}`] || ''
+      })
+    }
+
     // Build document data map for placeholders
     const docData = {
-      // Client info (English)
+      // Primary Client info (English) — Buyer 1
       buyer_name: clientInfo.buyer_name || '',
       nationality: clientInfo.nationality || '',
       id_or_passport: clientInfo.id_or_passport || '',
@@ -899,7 +939,7 @@ export default function App(props) {
       // Dates
       offer_date: inputs.offerDate || new Date().toISOString().slice(0, 10),
       first_payment_date: inputs.firstPaymentDate || inputs.offerDate || new Date().toISOString().slice(0, 10),
-      // Client info (Arabic aliases for templates)
+      // Client info (Arabic aliases for templates) — Buyer 1
       'اسم المشترى': clientInfo.buyer_name || '',
       'الجنسية': clientInfo.nationality || '',
       'رقم قومي/ رقم جواز': clientInfo.id_or_passport || '',
@@ -930,7 +970,9 @@ export default function App(props) {
       // Calculator summaries (optional)
       std_total_price: Number(stdPlan.totalPrice) || 0,
       std_financial_rate_percent: Number(stdPlan.financialDiscountRate) || 0,
-      std_calculated_pv: Number(stdPlan.calculatedPV) || 0
+      std_calculated_pv: Number(stdPlan.calculatedPV) || 0,
+      // Multi-buyer structured data
+      buyers
     }
 
     const body = {

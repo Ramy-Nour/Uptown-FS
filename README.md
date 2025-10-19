@@ -121,6 +121,7 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-10-19 01:40] Multi-buyer support (UI only): ClientInfoFormMin.jsx now includes a "Number of Buyers" selector (1–4). For buyers 2–4, the form opens additional sections with suffixed field keys (e.g., buyer_name_2, nationality_2, …). This keeps existing single-buyer keys intact while allowing up to four buyers without OCR or buffering.
 - [2025-10-19 01:25] Path alignment fix: App.jsx now imports client/src/components/calculator/ClientInfoFormMin.jsx (matching existing filesystem naming). Added ClientInfoFormMin.jsx as the minimal no-OCR template. This resolves Vite import-analysis failure due to filename mismatch.
 - [2025-10-19 01:10] Added a Minimal Client Information form (client/src/components/calculator/ClientInfoFormMinimal.jsx) patterned after InputsForm’s simple controlled inputs. App.jsx now imports the Minimal form to isolate typing/focus issues with the least complexity. The Basic form remains for reference; the OCR-enabled form persists under archive/ for future steps.
 - [2025-10-19 00:45] Removed legacy client/src/components/calculator/ClientInfoForm.jsx to avoid confusion. App.jsx now imports ClientInfoFormBasic.jsx. The OCR-enabled version is preserved at client/src/components/calculator/archive/ClientInfoForm_OCR.jsx for future reintroduction.

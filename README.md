@@ -121,6 +121,10 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-10-19 05:00] DB volume backup/restore scripts:
+  - Added scripts/db_volume_backup.sh to archive the db_data Docker volume to backups/db_data-YYYYMMDD-HHMMSS.tar.gz (UTC timestamp).
+  - Added scripts/db_volume_restore.sh to restore the db_data volume from a tar.gz archive. Documented usage and cautions (stop db before, version compatibility).
+  - README: Added “Database Backup and Restore (db_data volume)” section with instructions for physical volume backup/restore and optional pg_dump/psql commands for logical backups.
 - [2025-10-19 04:40] Server-rendered Client Offer PDF (Puppeteer):
   - API: Added POST /api/documents/client-offer (role: property_consultant). Generates a PDF from server-rendered HTML with buyers[] (phones/emails), payment schedule, totals, dates, and optional unit info. Supports Arabic/English.
   - Infra: Added puppeteer dependency and installed Chromium in API Dockerfile (development and production). Set PUPPETEER_EXECUTABLE_PATH; added fonts for Arabic rendering.
@@ -244,6 +248,34 @@ Persistence
 - Postgres data is stored in the named volume db_data and survives restarts.
 - Client form state persists in localStorage per Codespace URL.
 - Avoid docker compose down -v unless you want to reset the database.
+
+## Database Backup and Restore (db_data volume)
+
+Two scripts are provided to back up and restore the Postgres data volume (physical files). Physical volume backups are fast but are tied to the Postgres major version. For portability across versions, prefer logical dumps (pg_dump).
+
+Important
+- For maximum consistency, stop the db container before a volume backup or restore:
+  - docker compose stop db
+- After restore, start the db container:
+  - docker compose up -d db
+
+Create a volume backup (tar.gz)
+- scripts/db_volume_backup.sh
+  - Creates backups/db_data-YYYYMMDD-HHMMSS.tar.gz in the repo
+  - Usage: scripts/db_volume_backup.sh [backup_dir]
+  - Example: scripts/db_volume_backup.sh
+  - Output file: backups/db_data-20251019-050000.tar.gz (UTC timestamp)
+
+Restore from a volume backup
+- scripts/db_volume_restore.sh <path/to/db_data-YYYYMMDD-HHMMSS.tar.gz>
+  - WARNING: Deletes current contents of db_data and replaces with archive
+  - Example: scripts/db_volume_restore.sh backups/db_data-20251019-050000.tar.gz
+
+Notes
+- Physical volume backups/restores assume the same Postgres major version (here: 16).
+- If you need cross-version migration or fine-grained selection, use pg_dump/psql:
+  - docker exec -t app_db pg_dump -U appuser -d appdb > backups/appdb-YYYYMMDD.sql
+  - cat backups/appdb-YYYYMMDD.sql | docker exec -i app_db psql -U appuser -d appdb
 
 ---
 

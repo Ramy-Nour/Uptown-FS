@@ -305,6 +305,11 @@ API integration tests:
 
 ## Roadmap (next sessions)
 
+- Polish Client Offer PDF (server-rendered):
+  - Add branded header/logo, consistent typography, page headers/footers, and proper pagination (repeat table headers on page break).
+  - Improve RTL/Arabic typography and spacing; verify Noto Arabic fallback coverage.
+  - Add multi-language labels, currency formatting, optional unit summary block, and a configurable disclaimer.
+  - Source logo from VITE_COMPANY_LOGO_URL or client/public/logo/* with fallback.
 - Add UI-level access guards project-wide:
   - Hide block/unblock related links, buttons, and pages from admin/superadmin across all screens (Dashboard, Create Deal, Inventory, queues, etc.).
   - Keep server-side authorization as the source of truth; UI guards are UX hardening.

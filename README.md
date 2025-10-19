@@ -121,6 +121,9 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-10-19 03:55] Sales Manager team scoping for pending Block Requests:
+  - API: GET /api/blocks/pending now restricts Sales Manager view to requests initiated by consultants in their team, using sales_team_members (manager_user_id → consultant_user_id). Consultants see only their own; Financial Managers see all.
+  - Purpose: Ensure SMs only manage requests from their direct team.
 - [2025-10-19 03:45] FM approval actions in Block Requests queue:
   - UI: For Financial Managers, /deals/block-requests now shows Approve/Reject buttons per request (inline). It uses PATCH /api/blocks/:id/approve with action approve|reject and optional reason prompt. Requests are removed from the list after decision.
   - Purpose: Allow FM to process unit block approvals directly from the queue.

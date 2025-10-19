@@ -255,13 +255,19 @@ router.get('/pending', authMiddleware, async (req, res) => {
     `
     const params = []
     let where = ''
+    let joinTeam = ''
     // Consultants: only see own
     if (req.user.role === 'property_consultant') {
       where = ' AND b.requested_by = $1'
       params.push(req.user.id)
+    } else if (req.user.role === 'sales_manager') {
+      // Sales Manager: only see requests from consultants in their team
+      joinTeam = ' JOIN sales_team_members stm ON stm.consultant_user_id = b.requested_by AND stm.active = TRUE '
+      where = params.length ? ' AND stm.manager_user_id = $2' : ' AND stm.manager_user_id = $1'
+      params.push(req.user.id)
     }
-    // Sales Managers and Financial Managers see all pending
-    const q = base + where + ' ORDER BY b.created_at DESC'
+    // Financial Managers see all pending
+    const q = base.replace('FROM blocks b', `FROM blocks b${joinTeam}`) + where + ' ORDER BY b.created_at DESC'
     const r = await pool.query(q, params)
     return res.json({ ok: true, requests: r.rows })
   } catch (e) {

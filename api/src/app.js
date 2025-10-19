@@ -12,6 +12,7 @@ import {
   Frequencies,
   getPaymentMonths
 } from '../services/calculationService.js'
+import puppeteer from 'puppeteer'
 import convertToWords from '../utils/converter.js'
 import { createRequire } from 'module'
 import authRoutes from './authRoutes.js'
@@ -1456,6 +1457,203 @@ app.post('/api/generate-document', validate(generateDocumentSchema), async (req,
   } catch (err) {
     console.error('POST /api/generate-document error:', err)
     return bad(res, 500, 'Internal error during document generation')
+  }
+})
+
+// Server-rendered Client Offer PDF
+app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole(['property_consultant']), async (req, res) => {
+  try {
+    // Accept either direct payload or derive from deal_id
+    let {
+      language,
+      currency,
+      buyers,
+      schedule,
+      totals,
+      offer_date,
+      first_payment_date,
+      unit
+    } = req.body || {}
+
+    // If deal_id provided, try to derive from DB
+    if (!buyers || !schedule) {
+      const dealId = Number(req.body?.deal_id)
+      if (Number.isFinite(dealId) && dealId > 0) {
+        const dr = await pool.query('SELECT * FROM deals WHERE id=$1', [dealId])
+        if (dr.rows.length) {
+          const d = dr.rows[0]
+          try {
+            const calc = d.details?.calculator || {}
+            // buyers[]
+            const num = Math.min(Math.max(Number(calc?.clientInfo?.number_of_buyers) || 1, 1), 4)
+            const bb = []
+            for (let i = 1; i <= num; i++) {
+              const sfx = i === 1 ? '' : `_${i}`
+              bb.push({
+                buyer_name: calc?.clientInfo?.[`buyer_name${sfx}`] || '',
+                phone_primary: calc?.clientInfo?.[`phone_primary${sfx}`] || '',
+                phone_secondary: calc?.clientInfo?.[`phone_secondary${sfx}`] || '',
+                email: calc?.clientInfo?.[`email${sfx}`] || ''
+              })
+            }
+            buyers = buyers || bb
+            // schedule
+            if (!schedule && calc?.generatedPlan?.schedule) {
+              schedule = calc.generatedPlan.schedule
+              totals = calc.generatedPlan.totals || { totalNominal: 0 }
+            }
+            // dates and unit
+            offer_date = offer_date || calc?.inputs?.offerDate || new Date().toISOString().slice(0, 10)
+            first_payment_date = first_payment_date || calc?.inputs?.firstPaymentDate || offer_date
+            unit = unit || {
+              unit_code: calc?.unitInfo?.unit_code || '',
+              unit_type: calc?.unitInfo?.unit_type || ''
+            }
+            language = language || (req.body?.language || 'en')
+            currency = currency || (req.body?.currency || '')
+          } catch {
+            // fallback to request body only
+          }
+        }
+      }
+    }
+
+    // Minimal required fields
+    buyers = Array.isArray(buyers) && buyers.length ? buyers : []
+    schedule = Array.isArray(schedule) ? schedule : []
+    totals = totals || { totalNominal: schedule.reduce((s, e) => s + (Number(e.amount) || 0), 0) }
+    language = (String(language || 'en').toLowerCase().startsWith('ar') ? 'ar' : 'en')
+    const rtl = language === 'ar'
+    const dir = rtl ? 'rtl' : 'ltr'
+
+    // Build HTML
+    const css = `
+      <style>
+        @page { size: A4; margin: 16mm 14mm; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", "Noto Naskh Arabic", "DejaVu Sans", Arial, sans-serif; direction: ${dir}; }
+        h1,h2,h3 { margin: 0 0 8px; }
+        .header { display:flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .brand { font-size: 16px; color: #A97E34; font-weight: 700; }
+        .meta { color: #6b7280; font-size: 12px; }
+        .section { margin: 14px 0; }
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: ${rtl ? 'right' : 'left'}; background: #f6efe3; color: #5b4630; font-size: 12px; border-bottom: 1px solid #ead9bd; padding: 8px; }
+        td { font-size: 12px; border-bottom: 1px solid #f2e8d6; padding: 8px; }
+        .totals { margin-top: 8px; padding: 8px; border: 1px solid #ead9bd; border-radius: 8px; background: #fbfaf7; }
+        .buyers { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .buyer { border: 1px solid #ead9bd; border-radius: 8px; padding: 8px; background: #fff; }
+        .foot { margin-top: 12px; color:#6b7280; font-size: 11px; }
+      </style>
+    `
+
+    const f = (s) => Number(s || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    const todayTs = new Date().toISOString().slice(0, 19).replace('T', ' ')
+    const title = rtl ? 'عرض السعر للعميل' : 'Client Offer'
+    const tBuyers = rtl ? 'العملاء' : 'Clients'
+    const tSchedule = rtl ? 'خطة السداد' : 'Payment Plan'
+    const tTotals = rtl ? 'الإجمالي' : 'Totals'
+    const tOfferDate = rtl ? 'تاريخ العرض' : 'Offer Date'
+    const tFirstPayment = rtl ? 'تاريخ أول دفعة' : 'First Payment'
+    const tUnit = rtl ? 'الوحدة' : 'Unit'
+    const tMonth = rtl ? 'الشهر' : 'Month'
+    const tLabel = rtl ? 'الوصف' : 'Label'
+    const tAmount = rtl ? 'القيمة' : 'Amount'
+    const tDate = rtl ? 'التاريخ' : 'Date'
+
+    const buyersHtml = buyers.map((b, idx) => `
+      <div class="buyer">
+        <div><strong>${rtl ? 'العميل' : 'Buyer'} ${idx + 1}:</strong> ${b.buyer_name || '-'}</div>
+        <div><strong>${rtl ? 'الهاتف' : 'Phone'}:</strong> ${[b.phone_primary, b.phone_secondary].filter(Boolean).join(' / ') || '-'}</div>
+        <div><strong>Email:</strong> ${b.email || '-'}</div>
+      </div>
+    `).join('')
+
+    const scheduleRows = schedule.map((r, i) => `
+      <tr>
+        <td>${Number(r.month) || 0}</td>
+        <td>${r.label || ''}</td>
+        <td style="text-align:${rtl ? 'left' : 'right'}">${f(r.amount)} ${currency || ''}</td>
+        <td>${r.date || ''}</td>
+      </tr>
+    `).join('')
+
+    const unitLine = unit ? `${unit.unit_code || ''} ${unit.unit_type ? '— ' + unit.unit_type : ''}`.trim() : ''
+
+    const html = `
+      <html lang="${language}">
+        <head>
+          <meta charset="UTF-8" />
+          ${css}
+        </head>
+        <body>
+          <div class="header">
+            <div class="brand">${rtl ? 'نظام الشؤون المالية' : 'Uptown Financial System'}</div>
+            <div class="meta">${rtl ? 'تم الإنشاء' : 'Generated'}: ${todayTs}</div>
+          </div>
+
+          <h2>${title}</h2>
+          <div class="section">
+            <div class="meta"><strong>${tOfferDate}:</strong> ${offer_date || ''} &nbsp;&nbsp; <strong>${tFirstPayment}:</strong> ${first_payment_date || ''}</div>
+            ${unitLine ? `<div class="meta"><strong>${tUnit}:</strong> ${unitLine}</div>` : ''}
+          </div>
+
+          <div class="section">
+            <h3>${tBuyers}</h3>
+            <div class="buyers">
+              ${buyersHtml || (rtl ? '<div>لا يوجد بيانات عملاء</div>' : '<div>No client data</div>')}
+            </div>
+          </div>
+
+          <div class="section">
+            <h3>${tSchedule}</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>${tMonth}</th>
+                  <th>${tLabel}</th>
+                  <th style="text-align:${rtl ? 'left' : 'right'}">${tAmount}</th>
+                  <th>${tDate}</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${scheduleRows || `<tr><td colspan="4">${rtl ? 'لا توجد بيانات' : 'No data'}</td></tr>`}
+              </tbody>
+            </table>
+            <div class="totals">
+              <strong>${tTotals}:</strong> ${f(totals?.totalNominal || 0)} ${currency || ''}
+            </div>
+          </div>
+
+          <div class="foot">
+            ${rtl
+              ? 'هذا العرض تم إنشاؤه آليًا لأغراض المناقشة ولا يُعد مُستندًا تعاقديًا.'
+              : 'This offer is generated automatically for discussion purposes and is not a contractual document.'}
+          </div>
+        </body>
+      </html>
+    `
+
+    // Render with Puppeteer
+    const browser = await puppeteer.launch({
+      headless: 'new',
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    })
+    const page = await browser.newPage()
+    await page.setContent(html, { waitUntil: 'networkidle0' })
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: { top: '14mm', right: '12mm', bottom: '14mm', left: '12mm' }
+    })
+    await browser.close()
+
+    const filename = `client_offer_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+    return res.send(pdfBuffer)
+  } catch (err) {
+    console.error('POST /api/documents/client-offer error:', err)
+    return bad(res, 500, 'Failed to generate Client Offer PDF')
   }
 })
 

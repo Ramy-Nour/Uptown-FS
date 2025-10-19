@@ -121,6 +121,11 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-10-19 05:10] Client Offer PDF — Consultant info, Arabic RTL labels, and Amount in Words:
+  - API: Enhanced POST /api/documents/client-offer to include Consultant (deal creator or current user) name/email in the header.
+  - Arabic improvements: Full RTL layout (html dir, CSS), localized schedule labels (دفعة التعاقد، قسط متساوي، التسليم، مصروفات الصيانة/الجراج، سنة N ...)، and Arabic email label.
+  - Schedule now includes a fifth column “Amount in Words” (localized; computed if missing).
+  - Infra: Added extra fonts in API Dockerfile (font-noto, font-noto-cjk) to improve Arabic shaping; kept DejaVu Sans and fontconfig.
 - [2025-10-19 04:40] Server-rendered Client Offer PDF (Puppeteer):
   - API: Added POST /api/documents/client-offer (role: property_consultant). Generates a PDF from server-rendered HTML with buyers[] (phones/emails), payment schedule, totals, dates, and optional unit info. Supports Arabic/English.
   - Infra: Added puppeteer dependency and installed Chromium in API Dockerfile (development and production). Set PUPPETEER_EXECUTABLE_PATH; added fonts for Arabic rendering.

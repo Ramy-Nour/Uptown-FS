@@ -1475,9 +1475,44 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
       unit
     } = req.body || {}
 
+    // Determine consultant (creator)
+    let consultant = { name: null, email: null }
+    const dealId = Number(req.body?.deal_id)
+    if (Number.isFinite(dealId) && dealId > 0) {
+      try {
+        const q = await pool.query(`
+          SELECT u.email,
+                 COALESCE(NULLIF(TRIM(CONCAT(COALESCE(u.first_name,''),' ',COALESCE(u.last_name,''))),''), u.name, u.email) AS full_name
+          FROM deals d
+          JOIN users u ON u.id = d.created_by
+          WHERE d.id=$1
+          LIMIT 1
+        `, [dealId])
+        if (q.rows.length) {
+          consultant = { name: q.rows[0].full_name || null, email: q.rows[0].email || null }
+        }
+      } catch { /* ignore */ }
+    }
+    if (!consultant.email) {
+      // Fallback to current user
+      try {
+        const u = await pool.query(`
+          SELECT email,
+                 COALESCE(NULLIF(TRIM(CONCAT(COALESCE(first_name,''),' ',COALESCE(last_name,''))),''), name, email) AS full_name
+          FROM users WHERE id=$1 LIMIT 1
+        `, [req.user.id])
+        if (u.rows.length) {
+          consultant = { name: u.rows[0].full_name || null, email: u.rows[0].email || null }
+        } else {
+          consultant = { name: null, email: req.user?.email || null }
+        }
+      } catch {
+        consultant = { name: null, email: req.user?.email || null }
+      }
+    }
+
     // If deal_id provided, try to derive from DB
     if (!buyers || !schedule) {
-      const dealId = Number(req.body?.deal_id)
       if (Number.isFinite(dealId) && dealId > 0) {
         const dr = await pool.query('SELECT * FROM deals WHERE id=$1', [dealId])
         if (dr.rows.length) {
@@ -1526,19 +1561,46 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
     const rtl = language === 'ar'
     const dir = rtl ? 'rtl' : 'ltr'
 
+    // Localize schedule labels when Arabic
+    function arLabel(label) {
+      if (!label) return ''
+      const L = String(label).toLowerCase()
+      if (L.includes('down payment')) return 'دفعة التعاقد'
+      if (L.includes('equal installment')) return 'قسط متساوي'
+      if (L.includes('handover')) return 'التسليم'
+      if (L.includes('maintenance fee')) return 'مصروفات الصيانة'
+      if (L.includes('garage fee')) return 'مصروفات الجراج'
+      if (L.startsWith('year')) {
+        // examples: "Year 2 (monthly)" — simplify to Arabic phrase
+        const parts = /year\s+(\d+)\s*\(([^)]+)\)?/i.exec(label)
+        if (parts) {
+          const y = parts[1]
+          const f = parts[2].toLowerCase()
+          let fAr = 'سنوي'
+          if (f.includes('monthly')) fAr = 'شهري'
+          else if (f.includes('quarter')) fAr = 'ربع سنوي'
+          else if (f.includes('bi')) fAr = 'نصف سنوي'
+          return `سنة ${y} (${fAr})`
+        }
+      }
+      return label // fallback
+    }
+
     // Build HTML
     const css = `
       <style>
         @page { size: A4; margin: 16mm 14mm; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", "Noto Naskh Arabic", "DejaVu Sans", Arial, sans-serif; direction: ${dir}; }
+        html { direction: ${dir}; }
+        body { font-family: "Noto Naskh Arabic", "Amiri", "DejaVu Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
         h1,h2,h3 { margin: 0 0 8px; }
         .header { display:flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
         .brand { font-size: 16px; color: #A97E34; font-weight: 700; }
-        .meta { color: #6b7280; font-size: 12px; }
+        .meta { color: #6b7280; font-size: 12px; ${rtl ? 'text-align:right;' : ''}}
         .section { margin: 14px 0; }
         table { width: 100%; border-collapse: collapse; }
+        thead { display: table-header-group; }
         th { text-align: ${rtl ? 'right' : 'left'}; background: #f6efe3; color: #5b4630; font-size: 12px; border-bottom: 1px solid #ead9bd; padding: 8px; }
-        td { font-size: 12px; border-bottom: 1px solid #f2e8d6; padding: 8px; }
+        td { font-size: 12px; border-bottom: 1px solid #f2e8d6; padding: 8px; page-break-inside: avoid; }
         .totals { margin-top: 8px; padding: 8px; border: 1px solid #ead9bd; border-radius: 8px; background: #fbfaf7; }
         .buyers { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
         .buyer { border: 1px solid #ead9bd; border-radius: 8px; padding: 8px; background: #fff; }
@@ -1559,28 +1621,42 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
     const tLabel = rtl ? 'الوصف' : 'Label'
     const tAmount = rtl ? 'القيمة' : 'Amount'
     const tDate = rtl ? 'التاريخ' : 'Date'
+    const tAmountWords = rtl ? 'المبلغ بالحروف' : 'Amount in Words'
+    const tConsultant = rtl ? 'المستشار' : 'Consultant'
+    const tEmail = rtl ? 'البريد الإلكتروني' : 'Email'
 
     const buyersHtml = buyers.map((b, idx) => `
       <div class="buyer">
         <div><strong>${rtl ? 'العميل' : 'Buyer'} ${idx + 1}:</strong> ${b.buyer_name || '-'}</div>
         <div><strong>${rtl ? 'الهاتف' : 'Phone'}:</strong> ${[b.phone_primary, b.phone_secondary].filter(Boolean).join(' / ') || '-'}</div>
-        <div><strong>Email:</strong> ${b.email || '-'}</div>
+        <div><strong>${tEmail}:</strong> ${b.email || '-'}</div>
       </div>
     `).join('')
 
-    const scheduleRows = schedule.map((r, i) => `
-      <tr>
-        <td>${Number(r.month) || 0}</td>
-        <td>${r.label || ''}</td>
-        <td style="text-align:${rtl ? 'left' : 'right'}">${f(r.amount)} ${currency || ''}</td>
-        <td>${r.date || ''}</td>
-      </tr>
-    `).join('')
+    // Ensure writtenAmount present; if not, compute
+    const langForWords = language
+    const scheduleRows = schedule.map((r) => {
+      const labelText = rtl ? arLabel(r.label || '') : (r.label || '')
+      const amount = Number(r.amount) || 0
+      const words = r.writtenAmount || convertToWords(amount, langForWords, { currency })
+      return `
+        <tr>
+          <td>${Number(r.month) || 0}</td>
+          <td>${labelText}</td>
+          <td style="text-align:${rtl ? 'left' : 'right'}">${f(amount)} ${currency || ''}</td>
+          <td>${r.date || ''}</td>
+          <td>${words || ''}</td>
+        </tr>
+      `
+    }).join('')
 
     const unitLine = unit ? `${unit.unit_code || ''} ${unit.unit_type ? '— ' + unit.unit_type : ''}`.trim() : ''
+    const consultantLine = (consultant.name || consultant.email)
+      ? `<div class="meta"><strong>${tConsultant}:</strong> ${[consultant.name, consultant.email].filter(Boolean).join(' — ')}</div>`
+      : ''
 
     const html = `
-      <html lang="${language}">
+      <html lang="${language}" dir="${dir}">
         <head>
           <meta charset="UTF-8" />
           ${css}
@@ -1591,21 +1667,22 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
             <div class="meta">${rtl ? 'تم الإنشاء' : 'Generated'}: ${todayTs}</div>
           </div>
 
-          <h2>${title}</h2>
+          <h2 style="${rtl ? 'text-align:right;' : ''}">${title}</h2>
           <div class="section">
             <div class="meta"><strong>${tOfferDate}:</strong> ${offer_date || ''} &nbsp;&nbsp; <strong>${tFirstPayment}:</strong> ${first_payment_date || ''}</div>
             ${unitLine ? `<div class="meta"><strong>${tUnit}:</strong> ${unitLine}</div>` : ''}
+            ${consultantLine}
           </div>
 
           <div class="section">
-            <h3>${tBuyers}</h3>
+            <h3 style="${rtl ? 'text-align:right;' : ''}">${tBuyers}</h3>
             <div class="buyers">
               ${buyersHtml || (rtl ? '<div>لا يوجد بيانات عملاء</div>' : '<div>No client data</div>')}
             </div>
           </div>
 
           <div class="section">
-            <h3>${tSchedule}</h3>
+            <h3 style="${rtl ? 'text-align:right;' : ''}">${tSchedule}</h3>
             <table>
               <thead>
                 <tr>
@@ -1613,10 +1690,11 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
                   <th>${tLabel}</th>
                   <th style="text-align:${rtl ? 'left' : 'right'}">${tAmount}</th>
                   <th>${tDate}</th>
+                  <th>${tAmountWords}</th>
                 </tr>
               </thead>
               <tbody>
-                ${scheduleRows || `<tr><td colspan="4">${rtl ? 'لا توجد بيانات' : 'No data'}</td></tr>`}
+                ${scheduleRows || `<tr><td colspan="5">${rtl ? 'لا توجد بيانات' : 'No data'}</td></tr>`}
               </tbody>
             </table>
             <div class="totals">

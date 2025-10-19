@@ -14,7 +14,8 @@ RUN apk add --no-cache \
     ca-certificates \
     ttf-dejavu \
     fontconfig \
-    font-noto
+    font-noto \
+    font-noto-cjk
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 COPY . .
 EXPOSE 3000
@@ -31,7 +32,8 @@ RUN apk add --no-cache \
     ca-certificates \
     ttf-dejavu \
     fontconfig \
-    font-noto
+    font-noto \
+    font-noto-cjk
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 COPY . .
 EXPOSE 3000

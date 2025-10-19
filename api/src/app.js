@@ -1336,17 +1336,19 @@ app.post('/api/generate-document', validate(generateDocumentSchema), async (req,
     // Role-based access control and default template mapping
     const TYPE_RULES = {
       pricing_form: {
-        allowedRoles: ['property_consultant', 'sales_manager'],
-        // Map to actual file available in /api/templates
-        defaultTemplate: 'Pricing Form G.docx'
+        // Client's offer — Property Consultant only
+        allowedRoles: ['property_consultant'],
+        // No default template currently present; require templateName explicitly or add client_offer.docx later
+        defaultTemplate: 'client_offer.docx'
       },
       reservation_form: {
+        // Reservation form — Financial Admin only
         allowedRoles: ['financial_admin'],
-        // If you add a reservation form template, update this filename accordingly.
-        // For now require explicit templateName if different.
-        defaultTemplate: 'reservation_form.docx'
+        // Mapped to provided template in /api/templates
+        defaultTemplate: 'Pricing Form G.docx'
       },
       contract: {
+        // Contract form — Contracts Admin (person) only
         allowedRoles: ['contract_person'],
         // Map to actual file available in /api/templates
         defaultTemplate: 'Uptown Residence Contract.docx'

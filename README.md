@@ -121,6 +121,11 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-10-19 05:30] GitHub Actions: On-demand database backups:
+  - Added .github/workflows/db-backup.yml with workflow_dispatch inputs: mode {logical|bundle}, release {true|false}.
+  - logical: Runs pg_dump using secrets.DATABASE_URL and uploads a gzipped SQL artifact; optional GitHub Release created.
+  - bundle: Archives the repo’s backups/ directory and uploads as artifact; optional GitHub Release created.
+  - README: Documented usage and required secret (DATABASE_URL) format.
 - [2025-10-19 05:15] DB backup/restore convenience commands:
   - package.json: Added npm scripts `db:backup` and `db:restore` to run the volume backup and restore scripts without typing full paths.
   - scripts/db_volume_restore.sh: If filename arg is omitted or incorrect, the script now lists available backups from backups/*.tar.gz and shows usage examples.

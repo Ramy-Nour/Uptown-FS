@@ -1,0 +1,101 @@
+name: Database Backup
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Backup mode: 'logical' to dump from a DATABASE_URL; 'bundle' to archive repo backups/"
+        required: true
+        default: "logical"
+        type: choice
+        options:
+          - logical
+          - bundle
+      release:
+        description: "Create a GitHub Release with the backup artifact"
+        required: true
+        default: "false"
+        type: boolean
+
+jobs:
+  logical_dump:
+    if: ${{ github.event.inputs.mode == 'logical' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Dump database (pg_dump via secrets.DATABASE_URL)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "${DATABASE_URL}" ]; then
+            echo "ERROR: secrets.DATABASE_URL is not set."
+            echo "Set a repository secret DATABASE_URL like: postgresql://user:pass@host:5432/appdb"
+            exit 1
+          fi
+          TS="$(date -u +%Y%m%d-%H%M%S)"
+          mkdir -p out
+          echo "Running pg_dump from ${DATABASE_URL}"
+          pg_dump "${DATABASE_URL}" > "out/appdb-${TS}.sql"
+          gzip -9 "out/appdb-${TS}.sql"
+          ls -lh out/
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-logical-${{ github.run_id }}
+          path: out/*.gz
+
+      - name: Create GitHub Release
+        if: ${{ github.event.inputs.release == 'true' }}
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: backup-${{ github.run_id }}
+          name: "Database Backup (logical) • ${{ github.run_id }}"
+          draft: false
+          files: out/*.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  bundle_local_backups:
+    if: ${{ github.event.inputs.mode == 'bundle' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Archive repo backups/ directory
+        run: |
+          TS="$(date -u +%Y%m%d-%H%M%S)"
+          mkdir -p out
+          if [ -d backups ]; then
+            tar -czf "out/backups-${TS}.tar.gz" backups
+            ls -lh out/
+          else
+            echo "No backups/ directory found. Creating a marker file."
+            echo "No backups found in repository at time ${TS}." > out/README.txt
+            ls -lh out/
+          fi
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-bundle-${{ github.run_id }}
+          path: out/*
+
+      - name: Create GitHub Release
+        if: ${{ github.event.inputs.release == 'true' }}
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: backup-${{ github.run_id }}
+          name: "Database Backup (bundle) • ${{ github.run_id }}"
+          draft: false
+          files: out/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -820,10 +820,30 @@ export default function App(props) {
     setGenError('')
     setGenResult(null)
     try {
+      // Build buyers[] from clientInfo (supports up to 4 buyers via suffixed keys: _2, _3, _4)
+      const numBuyersRaw = Number(clientInfo.number_of_buyers)
+      const numBuyers = Math.min(Math.max(numBuyersRaw || 1, 1), 4)
+      const buyers = []
+      for (let i = 1; i <= numBuyers; i++) {
+        const sfx = i === 1 ? '' : `_${i}`
+        buyers.push({
+          buyer_name: clientInfo[`buyer_name${sfx}`] || '',
+          nationality: clientInfo[`nationality${sfx}`] || '',
+          id_or_passport: clientInfo[`id_or_passport${sfx}`] || '',
+          id_issue_date: clientInfo[`id_issue_date${sfx}`] || '',
+          birth_date: clientInfo[`birth_date${sfx}`] || '',
+          address: clientInfo[`address${sfx}`] || '',
+          phone_primary: clientInfo[`phone_primary${sfx}`] || '',
+          phone_secondary: clientInfo[`phone_secondary${sfx}`] || '',
+          email: clientInfo[`email${sfx}`] || ''
+        })
+      }
+
       const body = {
         ...payload,
         language,
         currency,
+        buyers,
         // base date for absolute due dates on schedule; require firstPaymentDate (fallback to offerDate or today)
         inputs: {
           ...payload.inputs,

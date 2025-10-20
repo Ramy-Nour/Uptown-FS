@@ -883,19 +883,25 @@ export default function App(props) {
     if (!genResult?.schedule?.length) return
     const rows = [
       ['#', 'Month', 'Label', 'Amount', 'Written Amount'],
-      ...genResult.schedule.map((row, i) => ([
-        i + 1,
-        row.month,
-        row.label,
-        Number(row.amount || 0).toFixed(2),
-        row.writtenAmount
-      ]))
+      ...genResult.schedule.map((row, i) => {
+        const amt = Number(row.amount || 0)
+        const written = (language === 'ar')
+          ? numberToArabic(amt, 'جنيه مصري', 'قرش')
+          : (row.writtenAmount || '')
+        return [
+          i + 1,
+          row.month,
+          row.label,
+          amt.toFixed(2),
+          written
+        ]
+      })
     ]
     const csv = rows.map(r => r.map(cell => {
       const s = String(cell ?? '')
-      if (/[\",\n]/.test(s)) return `\"${s.replace(/\"/g, '\"\"')}\"`
+      if (/[\",\\n]/.test(s)) return `\"${s.replace(/\"/g, '\"\"')}\"`
       return s
-    }).join(',')).join('\n')
+    }).join(',')).join('\\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -1116,13 +1122,19 @@ export default function App(props) {
     if (!genResult?.schedule?.length) return
     const aoa = [
       ['#', 'Month', 'Label', 'Amount', 'Written Amount'],
-      ...genResult.schedule.map((row, i) => ([
-        i + 1,
-        row.month,
-        row.label,
-        Number(row.amount || 0).toFixed(2),
-        row.writtenAmount
-      ]))
+      ...genResult.schedule.map((row, i) => {
+        const amt = Number(row.amount || 0)
+        const written = (language === 'ar')
+          ? numberToArabic(amt, 'جنيه مصري', 'قرش')
+          : (row.writtenAmount || '')
+        return [
+          i + 1,
+          row.month,
+          row.label,
+          amt.toFixed(2),
+          written
+        ]
+      })
     ]
     const ws = XLSX.utils.aoa_to_sheet(aoa)
     // Column widths for readability

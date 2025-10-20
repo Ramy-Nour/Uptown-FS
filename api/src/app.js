@@ -1636,19 +1636,20 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
     // Ensure writtenAmount present; if not, compute
     const langForWords = language
     const scheduleRows = schedule.map((r) => {
-      const labelText = rtl ? arLabel(r.label || '') : (r.label || '')
-      const amount = Number(r.amount) || 0
-      const words = r.writtenAmount || convertToWords(amount, langForWords, { currency })
-      return `
-        <tr>
-          <td>${Number(r.month) || 0}</td>
-          <td>${labelText}</td>
-          <td style="text-align:${rtl ? 'left' : 'right'}">${f(amount)} ${currency || ''}</td>
-          <td>${r.date || ''}</td>
-          <td>${words || ''}</td>
-        </tr>
-      `
-    }).join('')
+        const labelText = rtl ? arLabel(r.label || '') : (r.label || '')
+        const amount = Number(r.amount) || 0
+        // Always render words according to the requested language, ignoring any client-provided wording.
+        const words = convertToWords(amount, langForWords, { currency })
+        return `
+          <tr>
+            <td>${Number(r.month) || 0}</td>
+            <td>${labelText}</td>
+            <td style="text-align:${rtl ? 'left' : 'right'}">${f(amount)} ${currency || ''}</td>
+            <td>${r.date || ''}</td>
+            <td>${words || ''}</td>
+          </tr>
+        `
+      }).join('')
 
     const unitLine = unit ? `${unit.unit_code || ''} ${unit.unit_type ? '— ' + unit.unit_type : ''}`.trim() : ''
     const consultantLine = (consultant.name || consultant.email)

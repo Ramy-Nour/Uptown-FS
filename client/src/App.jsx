@@ -166,12 +166,20 @@ export default function App(props) {
     applyDocumentDirection(language)
   }, [language])
 
-  // Enforce DP type = amount for target-PV modes to avoid circular dependency
+  // When switching into PV-target modes, convert DP% to a fixed amount once.
+  // This avoids the pitfall where a user had 20% and it becomes the literal amount "20"
+  // leading to an unrealistically low solved total.
   useEffect(() => {
     if (mode === 'calculateForTargetPV' || mode === 'customYearlyThenEqual_targetPV') {
-      setInputs(s => (s.dpType === 'amount' ? s : { ...s, dpType: 'amount' }))
+      setInputs(s => {
+        if (s.dpType === 'amount') return s
+        const dpPct = Number(s.downPaymentValue) || 0
+        const base = Number(stdPlan.totalPrice) || 0
+        const dpAmt = base > 0 ? (base * dpPct) / 100 : 0
+        return { ...s, dpType: 'amount', downPaymentValue: Number(dpAmt.toFixed(2)) }
+      })
     }
-  }, [mode])
+  }, [mode, stdPlan.totalPrice])
 
   // Auto-compute Standard Calculated PV from Standard Total Price, Financial Rate, Duration and Frequency
   // IMPORTANT:

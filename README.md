@@ -121,6 +121,34 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-10-20 23:55] Client Offer PDF — Unit totals box:
+  - API: /api/documents/client-offer now renders a unit totals table (Unit Type, Price, Garden, Roof, Storage, Garage, Maintenance Deposit, Total). Optional rows are shown only when > 0; labels localized EN/AR.
+  - Client: exportClientOfferPdf sends unit_pricing_breakdown derived from the selected unit.
+- [2025-10-20 23:45] Dual totals everywhere (incl./excl. Maintenance Deposit):
+  - API: /api/generate-plan totals now include totalNominalIncludingMaintenance and totalNominalExcludingMaintenance (totalNominal preserved for compatibility).
+  - Client: PaymentSchedule footer shows both totals; CSV/XLSX exports append both; Client Offer PDF totals block shows both (localized).
+- [2025-10-20 23:35] Client Offer PDF — Consultant identity and footer:
+  - Consultant label localized to “Property Consultant” / “المستشار العقاري”.
+  - Name resolution improved: falls back to req.user first_name/last_name or name when DB lacks names; email still shown.
+  - Footer shows page numbering: “Page X of Y” / “صفحة س من ص”.
+- [2025-10-20 23:20] Maintenance Deposit terminology and scheduling:
+  - Renamed “Maintenance Fee” to “Maintenance Deposit” throughout schedule/UI (Arabic: وديعة الصيانة).
+  - Default due date equals Handover date when month is not provided.
+  - New optional maintenancePaymentDate supported (calendar date overrides month offset).
+  - Acceptance calculations exclude Maintenance Deposit from cumulative totals.
+- [2025-10-20 23:00] Acceptance Evaluation and Standard PV baseline:
+  - Standard PV in /api/generate-plan is now computed via the central engine including the current request’s Down Payment definition to match Proposed PV when using the same plan.
+  - PV rule fixed: Proposed PV passes when ≥ Standard PV (within tolerance/epsilon).
+- [2025-10-20 22:45] Arabic words everywhere:
+  - PaymentSchedule already showed Arabic words when language='ar'.
+  - CSV/XLSX exports now write Arabic words when exporting in Arabic.
+  - Client Offer PDF always renders amount-in-words in the requested language (ignores client-provided wording to avoid mismatches).
+- [2025-10-20 22:30] DP handling and mode defaults:
+  - Target-PV modes now convert DP% to a fixed amount on mode switch (computed from the current Standard Total Price) to avoid “20% → 20 EGP” errors.
+  - Consultant default mode changed to “Discounted Standard Price (Compare to Standard)”.
+- [2025-10-20 22:10] Standard Pricing — PV alignment:
+  - Table rows now request PV from the central calculator with the user’s current DP% included (previously sent 0%).
+  - The table recomputes PV when DP% changes so PV in the form and list match.
 - [2025-10-19 05:30] GitHub Actions: On-demand database backups:
   - Added .github/workflows/db-backup.yml with workflow_dispatch inputs: mode {logical|bundle}, release {true|false}.
   - logical: Runs pg_dump using secrets.DATABASE_URL and uploads a gzipped SQL artifact; optional GitHub Release created.

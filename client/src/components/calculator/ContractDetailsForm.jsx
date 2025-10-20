@@ -49,6 +49,10 @@ export default function ContractDetailsForm({ role, contractInfo, setContractInf
             <input type="number" min="0" style={input()} value={feeSchedule.maintenancePaymentMonth} onChange={e => setFeeSchedule(s => ({ ...s, maintenancePaymentMonth: e.target.value }))} placeholder="e.g. 72 if handover after 6 years" />
           </div>
           <div>
+            <label style={styles.label}>Maintenance Deposit Date (optional — overrides month)</label>
+            <input type="date" style={input()} value={feeSchedule.maintenancePaymentDate || ''} onChange={e => setFeeSchedule(s => ({ ...s, maintenancePaymentDate: e.target.value }))} />
+          </div>
+          <div>
             <label style={styles.label}>Garage Amount</label>
             <input type="number" style={input()} value={feeSchedule.garagePaymentAmount} onChange={e => setFeeSchedule(s => ({ ...s, garagePaymentAmount: e.target.value }))} placeholder="e.g. 200000" />
           </div>

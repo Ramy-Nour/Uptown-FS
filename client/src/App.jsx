@@ -857,7 +857,9 @@ export default function App(props) {
           ...payload.inputs,
           baseDate: inputs.firstPaymentDate || inputs.offerDate || new Date().toISOString().slice(0, 10),
           maintenancePaymentAmount: Number(feeSchedule.maintenancePaymentAmount) || 0,
-          // Default maintenance due at handover when month is empty
+          // Optional explicit calendar date for maintenance deposit
+          maintenancePaymentDate: feeSchedule.maintenancePaymentDate || '',
+          // Default maintenance due at handover when month is empty (ignored if date is provided)
           maintenancePaymentMonth: (() => {
             const m = Number(feeSchedule.maintenancePaymentMonth)
             if (Number.isFinite(m) && m >= 0) return m

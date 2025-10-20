@@ -1142,11 +1142,28 @@ app.post('/api/generate-plan', validate(generatePlanSchema), async (req, res) =>
 
     // Additional one-time fees (NOT included in PV calculation — appended only to schedule)
     const maintAmt = Number(effInputs.maintenancePaymentAmount) || 0
-    // Default maintenance due at handover date when month not provided explicitly
-    let maintMonth = Number(effInputs.maintenancePaymentMonth)
-    if (!Number.isFinite(maintMonth) || maintMonth < 0) {
-      const hy = Number(effInputs.handoverYear) || 0
-      maintMonth = hy > 0 ? hy * 12 : 0
+    // Support explicit maintenance calendar date; otherwise compute by month offset (default: handover)
+    const maintDateStr = effInputs.maintenancePaymentDate || null
+    let maintMonth
+    if (maintDateStr) {
+      try {
+        const b = baseDate || new Date().toISOString().slice(0, 10)
+        const base = new Date(b)
+        const due = new Date(maintDateStr)
+        if (!isNaN(base.getTime()) && !isNaN(due.getTime())) {
+          const years = due.getFullYear() - base.getFullYear()
+          const months = due.getMonth() - base.getMonth()
+          const days = due.getDate() - base.getDate()
+          maintMonth = years * 12 + months + (days >= 0 ? 0 : -1) // adjust if due day before base day
+        }
+      } catch { /* ignore and fall back */ }
+    }
+    if (!Number.isFinite(maintMonth)) {
+      maintMonth = Number(effInputs.maintenancePaymentMonth)
+      if (!Number.isFinite(maintMonth) || maintMonth < 0) {
+        const hy = Number(effInputs.handoverYear) || 0
+        maintMonth = hy > 0 ? hy * 12 : 0
+      }
     }
     if (maintAmt > 0) pushEntry('Maintenance Deposit', maintMonth, maintAmt, baseDate)
 

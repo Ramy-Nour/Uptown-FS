@@ -948,26 +948,27 @@ app.post('/api/generate-plan', validate(generatePlanSchema), async (req, res) =>
       const rowFreqValid = !!rowFreq
 
       if (rowRateValid && rowDurValid && rowFreqValid) {
-        const monthlyRateCalc = Math.pow(1 + rowRate / 100, 1 / 12) - 1
-        let perYearCalc = 12
-        switch (rowFreq) {
-          case Frequencies.Quarterly: perYearCalc = 4; break
-          case Frequencies.BiAnnually: perYearCalc = 2; break
-          case Frequencies.Annually: perYearCalc = 1; break
-          case Frequencies.Monthly:
-          default: perYearCalc = 12; break
+        // Compute the true Standard PV by running the standard structure (including Down Payment) through the engine,
+        // using the current request's DP definition to avoid mismatches with the form.
+        const stdInputsForPv = {
+          salesDiscountPercent: 0,
+          dpType: (effInputs?.dpType === 'percentage' || effInputs?.dpType === 'amount') ? effInputs.dpType : 'percentage',
+          downPaymentValue: Number(effInputs?.downPaymentValue) || 0,
+          planDurationYears: rowDur,
+          installmentFrequency: rowFreq,
+          additionalHandoverPayment: 0,
+          handoverYear: 1,
+          splitFirstYearPayments: false,
+          firstYearPayments: [],
+          subsequentYears: []
         }
-        const nCalc = rowDur * perYearCalc
-        const perPaymentCalc = nCalc > 0 ? (totalPrice / nCalc) : 0
-        const monthsCalc = getPaymentMonths(nCalc, rowFreq, 0)
-        let stdPVComputed = 0
-        if (monthlyRateCalc <= 0 || nCalc === 0) {
-          stdPVComputed = perPaymentCalc * nCalc
-          computedPVEqualsTotalNominal = true
-        } else {
-          for (const m of monthsCalc) stdPVComputed += perPaymentCalc / Math.pow(1 + monthlyRateCalc, m)
-          computedPVEqualsTotalNominal = false
-        }
+        const stdPvResult = calculateByMode(
+          CalculationModes.EvaluateCustomPrice,
+          { totalPrice, financialDiscountRate: rowRate, calculatedPV: 0 },
+          stdInputsForPv
+        )
+        const stdPVComputed = Number(stdPvResult?.calculatedPV) || 0
+        computedPVEqualsTotalNominal = stdPVComputed === totalPrice
 
         effectiveStdPlan = {
           totalPrice,
@@ -1204,10 +1205,10 @@ app.post('/api/generate-plan', validate(generatePlanSchema), async (req, res) =>
     // ----- Proposed PV from calculation engine -----
     const proposedPV = Number(result.calculatedPV) || 0
     const pvTolerancePercent = thresholds.pvTolerancePercent
-    // Pass when Proposed PV is less than or equal to the allowed cap (Standard PV * tolerance).
-    // This treats equality as acceptable and allows Standard PV to be larger.
+    // Pass when Proposed PV is GREATER THAN OR EQUAL to the allowed floor (Standard PV / tolerance if tolerance<100?).
+    // Business rule here: Proposed PV must be at least Standard PV (within epsilon). Tolerance >=100 means relax upward only.
     const EPS = 1e-2 // 0.01 currency units to absorb float noise
-    const pvPass = proposedPV <= (standardPV * (pvTolerancePercent / 100) + EPS)
+    const pvPass = proposedPV + EPS >= (standardPV * (pvTolerancePercent / 100))
     const pvDifference = standardPV - proposedPV
 
     // ----- Conditions based on cumulative percentages -----

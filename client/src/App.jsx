@@ -140,7 +140,7 @@ export default function App(props) {
   const [errors, setErrors] = useState({})
 
   // Custom form state
-  const [mode, setMode] = useState('calculateForTargetPV')
+  const [mode, setMode] = useState('evaluateCustomPrice')
   const [language, setLanguage] = useState('en')
   const [currency, setCurrency] = useState('EGP')
   const [stdPlan, setStdPlan] = useState({

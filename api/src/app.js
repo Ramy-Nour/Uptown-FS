@@ -1177,9 +1177,16 @@ app.post('/api/generate-plan', validate(generatePlanSchema), async (req, res) =>
 
     schedule.sort((a, b) => (a.month - b.month) || a.label.localeCompare(b.label))
 
+    // Totals: provide both excluding and including Maintenance Deposit
+    const totalIncl = schedule.reduce((s, e) => s + e.amount, 0)
+    const totalExcl = schedule
+      .filter(e => e.label !== 'Maintenance Deposit' && e.label !== 'Maintenance Fee')
+      .reduce((s, e) => s + e.amount, 0)
     const totals = {
       count: schedule.length,
-      totalNominal: schedule.reduce((s, e) => s + e.amount, 0)
+      totalNominal: totalIncl, // preserve existing meaning (including all)
+      totalNominalIncludingMaintenance: totalIncl,
+      totalNominalExcludingMaintenance: totalExcl
     }
 
     // ----- Dynamic acceptance thresholds (TM-approved) -----

@@ -857,7 +857,13 @@ export default function App(props) {
           ...payload.inputs,
           baseDate: inputs.firstPaymentDate || inputs.offerDate || new Date().toISOString().slice(0, 10),
           maintenancePaymentAmount: Number(feeSchedule.maintenancePaymentAmount) || 0,
-          maintenancePaymentMonth: Number(feeSchedule.maintenancePaymentMonth) || 0,
+          // Default maintenance due at handover when month is empty
+          maintenancePaymentMonth: (() => {
+            const m = Number(feeSchedule.maintenancePaymentMonth)
+            if (Number.isFinite(m) && m >= 0) return m
+            const hy = Number(inputs.handoverYear) || 0
+            return hy > 0 ? hy * 12 : 0
+          })(),
           garagePaymentAmount: Number(feeSchedule.garagePaymentAmount) || 0,
           garagePaymentMonth: Number(feeSchedule.garagePaymentMonth) || 0
         }

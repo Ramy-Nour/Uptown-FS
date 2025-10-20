@@ -12,7 +12,8 @@ function translateLabel(label, language) {
     'Equal Installment': 'قسط متساوي',
     'First Year': 'السنة الأولى',
     'Handover': 'التسليم',
-    'Maintenance Fee': 'رسوم الصيانة',
+    'Maintenance Fee': 'وديعة الصيانة',
+    'Maintenance Deposit': 'وديعة الصيانة',
     'Garage Fee': 'رسوم الجراج'
   }
   if (map[label]) return map[label]

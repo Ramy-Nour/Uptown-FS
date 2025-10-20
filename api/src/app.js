@@ -1142,7 +1142,12 @@ app.post('/api/generate-plan', validate(generatePlanSchema), async (req, res) =>
 
     // Additional one-time fees (NOT included in PV calculation — appended only to schedule)
     const maintAmt = Number(effInputs.maintenancePaymentAmount) || 0
-    const maintMonth = Number(effInputs.maintenancePaymentMonth) || 0
+    // Default maintenance due at handover date when month not provided explicitly
+    let maintMonth = Number(effInputs.maintenancePaymentMonth)
+    if (!Number.isFinite(maintMonth) || maintMonth < 0) {
+      const hy = Number(effInputs.handoverYear) || 0
+      maintMonth = hy > 0 ? hy * 12 : 0
+    }
     if (maintAmt > 0) pushEntry('Maintenance Fee', maintMonth, maintAmt, baseDate)
 
     const garAmt = Number(effInputs.garagePaymentAmount) || 0

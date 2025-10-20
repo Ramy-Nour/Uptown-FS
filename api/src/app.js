@@ -1732,7 +1732,8 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
               </tbody>
             </table>
             <div class="totals">
-              <strong>${tTotals}:</strong> ${f(totals?.totalNominal || 0)} ${currency || ''}
+              <div><strong>${rtl ? 'الإجمالي (بدون وديعة الصيانة)' : 'Total (excluding Maintenance Deposit)'}:</strong> ${f(Number(totals?.totalNominalExcludingMaintenance ?? totals?.totalNominal || 0))} ${currency || ''}</div>
+              <div><strong>${rtl ? 'الإجمالي (شامل وديعة الصيانة)' : 'Total (including Maintenance Deposit)'}:</strong> ${f(Number(totals?.totalNominalIncludingMaintenance ?? totals?.totalNominal || 0))} ${currency || ''}</div>
             </div>
           </div>
 

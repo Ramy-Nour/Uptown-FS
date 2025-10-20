@@ -905,11 +905,26 @@ export default function App(props) {
         ]
       })
     ]
+    // Append dual totals
+    const totalIncl = Number(genResult?.totals?.totalNominalIncludingMaintenance ?? genResult?.totals?.totalNominal || 0)
+    const totalExcl = Number(genResult?.totals?.totalNominalExcludingMaintenance ?? totalIncl)
+    rows.push([])
+    rows.push([
+      '', '', (language === 'ar' ? 'الإجمالي (بدون وديعة الصيانة)' : 'Total (excluding Maintenance Deposit)'),
+      totalExcl.toFixed(2),
+      ''
+    ])
+    rows.push([
+      '', '', (language === 'ar' ? 'الإجمالي (شامل وديعة الصيانة)' : 'Total (including Maintenance Deposit)'),
+      totalIncl.toFixed(2),
+      ''
+    ])
+
     const csv = rows.map(r => r.map(cell => {
       const s = String(cell ?? '')
-      if (/[\",\\n]/.test(s)) return `\"${s.replace(/\"/g, '\"\"')}\"`
+      if (/[\",\n]/.test(s)) return `\"${s.replace(/\"/g, '\"\"')}\"`
       return s
-    }).join(',')).join('\\n')
+    }).join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -1144,6 +1159,21 @@ export default function App(props) {
         ]
       })
     ]
+    // Append dual totals
+    const totalIncl = Number(genResult?.totals?.totalNominalIncludingMaintenance ?? genResult?.totals?.totalNominal || 0)
+    const totalExcl = Number(genResult?.totals?.totalNominalExcludingMaintenance ?? totalIncl)
+    aoa.push([])
+    aoa.push([
+      '', '', (language === 'ar' ? 'الإجمالي (بدون وديعة الصيانة)' : 'Total (excluding Maintenance Deposit)'),
+      totalExcl.toFixed(2),
+      ''
+    ])
+    aoa.push([
+      '', '', (language === 'ar' ? 'الإجمالي (شامل وديعة الصيانة)' : 'Total (including Maintenance Deposit)'),
+      totalIncl.toFixed(2),
+      ''
+    ])
+
     const ws = XLSX.utils.aoa_to_sheet(aoa)
     // Column widths for readability
     ws['!cols'] = [{ wch: 6 }, { wch: 10 }, { wch: 28 }, { wch: 16 }, { wch: 50 }]

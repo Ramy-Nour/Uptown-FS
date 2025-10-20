@@ -1148,7 +1148,7 @@ app.post('/api/generate-plan', validate(generatePlanSchema), async (req, res) =>
       const hy = Number(effInputs.handoverYear) || 0
       maintMonth = hy > 0 ? hy * 12 : 0
     }
-    if (maintAmt > 0) pushEntry('Maintenance Fee', maintMonth, maintAmt, baseDate)
+    if (maintAmt > 0) pushEntry('Maintenance Deposit', maintMonth, maintAmt, baseDate)
 
     const garAmt = Number(effInputs.garagePaymentAmount) || 0
     const garMonth = Number(effInputs.garagePaymentMonth) || 0
@@ -1221,9 +1221,9 @@ app.post('/api/generate-plan', validate(generatePlanSchema), async (req, res) =>
     const totalNominalForConditions = (Number(result.totalNominalPrice) || 0) + (Number(effInputs.additionalHandoverPayment) || 0)
 
     // Helper to compute cumulative at month cutoff
-    // Include Garage amounts in acceptance totals, exclude Maintenance only (as per requirements)
+    // Include Garage amounts in acceptance totals, exclude Maintenance Deposit only (as per requirements)
     const sumUpTo = (monthCutoff) => schedule
-      .filter(s => s.label !== 'Maintenance Fee')
+      .filter(s => s.label !== 'Maintenance Deposit' && s.label !== 'Maintenance Fee')
       .reduce((sum, s) => sum + (s.month <= monthCutoff ? (Number(s.amount) || 0) : 0), 0)
 
     const cutoffY1 = 12
@@ -1574,7 +1574,7 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
       if (L.includes('down payment')) return 'دفعة التعاقد'
       if (L.includes('equal installment')) return 'قسط متساوي'
       if (L.includes('handover')) return 'التسليم'
-      if (L.includes('maintenance fee')) return 'مصروفات الصيانة'
+      if (L.includes('maintenance')) return 'وديعة الصيانة'
       if (L.includes('garage fee')) return 'مصروفات الجراج'
       if (L.startsWith('year')) {
         // examples: "Year 2 (monthly)" — simplify to Arabic phrase

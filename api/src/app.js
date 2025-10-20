@@ -1689,6 +1689,46 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
       ? `<div class="meta"><strong>${tConsultant}:</strong> ${[consultant.name, consultant.email].filter(Boolean).join(' — ')}</div>`
       : ''
 
+    // Unit pricing breakdown (optional)
+    const upb = req.body?.unit_pricing_breakdown || req.body?.unitPricingBreakdown || null
+    let unitTotalsBox = ''
+    if (upb && typeof upb === 'object') {
+      const rows = []
+      const L = (en, ar) => rtl ? ar : en
+      const addRow = (label, val) => {
+        const n = Number(val) || 0
+        if (!(n > 0) && label !== 'unit_type') return
+        rows.push(`
+          <tr>
+            <td style="padding:6px 8px; background:#ead9bd; font-weight:700;">${label}</td>
+            <td style="padding:6px 8px; text-align:${rtl ? 'left' : 'right'}">${label === 'unit_type' ? (unit?.unit_type || '') : f(n)} ${label === 'unit_type' ? '' : (currency || '')}</td>
+          </tr>
+        `)
+      }
+      addRow(L('Unit Type', 'نوع الوحدة'), 1) // placeholder to render unit type on the right cell
+      addRow(L('Price', 'السعر'), upb.base)
+      if (Number(upb.garden || 0) > 0) addRow(L('Garden', 'الحديقة'), upb.garden)
+      if (Number(upb.roof || 0) > 0) addRow(L('Roof', 'السطح'), upb.roof)
+      if (Number(upb.storage || 0) > 0) addRow(L('Storage', 'غرفة التخزين'), upb.storage)
+      if (Number(upb.garage || 0) > 0) addRow(L('Garage', 'الجراج'), upb.garage)
+      // Maintenance Deposit may be provided separately in fee inputs; include from upb.maintenance if present
+      if (Number(upb.maintenance || 0) > 0) addRow(L('Maintenance Deposit', 'وديعة الصيانة'), upb.maintenance)
+      const totalAll = (Number(upb.base||0)+Number(upb.garden||0)+Number(upb.roof||0)+Number(upb.storage||0)+Number(upb.garage||0)+Number(upb.maintenance||0))
+      rows.push(`
+        <tr>
+          <td style="padding:6px 8px; background:#cba86c; font-weight:900;">${L('Total', 'الإجمالي')}</td>
+          <td style="padding:6px 8px; text-align:${rtl ? 'left' : 'right'}; font-weight:900;">${f(totalAll)} ${currency || ''}</td>
+        </tr>
+      `)
+      unitTotalsBox = `
+        <div style="margin:${rtl ? '0 16px 0 0' : '0 0 0 16px'}; float:${rtl ? 'left' : 'right'}; width: ${rtl ? '42%' : '42%'};">
+          <table style="width:100%; border-collapse:collapse; border:1px solid #ead9bd">
+            ${rows.join('')}
+          </table>
+        </div>
+      `
+    }
+
     const html = `
       <html lang="${language}" dir="${dir}">
         <head>
@@ -1703,9 +1743,11 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
 
           <h2 style="${rtl ? 'text-align:right;' : ''}">${title}</h2>
           <div class="section">
-            <div class="meta"><strong>${tOfferDate}:</strong> ${offer_date || ''} &nbsp;&nbsp; <strong>${tFirstPayment}:</strong> ${first_payment_date || ''}</div>
+            <div class="meta"><strong>${tOfferDate}:</strong> ${offer_date || ''}   <strong>${tFirstPayment}:</strong> ${first_payment_date || ''}</div>
             ${unitLine ? `<div class="meta"><strong>${tUnit}:</strong> ${unitLine}</div>` : ''}
             ${consultantLine}
+            ${unitTotalsBox}
+            <div style="clear:both;"></div>
           </div>
 
           <div class="section">

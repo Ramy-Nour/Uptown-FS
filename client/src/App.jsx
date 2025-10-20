@@ -1108,6 +1108,16 @@ export default function App(props) {
         unit: {
           unit_code: unitInfo.unit_code || '',
           unit_type: unitInfo.unit_type || ''
+        },
+        // Include unit pricing breakdown for PDF header box
+        unit_pricing_breakdown: {
+          base: Number(unitPricingBreakdown.base || 0),
+          garden: Number(unitPricingBreakdown.garden || 0),
+          roof: Number(unitPricingBreakdown.roof || 0),
+          storage: Number(unitPricingBreakdown.storage || 0),
+          garage: Number(unitPricingBreakdown.garage || 0),
+          maintenance: Number(unitPricingBreakdown.maintenance || 0),
+          totalExclMaintenance: Number(unitPricingBreakdown.totalExclMaintenance || 0)
         }
       }
       const resp = await fetchWithAuth(`${API_URL}/api/documents/client-offer`, {

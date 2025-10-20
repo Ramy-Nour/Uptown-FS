@@ -1719,10 +1719,20 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
     })
     const page = await browser.newPage()
     await page.setContent(html, { waitUntil: 'networkidle0' })
+    // Localized footer: Page X of Y (EN) / صفحة س من ص (AR)
+    const footerTemplate = `
+      <div style="width:100%; font-size:10px; color:#6b7280; padding:6px 10px; ${rtl ? 'direction:rtl; text-align:left;' : 'direction:ltr; text-align:right;'}">
+        ${rtl ? 'صفحة' : 'Page'} <span class="pageNumber"></span> ${rtl ? 'من' : 'of'} <span class="totalPages"></span>
+      </div>`
+    const headerTemplate = '<div></div>'
+
     const pdfBuffer = await page.pdf({
       format: 'A4',
       printBackground: true,
-      margin: { top: '14mm', right: '12mm', bottom: '14mm', left: '12mm' }
+      displayHeaderFooter: true,
+      headerTemplate,
+      footerTemplate,
+      margin: { top: '14mm', right: '12mm', bottom: '18mm', left: '12mm' }
     })
     await browser.close()
 

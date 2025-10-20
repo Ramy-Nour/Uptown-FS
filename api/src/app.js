@@ -1645,7 +1645,7 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
     const tAmount = rtl ? 'القيمة' : 'Amount'
     const tDate = rtl ? 'التاريخ' : 'Date'
     const tAmountWords = rtl ? 'المبلغ بالحروف' : 'Amount in Words'
-    const tConsultant = rtl ? 'المستشار' : 'Consultant'
+    const tConsultant = rtl ? 'المستشار العقاري' : 'Property Consultant'
     const tEmail = rtl ? 'البريد الإلكتروني' : 'Email'
 
     const buyersHtml = buyers.map((b, idx) => `

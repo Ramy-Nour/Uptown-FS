@@ -1517,7 +1517,7 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
       } catch { /* ignore */ }
     }
     if (!consultant.email) {
-      // Fallback to current user
+      // Fallback to current user (DB), then derive from req.user if DB has no record
       try {
         const u = await pool.query(`
           SELECT email,
@@ -1526,11 +1526,14 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
         `, [req.user.id])
         if (u.rows.length) {
           consultant = { name: u.rows[0].full_name || null, email: u.rows[0].email || null }
-        } else {
-          consultant = { name: null, email: req.user?.email || null }
         }
-      } catch {
-        consultant = { name: null, email: req.user?.email || null }
+      } catch { /* ignore */ }
+      if (!consultant.email) {
+        // Derive from authenticated request context
+        const fullFromReq = [req.user?.first_name, req.user?.last_name].filter(Boolean).join(' ').trim()
+        const derivedName = fullFromReq || (req.user?.name || null)
+        const derivedEmail = req.user?.email || null
+        consultant = { name: derivedName, email: derivedEmail }
       }
     }
 

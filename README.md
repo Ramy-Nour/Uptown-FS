@@ -121,6 +121,10 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-10-21 07:00] Maintenance Deposit — always sourced from unit model pricing:
+  - API: /api/generate-plan now ignores consultant-entered maintenance amounts when a unitId is present and always uses the unit’s approved model pricing maintenance_price. Timing (date/month) remains configurable; default is Handover month when not specified.
+  - API: /api/documents/client-offer continues to auto-resolve maintenance for the header totals box using unit_id.
+  - PDF remains A4 portrait; header layout tightened.
 - [2025-10-21 06:50] Maintenance Deposit auto-inclusion and PDF portrait:
   - API: /api/generate-plan now auto-populates the Maintenance Deposit from the unit’s approved model pricing when unitId is provided and the consultant did not enter an amount. The schedule includes a “Maintenance Deposit” line at the default handover date unless an explicit maintenance date/month is provided.
   - API: /api/documents/client-offer auto-resolves the unit pricing breakdown (including maintenance) from DB when unit_id is sent, so the PDF totals box always reflects maintenance without relying on consultant input.

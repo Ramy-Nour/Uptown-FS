@@ -1159,11 +1159,8 @@ app.post('/api/generate-plan', validate(generatePlanSchema), async (req, res) =>
     }
 
     // Additional one-time fees (NOT included in PV calculation — appended only to schedule)
-    // Auto-resolve Maintenance Deposit from unit pricing when consultant didn't enter one
-    let maintAmt = Number(effInputs.maintenancePaymentAmount) || 0
-    if (!(maintAmt > 0) && (Number(unitId) > 0) && maintFromPricing > 0) {
-      maintAmt = maintFromPricing
-    }
+    // Maintenance Deposit amount ALWAYS sourced from unit model pricing when a unit is selected; consultant input is ignored.
+    let maintAmt = (Number(unitId) > 0) ? (Number(maintFromPricing) || 0) : (Number(effInputs.maintenancePaymentAmount) || 0)
 
     // Support explicit maintenance calendar date; otherwise compute by month offset (default: handover)
     const maintDateStr = effInputs.maintenancePaymentDate || null

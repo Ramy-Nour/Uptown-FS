@@ -906,7 +906,7 @@ export default function App(props) {
       })
     ]
     // Append dual totals
-    const totalIncl = Number(genResult?.totals?.totalNominalIncludingMaintenance ?? genResult?.totals?.totalNominal || 0)
+    const totalIncl = Number(((genResult?.totals?.totalNominalIncludingMaintenance ?? genResult?.totals?.totalNominal)) || 0)
     const totalExcl = Number(genResult?.totals?.totalNominalExcludingMaintenance ?? totalIncl)
     rows.push([])
     rows.push([
@@ -1170,7 +1170,7 @@ export default function App(props) {
       })
     ]
     // Append dual totals
-    const totalIncl = Number(genResult?.totals?.totalNominalIncludingMaintenance ?? genResult?.totals?.totalNominal || 0)
+    const totalIncl = Number(((genResult?.totals?.totalNominalIncludingMaintenance ?? genResult?.totals?.totalNominal)) || 0)
     const totalExcl = Number(genResult?.totals?.totalNominalExcludingMaintenance ?? totalIncl)
     aoa.push([])
     aoa.push([

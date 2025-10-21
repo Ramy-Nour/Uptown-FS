@@ -72,7 +72,7 @@ export default function PaymentSchedule({ schedule = [], totals = null, language
                 {rtl ? 'الإجمالي (بدون وديعة الصيانة)' : 'Total (excluding Maintenance Deposit)'}
               </td>
               <td style={{ padding: 12, fontWeight: 700, background: '#fbfaf7', textAlign: 'right' }}>
-                {Number(totals.totalNominalExcludingMaintenance ?? totals.totalNominal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {Number(((totals.totalNominalExcludingMaintenance ?? totals.totalNominal)) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </td>
               <td style={{ padding: 12, fontWeight: 700, background: '#fbfaf7' }}></td>
             </tr>
@@ -81,7 +81,7 @@ export default function PaymentSchedule({ schedule = [], totals = null, language
                 {rtl ? 'الإجمالي (شامل وديعة الصيانة)' : 'Total (including Maintenance Deposit)'}
               </td>
               <td style={{ padding: 12, fontWeight: 700, background: '#fbfaf7', textAlign: 'right' }}>
-                {Number(totals.totalNominalIncludingMaintenance ?? totals.totalNominal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {Number(((totals.totalNominalIncludingMaintenance ?? totals.totalNominal)) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </td>
               <td style={{ padding: 12, fontWeight: 700, background: '#fbfaf7' }}></td>
             </tr>

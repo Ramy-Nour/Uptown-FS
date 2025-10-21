@@ -447,6 +447,39 @@ router.patch(
          VALUES ($1, 'approve', $2, $3::jsonb, $4::jsonb)`,
         [id, req.user.id, JSON.stringify(prev.rows[0] || null), JSON.stringify(row)]
       )
+      // Propagate approved standard pricing to the related unit (if present)
+      const unitId = Number(row.unit_id) || null
+      const newPrice = Number(row.price) || 0
+      const newArea = row.area != null ? Number(row.area) : null
+      if (unitId) {
+        const params = [newPrice, unitId]
+        let sql = `UPDATE units SET base_price=$1, updated_at=now() WHERE id=$2`
+        if (newArea != null && Number.isFinite(newArea) && newArea > 0) {
+          // include area update when valid
+          sql = `UPDATE units SET base_price=$1, area=$3, updated_at=now() WHERE id=$2`
+          params.push(unitId) // will adjust below
+          // reorder params properly: [price, unitId, area] -> fix to [price, unitId, area]
+          params[1] = unitId
+          params.push(newArea)
+        }
+        const upd = await client.query(sql, params)
+        await client.query(
+          `INSERT INTO standard_pricing_history
+           (standard_pricing_id, change_type, changed_by, old_values, new_values)
+           VALUES ($1, 'propagate', $2, $3::jsonb, $4::jsonb)`,
+          [
+            id,
+            req.user.id,
+            JSON.stringify(prev.rows[0] || null),
+            JSON.stringify({
+              propagated_to_units: upd.rowCount || 0,
+              unit_id: unitId,
+              new_base_price: newPrice,
+              new_area: newArea,
+            }),
+          ]
+        )
+      }
       await client.query('COMMIT')
       client.release()
       return ok(res, { standard_pricing: row })

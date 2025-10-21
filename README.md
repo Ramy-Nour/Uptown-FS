@@ -121,6 +121,8 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-10-21 07:05] Top-Management approvals for Standard Pricing:
+  - API: Updated /api/workflow/standard-pricing/:id/approve and /reject to allow Chairman and Vice Chairman in addition to CEO. Previously, only CEO could approve/reject, which blocked Top Management when other roles attempted to act. This change makes approvals applicable regardless of the unit’s linkage to a Standard Price record.
 - [2025-10-21 06:35] Client Offer PDF — consultant name reliability:
   - API: Simplified consultant identity resolution to rely strictly on users.name and users.email. We initialize from the authenticated user context and, if a deal_id is provided, prefer the deal creator from DB. Fallback reads the current user from DB using name/email columns only. This ensures the consultant’s name appears in the PDF whenever it’s present in the users table.
 - [2025-10-21 06:25] Consultant UX — export buttons visibility and Unit Block section placement:

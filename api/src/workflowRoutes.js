@@ -417,7 +417,7 @@ router.patch(
 router.patch(
   '/standard-pricing/:id/approve',
   authMiddleware,
-  requireRole(['ceo']),
+  requireRole(['ceo', 'chairman', 'vice_chairman']),
   async (req, res) => {
     const client = await pool.connect()
     try {
@@ -462,7 +462,7 @@ router.patch(
 router.patch(
   '/standard-pricing/:id/reject',
   authMiddleware,
-  requireRole(['ceo']),
+  requireRole(['ceo', 'chairman', 'vice_chairman']),
   async (req, res) => {
     const client = await pool.connect()
     try {

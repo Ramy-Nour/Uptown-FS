@@ -836,6 +836,9 @@ app.post('/api/generate-plan', validate(generatePlanSchema), async (req, res) =>
       effInputs.installmentFrequency = nf
     }
 
+    // Will hold auto-resolved maintenance amount when unitId provided
+    let maintFromPricing = 0
+
     if (standardPricingId || unitId) {
       // Resolve nominal base from approved pricing and authoritative rate/duration/frequency from global standard_plan
       let row = null
@@ -880,6 +883,9 @@ app.post('/api/generate-plan', validate(generatePlanSchema), async (req, res) =>
       if (!row) {
         return bad(res, 404, 'Approved standard price not found for the selected unit/model')
       }
+
+      // Persist maintenance from pricing to use later if consultant didn't enter one
+      maintFromPricing = Number(row.maintenance_price) || 0
 
       const totalPrice =
         (Number(row.price) || 0) +
@@ -985,7 +991,7 @@ app.post('/api/generate-plan', validate(generatePlanSchema), async (req, res) =>
         effectiveStdPlan = {
           totalPrice,
           financialDiscountRate: rowRate,
-          calculatedPV: Number(stdPVComputed.toFixed(2))
+          calculatedPV: Number(stdPvComputed.toFixed(2))
         }
         annualRateUsedMeta = rowRate
         durationYearsUsedMeta = rowDur
@@ -1153,7 +1159,9 @@ app.post('/api/generate-plan', validate(generatePlanSchema), async (req, res) =>
     }
 
     // Additional one-time fees (NOT included in PV calculation — appended only to schedule)
-    const maintAmt = Number(effInputs.maintenancePaymentAmount) || 0
+    // Maintenance Deposit amount ALWAYS sourced from unit model pricing when a unit is selected; consultant input is ignored.
+    let maintAmt = (Number(unitId) > 0) ? (Number(maintFromPricing) || 0) : (Number(effInputs.maintenancePaymentAmount) || 0)
+
     // Support explicit maintenance calendar date; otherwise compute by month offset (default: handover)
     const maintDateStr = effInputs.maintenancePaymentDate || null
     let maintMonth
@@ -1704,8 +1712,34 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
       ? `<div class="meta"><strong>${tConsultant}:</strong> ${[consultant.name, consultant.email].filter(Boolean).join(' — ')}</div>`
       : ''
 
-    // Unit pricing breakdown (optional)
-    const upb = req.body?.unit_pricing_breakdown || req.body?.unitPricingBreakdown || null
+    // Unit pricing breakdown (auto-resolve from DB when unit_id is provided)
+    let upb = req.body?.unit_pricing_breakdown || req.body?.unitPricingBreakdown || null
+    try {
+      const unitId = Number(unit?.unit_id)
+      if (Number.isFinite(unitId) && unitId > 0) {
+        const r = await pool.query(`
+          SELECT p.price, p.maintenance_price, p.garage_price, p.garden_price, p.roof_price, p.storage_price
+          FROM units u
+          JOIN unit_model_pricing p ON p.model_id = u.model_id
+          WHERE u.id=$1 AND p.status='approved'
+          ORDER BY p.id DESC
+          LIMIT 1
+        `, [unitId])
+        if (r.rows.length) {
+          const row = r.rows[0]
+          // Build effective breakdown from DB, prefer client-provided values when present
+          upb = {
+            base: Number((upb && upb.base) ?? row.price) || 0,
+            garden: Number((upb && upb.garden) ?? row.garden_price) || 0,
+            roof: Number((upb && upb.roof) ?? row.roof_price) || 0,
+            storage: Number((upb && upb.storage) ?? row.storage_price) || 0,
+            garage: Number((upb && upb.garage) ?? row.garage_price) || 0,
+            maintenance: Number((upb && upb.maintenance) ?? row.maintenance_price) || 0
+          }
+        }
+      }
+    } catch { /* ignore and continue with provided breakdown */ }
+
     let unitTotalsBox = ''
     if (upb && typeof upb === 'object') {
       const rows = []
@@ -1716,7 +1750,7 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
         rows.push(`
           <tr>
             <td style="padding:6px 8px; background:#ead9bd; font-weight:700;">${label}</td>
-            <td style="padding:6px 8px; text-align:${rtl ? 'left' : 'right'}">${label === 'unit_type' ? (unit?.unit_type || '') : f(n)} ${label === 'unit_type' ? '' : (currency || '')}</td>
+            <td style="padding:6px 8px; text-align:${rtl ? 'left' : 'right'}; white-space:nowrap; min-width:120px;">${label === 'unit_type' ? (unit?.unit_type || '') : f(n)} ${label === 'unit_type' ? '' : (currency || '')}</td>
           </tr>
         `)
       }
@@ -1726,7 +1760,7 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
       if (Number(upb.roof || 0) > 0) addRow(L('Roof', 'السطح'), upb.roof)
       if (Number(upb.storage || 0) > 0) addRow(L('Storage', 'غرفة التخزين'), upb.storage)
       if (Number(upb.garage || 0) > 0) addRow(L('Garage', 'الجراج'), upb.garage)
-      // Maintenance Deposit may be provided separately in fee inputs; include from upb.maintenance if present
+      // Maintenance Deposit from breakdown (auto-fetched above if unit_id present)
       const maint = Number(upb.maintenance || 0)
       if (maint > 0) addRow(L('Maintenance Deposit', 'وديعة الصيانة'), maint)
       const totalExcl = (Number(upb.base||0)+Number(upb.garden||0)+Number(upb.roof||0)+Number(upb.storage||0)+Number(upb.garage||0))
@@ -1734,15 +1768,15 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
       rows.push(`
         <tr>
           <td style="padding:6px 8px; background:#cba86c; font-weight:900;">${L('Total (excluding Maintenance Deposit)', 'الإجمالي (بدون وديعة الصيانة)')}</td>
-          <td style="padding:6px 8px; text-align:${rtl ? 'left' : 'right'}; font-weight:900;">${f(totalExcl)} ${currency || ''}</td>
+          <td style="padding:6px 8px; text-align:${rtl ? 'left' : 'right'}; font-weight:900; white-space:nowrap; min-width:120px;">${f(totalExcl)} ${currency || ''}</td>
         </tr>
         <tr>
           <td style="padding:6px 8px; background:#cba86c; font-weight:900;">${L('Total (including Maintenance Deposit)', 'الإجمالي (شامل وديعة الصيانة)')}</td>
-          <td style="padding:6px 8px; text-align:${rtl ? 'left' : 'right'}; font-weight:900;">${f(totalIncl)} ${currency || ''}</td>
+          <td style="padding:6px 8px; text-align:${rtl ? 'left' : 'right'}; font-weight:900; white-space:nowrap; min-width:120px;">${f(totalIncl)} ${currency || ''}</td>
         </tr>
       `)
       unitTotalsBox = `
-        <div style="margin:${rtl ? '0 16px 0 0' : '0 0 0 16px'}; float:${rtl ? 'left' : 'right'}; width: ${rtl ? '42%' : '42%'};">
+        <div style="margin:${rtl ? '0 16px 0 0' : '0 0 0 16px'}; width: 42%;">
           <table style="width:100%; border-collapse:collapse; border:1px solid #ead9bd">
             ${rows.join('')}
           </table>
@@ -1767,21 +1801,17 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
             <div class="meta"><strong>${tOfferDate}:</strong> ${offer_date || ''}   <strong>${tFirstPayment}:</strong> ${first_payment_date || ''}</div>
             ${unitLine ? `<div class="meta"><strong>${tUnit}:</strong> ${unitLine}</div>` : ''}
             ${consultantLine}
-            <div style="display:flex; ${rtl ? 'flex-direction:row-reverse;' : ''} gap:12px; align-items:flex-start;">
+            <div style="display:flex; ${rtl ? 'flex-direction:row-reverse;' : ''} gap:12px; align-items:stretch;">
               <div style="flex:1;">
                 <div class="buyers">
                   ${buyersHtml || (rtl ? '<div>لا يوجد بيانات عملاء</div>' : '<div>No client data</div>')}
                 </div>
               </div>
-              <div style="width:42%;">${unitTotalsBox}</div>
+              ${unitTotalsBox}
             </div>
           </div>
 
-          <!-- Clients block moved up into the header section alongside the unit totals to optimize page space. -->
-  <div class="buyers">
-              ${buyersHtml || (rtl ? '<div>لا يوجد بيانات عملاء</div>' : '<div>No client data</div>')}
-            </div>
-          </div>
+          
 
           <div class="section">
             <h3 style="${rtl ? 'text-align:right;' : ''}">${tSchedule}</h3>
@@ -1828,6 +1858,7 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
 
     const pdfBuffer = await page.pdf({
       format: 'A4',
+      landscape: false,
       printBackground: true,
       displayHeaderFooter: true,
       headerTemplate,

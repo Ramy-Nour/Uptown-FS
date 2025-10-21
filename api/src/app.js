@@ -948,26 +948,27 @@ app.post('/api/generate-plan', validate(generatePlanSchema), async (req, res) =>
       const rowFreqValid = !!rowFreq
 
       if (rowRateValid && rowDurValid && rowFreqValid) {
-        const monthlyRateCalc = Math.pow(1 + rowRate / 100, 1 / 12) - 1
-        let perYearCalc = 12
-        switch (rowFreq) {
-          case Frequencies.Quarterly: perYearCalc = 4; break
-          case Frequencies.BiAnnually: perYearCalc = 2; break
-          case Frequencies.Annually: perYearCalc = 1; break
-          case Frequencies.Monthly:
-          default: perYearCalc = 12; break
+        // Compute the true Standard PV by running the standard structure (including Down Payment) through the engine,
+        // using the current request's DP definition to avoid mismatches with the form.
+        const stdInputsForPv = {
+          salesDiscountPercent: 0,
+          dpType: (effInputs?.dpType === 'percentage' || effInputs?.dpType === 'amount') ? effInputs.dpType : 'percentage',
+          downPaymentValue: Number(effInputs?.downPaymentValue) || 0,
+          planDurationYears: rowDur,
+          installmentFrequency: rowFreq,
+          additionalHandoverPayment: 0,
+          handoverYear: 1,
+          splitFirstYearPayments: false,
+          firstYearPayments: [],
+          subsequentYears: []
         }
-        const nCalc = rowDur * perYearCalc
-        const perPaymentCalc = nCalc > 0 ? (totalPrice / nCalc) : 0
-        const monthsCalc = getPaymentMonths(nCalc, rowFreq, 0)
-        let stdPVComputed = 0
-        if (monthlyRateCalc <= 0 || nCalc === 0) {
-          stdPVComputed = perPaymentCalc * nCalc
-          computedPVEqualsTotalNominal = true
-        } else {
-          for (const m of monthsCalc) stdPVComputed += perPaymentCalc / Math.pow(1 + monthlyRateCalc, m)
-          computedPVEqualsTotalNominal = false
-        }
+        const stdPvResult = calculateByMode(
+          CalculationModes.EvaluateCustomPrice,
+          { totalPrice, financialDiscountRate: rowRate, calculatedPV: 0 },
+          stdInputsForPv
+        )
+        const stdPVComputed = Number(stdPvResult?.calculatedPV) || 0
+        computedPVEqualsTotalNominal = stdPVComputed === totalPrice
 
         effectiveStdPlan = {
           totalPrice,
@@ -1141,8 +1142,30 @@ app.post('/api/generate-plan', validate(generatePlanSchema), async (req, res) =>
 
     // Additional one-time fees (NOT included in PV calculation — appended only to schedule)
     const maintAmt = Number(effInputs.maintenancePaymentAmount) || 0
-    const maintMonth = Number(effInputs.maintenancePaymentMonth) || 0
-    if (maintAmt > 0) pushEntry('Maintenance Fee', maintMonth, maintAmt, baseDate)
+    // Support explicit maintenance calendar date; otherwise compute by month offset (default: handover)
+    const maintDateStr = effInputs.maintenancePaymentDate || null
+    let maintMonth
+    if (maintDateStr) {
+      try {
+        const b = baseDate || new Date().toISOString().slice(0, 10)
+        const base = new Date(b)
+        const due = new Date(maintDateStr)
+        if (!isNaN(base.getTime()) && !isNaN(due.getTime())) {
+          const years = due.getFullYear() - base.getFullYear()
+          const months = due.getMonth() - base.getMonth()
+          const days = due.getDate() - base.getDate()
+          maintMonth = years * 12 + months + (days >= 0 ? 0 : -1) // adjust if due day before base day
+        }
+      } catch { /* ignore and fall back */ }
+    }
+    if (!Number.isFinite(maintMonth)) {
+      maintMonth = Number(effInputs.maintenancePaymentMonth)
+      if (!Number.isFinite(maintMonth) || maintMonth < 0) {
+        const hy = Number(effInputs.handoverYear) || 0
+        maintMonth = hy > 0 ? hy * 12 : 0
+      }
+    }
+    if (maintAmt > 0) pushEntry('Maintenance Deposit', maintMonth, maintAmt, baseDate)
 
     const garAmt = Number(effInputs.garagePaymentAmount) || 0
     const garMonth = Number(effInputs.garagePaymentMonth) || 0
@@ -1154,9 +1177,16 @@ app.post('/api/generate-plan', validate(generatePlanSchema), async (req, res) =>
 
     schedule.sort((a, b) => (a.month - b.month) || a.label.localeCompare(b.label))
 
+    // Totals: provide both excluding and including Maintenance Deposit
+    const totalIncl = schedule.reduce((s, e) => s + e.amount, 0)
+    const totalExcl = schedule
+      .filter(e => e.label !== 'Maintenance Deposit' && e.label !== 'Maintenance Fee')
+      .reduce((s, e) => s + e.amount, 0)
     const totals = {
       count: schedule.length,
-      totalNominal: schedule.reduce((s, e) => s + e.amount, 0)
+      totalNominal: totalIncl, // preserve existing meaning (including all)
+      totalNominalIncludingMaintenance: totalIncl,
+      totalNominalExcludingMaintenance: totalExcl
     }
 
     // ----- Dynamic acceptance thresholds (TM-approved) -----
@@ -1204,10 +1234,10 @@ app.post('/api/generate-plan', validate(generatePlanSchema), async (req, res) =>
     // ----- Proposed PV from calculation engine -----
     const proposedPV = Number(result.calculatedPV) || 0
     const pvTolerancePercent = thresholds.pvTolerancePercent
-    // Pass when Proposed PV is less than or equal to the allowed cap (Standard PV * tolerance).
-    // This treats equality as acceptable and allows Standard PV to be larger.
+    // Pass when Proposed PV is GREATER THAN OR EQUAL to the allowed floor (Standard PV / tolerance if tolerance<100?).
+    // Business rule here: Proposed PV must be at least Standard PV (within epsilon). Tolerance >=100 means relax upward only.
     const EPS = 1e-2 // 0.01 currency units to absorb float noise
-    const pvPass = proposedPV <= (standardPV * (pvTolerancePercent / 100) + EPS)
+    const pvPass = proposedPV + EPS >= (standardPV * (pvTolerancePercent / 100))
     const pvDifference = standardPV - proposedPV
 
     // ----- Conditions based on cumulative percentages -----
@@ -1215,9 +1245,9 @@ app.post('/api/generate-plan', validate(generatePlanSchema), async (req, res) =>
     const totalNominalForConditions = (Number(result.totalNominalPrice) || 0) + (Number(effInputs.additionalHandoverPayment) || 0)
 
     // Helper to compute cumulative at month cutoff
-    // Include Garage amounts in acceptance totals, exclude Maintenance only (as per requirements)
+    // Include Garage amounts in acceptance totals, exclude Maintenance Deposit only (as per requirements)
     const sumUpTo = (monthCutoff) => schedule
-      .filter(s => s.label !== 'Maintenance Fee')
+      .filter(s => s.label !== 'Maintenance Deposit' && s.label !== 'Maintenance Fee')
       .reduce((sum, s) => sum + (s.month <= monthCutoff ? (Number(s.amount) || 0) : 0), 0)
 
     const cutoffY1 = 12
@@ -1494,7 +1524,7 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
       } catch { /* ignore */ }
     }
     if (!consultant.email) {
-      // Fallback to current user
+      // Fallback to current user (DB), then derive from req.user if DB has no record
       try {
         const u = await pool.query(`
           SELECT email,
@@ -1503,11 +1533,14 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
         `, [req.user.id])
         if (u.rows.length) {
           consultant = { name: u.rows[0].full_name || null, email: u.rows[0].email || null }
-        } else {
-          consultant = { name: null, email: req.user?.email || null }
         }
-      } catch {
-        consultant = { name: null, email: req.user?.email || null }
+      } catch { /* ignore */ }
+      if (!consultant.email) {
+        // Derive from authenticated request context
+        const fullFromReq = [req.user?.first_name, req.user?.last_name].filter(Boolean).join(' ').trim()
+        const derivedName = fullFromReq || (req.user?.name || null)
+        const derivedEmail = req.user?.email || null
+        consultant = { name: derivedName, email: derivedEmail }
       }
     }
 
@@ -1568,7 +1601,7 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
       if (L.includes('down payment')) return 'دفعة التعاقد'
       if (L.includes('equal installment')) return 'قسط متساوي'
       if (L.includes('handover')) return 'التسليم'
-      if (L.includes('maintenance fee')) return 'مصروفات الصيانة'
+      if (L.includes('maintenance')) return 'وديعة الصيانة'
       if (L.includes('garage fee')) return 'مصروفات الجراج'
       if (L.startsWith('year')) {
         // examples: "Year 2 (monthly)" — simplify to Arabic phrase
@@ -1622,7 +1655,7 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
     const tAmount = rtl ? 'القيمة' : 'Amount'
     const tDate = rtl ? 'التاريخ' : 'Date'
     const tAmountWords = rtl ? 'المبلغ بالحروف' : 'Amount in Words'
-    const tConsultant = rtl ? 'المستشار' : 'Consultant'
+    const tConsultant = rtl ? 'المستشار العقاري' : 'Property Consultant'
     const tEmail = rtl ? 'البريد الإلكتروني' : 'Email'
 
     const buyersHtml = buyers.map((b, idx) => `
@@ -1636,24 +1669,65 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
     // Ensure writtenAmount present; if not, compute
     const langForWords = language
     const scheduleRows = schedule.map((r) => {
-      const labelText = rtl ? arLabel(r.label || '') : (r.label || '')
-      const amount = Number(r.amount) || 0
-      const words = r.writtenAmount || convertToWords(amount, langForWords, { currency })
-      return `
-        <tr>
-          <td>${Number(r.month) || 0}</td>
-          <td>${labelText}</td>
-          <td style="text-align:${rtl ? 'left' : 'right'}">${f(amount)} ${currency || ''}</td>
-          <td>${r.date || ''}</td>
-          <td>${words || ''}</td>
-        </tr>
-      `
-    }).join('')
+        const labelText = rtl ? arLabel(r.label || '') : (r.label || '')
+        const amount = Number(r.amount) || 0
+        // Always render words according to the requested language, ignoring any client-provided wording.
+        const words = convertToWords(amount, langForWords, { currency })
+        return `
+          <tr>
+            <td>${Number(r.month) || 0}</td>
+            <td>${labelText}</td>
+            <td style="text-align:${rtl ? 'left' : 'right'}">${f(amount)} ${currency || ''}</td>
+            <td>${r.date || ''}</td>
+            <td>${words || ''}</td>
+          </tr>
+        `
+      }).join('')
 
     const unitLine = unit ? `${unit.unit_code || ''} ${unit.unit_type ? '— ' + unit.unit_type : ''}`.trim() : ''
     const consultantLine = (consultant.name || consultant.email)
       ? `<div class="meta"><strong>${tConsultant}:</strong> ${[consultant.name, consultant.email].filter(Boolean).join(' — ')}</div>`
       : ''
+
+    // Unit pricing breakdown (optional)
+    const upb = req.body?.unit_pricing_breakdown || req.body?.unitPricingBreakdown || null
+    let unitTotalsBox = ''
+    if (upb && typeof upb === 'object') {
+      const rows = []
+      const L = (en, ar) => rtl ? ar : en
+      const addRow = (label, val) => {
+        const n = Number(val) || 0
+        if (!(n > 0) && label !== 'unit_type') return
+        rows.push(`
+          <tr>
+            <td style="padding:6px 8px; background:#ead9bd; font-weight:700;">${label}</td>
+            <td style="padding:6px 8px; text-align:${rtl ? 'left' : 'right'}">${label === 'unit_type' ? (unit?.unit_type || '') : f(n)} ${label === 'unit_type' ? '' : (currency || '')}</td>
+          </tr>
+        `)
+      }
+      addRow(L('Unit Type', 'نوع الوحدة'), 1) // placeholder to render unit type on the right cell
+      addRow(L('Price', 'السعر'), upb.base)
+      if (Number(upb.garden || 0) > 0) addRow(L('Garden', 'الحديقة'), upb.garden)
+      if (Number(upb.roof || 0) > 0) addRow(L('Roof', 'السطح'), upb.roof)
+      if (Number(upb.storage || 0) > 0) addRow(L('Storage', 'غرفة التخزين'), upb.storage)
+      if (Number(upb.garage || 0) > 0) addRow(L('Garage', 'الجراج'), upb.garage)
+      // Maintenance Deposit may be provided separately in fee inputs; include from upb.maintenance if present
+      if (Number(upb.maintenance || 0) > 0) addRow(L('Maintenance Deposit', 'وديعة الصيانة'), upb.maintenance)
+      const totalAll = (Number(upb.base||0)+Number(upb.garden||0)+Number(upb.roof||0)+Number(upb.storage||0)+Number(upb.garage||0)+Number(upb.maintenance||0))
+      rows.push(`
+        <tr>
+          <td style="padding:6px 8px; background:#cba86c; font-weight:900;">${L('Total', 'الإجمالي')}</td>
+          <td style="padding:6px 8px; text-align:${rtl ? 'left' : 'right'}; font-weight:900;">${f(totalAll)} ${currency || ''}</td>
+        </tr>
+      `)
+      unitTotalsBox = `
+        <div style="margin:${rtl ? '0 16px 0 0' : '0 0 0 16px'}; float:${rtl ? 'left' : 'right'}; width: ${rtl ? '42%' : '42%'};">
+          <table style="width:100%; border-collapse:collapse; border:1px solid #ead9bd">
+            ${rows.join('')}
+          </table>
+        </div>
+      `
+    }
 
     const html = `
       <html lang="${language}" dir="${dir}">
@@ -1669,9 +1743,11 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
 
           <h2 style="${rtl ? 'text-align:right;' : ''}">${title}</h2>
           <div class="section">
-            <div class="meta"><strong>${tOfferDate}:</strong> ${offer_date || ''} &nbsp;&nbsp; <strong>${tFirstPayment}:</strong> ${first_payment_date || ''}</div>
+            <div class="meta"><strong>${tOfferDate}:</strong> ${offer_date || ''}   <strong>${tFirstPayment}:</strong> ${first_payment_date || ''}</div>
             ${unitLine ? `<div class="meta"><strong>${tUnit}:</strong> ${unitLine}</div>` : ''}
             ${consultantLine}
+            ${unitTotalsBox}
+            <div style="clear:both;"></div>
           </div>
 
           <div class="section">
@@ -1698,7 +1774,8 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
               </tbody>
             </table>
             <div class="totals">
-              <strong>${tTotals}:</strong> ${f(totals?.totalNominal || 0)} ${currency || ''}
+              <div><strong>${rtl ? 'الإجمالي (بدون وديعة الصيانة)' : 'Total (excluding Maintenance Deposit)'}:</strong> ${f(Number(totals?.totalNominalExcludingMaintenance ?? totals?.totalNominal || 0))} ${currency || ''}</div>
+              <div><strong>${rtl ? 'الإجمالي (شامل وديعة الصيانة)' : 'Total (including Maintenance Deposit)'}:</strong> ${f(Number(totals?.totalNominalIncludingMaintenance ?? totals?.totalNominal || 0))} ${currency || ''}</div>
             </div>
           </div>
 
@@ -1718,10 +1795,20 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
     })
     const page = await browser.newPage()
     await page.setContent(html, { waitUntil: 'networkidle0' })
+    // Localized footer: Page X of Y (EN) / صفحة س من ص (AR)
+    const footerTemplate = `
+      <div style="width:100%; font-size:10px; color:#6b7280; padding:6px 10px; ${rtl ? 'direction:rtl; text-align:left;' : 'direction:ltr; text-align:right;'}">
+        ${rtl ? 'صفحة' : 'Page'} <span class="pageNumber"></span> ${rtl ? 'من' : 'of'} <span class="totalPages"></span>
+      </div>`
+    const headerTemplate = '<div></div>'
+
     const pdfBuffer = await page.pdf({
       format: 'A4',
       printBackground: true,
-      margin: { top: '14mm', right: '12mm', bottom: '14mm', left: '12mm' }
+      displayHeaderFooter: true,
+      headerTemplate,
+      footerTemplate,
+      margin: { top: '14mm', right: '12mm', bottom: '18mm', left: '12mm' }
     })
     await browser.close()
 

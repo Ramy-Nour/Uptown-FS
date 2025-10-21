@@ -223,6 +223,9 @@ export default function StandardPricing() {
               return [p.id, 0];
             }
 
+            // Always include the Down Payment in PV (use the current form's DP% as policy)
+            const dpPct = Number(dpPercent) || 0;
+
             const body = {
               mode: 'evaluateCustomPrice',
               stdPlan: {
@@ -233,7 +236,7 @@ export default function StandardPricing() {
               inputs: {
                 salesDiscountPercent: 0,
                 dpType: 'percentage',
-                downPaymentValue: 0, // baseline standard PV (no DP)
+                downPaymentValue: dpPct, // include DP in PV calculation
                 planDurationYears: rowYears,
                 installmentFrequency: rowFreq,
                 additionalHandoverPayment: 0,
@@ -271,7 +274,7 @@ export default function StandardPricing() {
 
     computeAllPVs();
     return () => { abort = true; };
-  }, [pricings, stdPlanCfg]);
+  }, [pricings, stdPlanCfg, dpPercent]);
 
   // Pricing history modal state
   const [historyPricingId, setHistoryPricingId] = useState(null);

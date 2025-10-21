@@ -41,12 +41,16 @@ export default function ContractDetailsForm({ role, contractInfo, setContractInf
         <h3 style={{ marginTop: 0, fontSize: 16, fontWeight: 600 }}>Additional Fees Schedule (not included in PV)</h3>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
           <div>
-            <label style={styles.label}>Maintenance Amount</label>
+            <label style={styles.label}>Maintenance Deposit Amount</label>
             <input type="number" style={input()} value={feeSchedule.maintenancePaymentAmount} onChange={e => setFeeSchedule(s => ({ ...s, maintenancePaymentAmount: e.target.value }))} placeholder="e.g. 150000" />
           </div>
           <div>
-            <label style={styles.label}>Maintenance Due Month (from contract date)</label>
-            <input type="number" min="0" style={input()} value={feeSchedule.maintenancePaymentMonth} onChange={e => setFeeSchedule(s => ({ ...s, maintenancePaymentMonth: e.target.value }))} placeholder="e.g. 0 for at contract" />
+            <label style={styles.label}>Maintenance Deposit Due Month (defaults to Handover date)</label>
+            <input type="number" min="0" style={input()} value={feeSchedule.maintenancePaymentMonth} onChange={e => setFeeSchedule(s => ({ ...s, maintenancePaymentMonth: e.target.value }))} placeholder="e.g. 72 if handover after 6 years" />
+          </div>
+          <div>
+            <label style={styles.label}>Maintenance Deposit Date (optional — overrides month)</label>
+            <input type="date" style={input()} value={feeSchedule.maintenancePaymentDate || ''} onChange={e => setFeeSchedule(s => ({ ...s, maintenancePaymentDate: e.target.value }))} />
           </div>
           <div>
             <label style={styles.label}>Garage Amount</label>
@@ -57,7 +61,7 @@ export default function ContractDetailsForm({ role, contractInfo, setContractInf
             <input type="number" min="0" style={input()} value={feeSchedule.garagePaymentMonth} onChange={e => setFeeSchedule(s => ({ ...s, garagePaymentMonth: e.target.value }))} placeholder="e.g. 12" />
           </div>
         </div>
-        <small style={styles.metaText}>These fees will be appended to the generated schedule with dates based on the contract date (or reservation form date if contract date is empty). They are not part of PV calculation.</small>
+        <small style={styles.metaText}>These amounts will be appended to the generated schedule with dates based on the contract date (or reservation form date if contract date is empty). They are not part of PV calculation.</small>
       </div>
     </section>
   )

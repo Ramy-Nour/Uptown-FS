@@ -140,7 +140,7 @@ export default function App(props) {
   const [errors, setErrors] = useState({})
 
   // Custom form state
-  const [mode, setMode] = useState('calculateForTargetPV')
+  const [mode, setMode] = useState('evaluateCustomPrice')
   const [language, setLanguage] = useState('en')
   const [currency, setCurrency] = useState('EGP')
   const [stdPlan, setStdPlan] = useState({
@@ -166,12 +166,20 @@ export default function App(props) {
     applyDocumentDirection(language)
   }, [language])
 
-  // Enforce DP type = amount for target-PV modes to avoid circular dependency
+  // When switching into PV-target modes, convert DP% to a fixed amount once.
+  // This avoids the pitfall where a user had 20% and it becomes the literal amount "20"
+  // leading to an unrealistically low solved total.
   useEffect(() => {
     if (mode === 'calculateForTargetPV' || mode === 'customYearlyThenEqual_targetPV') {
-      setInputs(s => (s.dpType === 'amount' ? s : { ...s, dpType: 'amount' }))
+      setInputs(s => {
+        if (s.dpType === 'amount') return s
+        const dpPct = Number(s.downPaymentValue) || 0
+        const base = Number(stdPlan.totalPrice) || 0
+        const dpAmt = base > 0 ? (base * dpPct) / 100 : 0
+        return { ...s, dpType: 'amount', downPaymentValue: Number(dpAmt.toFixed(2)) }
+      })
     }
-  }, [mode])
+  }, [mode, stdPlan.totalPrice])
 
   // Auto-compute Standard Calculated PV from Standard Total Price, Financial Rate, Duration and Frequency
   // IMPORTANT:
@@ -849,7 +857,15 @@ export default function App(props) {
           ...payload.inputs,
           baseDate: inputs.firstPaymentDate || inputs.offerDate || new Date().toISOString().slice(0, 10),
           maintenancePaymentAmount: Number(feeSchedule.maintenancePaymentAmount) || 0,
-          maintenancePaymentMonth: Number(feeSchedule.maintenancePaymentMonth) || 0,
+          // Optional explicit calendar date for maintenance deposit
+          maintenancePaymentDate: feeSchedule.maintenancePaymentDate || '',
+          // Default maintenance due at handover when month is empty (ignored if date is provided)
+          maintenancePaymentMonth: (() => {
+            const m = Number(feeSchedule.maintenancePaymentMonth)
+            if (Number.isFinite(m) && m >= 0) return m
+            const hy = Number(inputs.handoverYear) || 0
+            return hy > 0 ? hy * 12 : 0
+          })(),
           garagePaymentAmount: Number(feeSchedule.garagePaymentAmount) || 0,
           garagePaymentMonth: Number(feeSchedule.garagePaymentMonth) || 0
         }
@@ -875,14 +891,35 @@ export default function App(props) {
     if (!genResult?.schedule?.length) return
     const rows = [
       ['#', 'Month', 'Label', 'Amount', 'Written Amount'],
-      ...genResult.schedule.map((row, i) => ([
-        i + 1,
-        row.month,
-        row.label,
-        Number(row.amount || 0).toFixed(2),
-        row.writtenAmount
-      ]))
+      ...genResult.schedule.map((row, i) => {
+        const amt = Number(row.amount || 0)
+        const written = (language === 'ar')
+          ? numberToArabic(amt, 'جنيه مصري', 'قرش')
+          : (row.writtenAmount || '')
+        return [
+          i + 1,
+          row.month,
+          row.label,
+          amt.toFixed(2),
+          written
+        ]
+      })
     ]
+    // Append dual totals
+    const totalIncl = Number(genResult?.totals?.totalNominalIncludingMaintenance ?? genResult?.totals?.totalNominal || 0)
+    const totalExcl = Number(genResult?.totals?.totalNominalExcludingMaintenance ?? totalIncl)
+    rows.push([])
+    rows.push([
+      '', '', (language === 'ar' ? 'الإجمالي (بدون وديعة الصيانة)' : 'Total (excluding Maintenance Deposit)'),
+      totalExcl.toFixed(2),
+      ''
+    ])
+    rows.push([
+      '', '', (language === 'ar' ? 'الإجمالي (شامل وديعة الصيانة)' : 'Total (including Maintenance Deposit)'),
+      totalIncl.toFixed(2),
+      ''
+    ])
+
     const csv = rows.map(r => r.map(cell => {
       const s = String(cell ?? '')
       if (/[\",\n]/.test(s)) return `\"${s.replace(/\"/g, '\"\"')}\"`
@@ -1071,6 +1108,16 @@ export default function App(props) {
         unit: {
           unit_code: unitInfo.unit_code || '',
           unit_type: unitInfo.unit_type || ''
+        },
+        // Include unit pricing breakdown for PDF header box
+        unit_pricing_breakdown: {
+          base: Number(unitPricingBreakdown.base || 0),
+          garden: Number(unitPricingBreakdown.garden || 0),
+          roof: Number(unitPricingBreakdown.roof || 0),
+          storage: Number(unitPricingBreakdown.storage || 0),
+          garage: Number(unitPricingBreakdown.garage || 0),
+          maintenance: Number(unitPricingBreakdown.maintenance || 0),
+          totalExclMaintenance: Number(unitPricingBreakdown.totalExclMaintenance || 0)
         }
       }
       const resp = await fetchWithAuth(`${API_URL}/api/documents/client-offer`, {
@@ -1108,14 +1155,35 @@ export default function App(props) {
     if (!genResult?.schedule?.length) return
     const aoa = [
       ['#', 'Month', 'Label', 'Amount', 'Written Amount'],
-      ...genResult.schedule.map((row, i) => ([
-        i + 1,
-        row.month,
-        row.label,
-        Number(row.amount || 0).toFixed(2),
-        row.writtenAmount
-      ]))
+      ...genResult.schedule.map((row, i) => {
+        const amt = Number(row.amount || 0)
+        const written = (language === 'ar')
+          ? numberToArabic(amt, 'جنيه مصري', 'قرش')
+          : (row.writtenAmount || '')
+        return [
+          i + 1,
+          row.month,
+          row.label,
+          amt.toFixed(2),
+          written
+        ]
+      })
     ]
+    // Append dual totals
+    const totalIncl = Number(genResult?.totals?.totalNominalIncludingMaintenance ?? genResult?.totals?.totalNominal || 0)
+    const totalExcl = Number(genResult?.totals?.totalNominalExcludingMaintenance ?? totalIncl)
+    aoa.push([])
+    aoa.push([
+      '', '', (language === 'ar' ? 'الإجمالي (بدون وديعة الصيانة)' : 'Total (excluding Maintenance Deposit)'),
+      totalExcl.toFixed(2),
+      ''
+    ])
+    aoa.push([
+      '', '', (language === 'ar' ? 'الإجمالي (شامل وديعة الصيانة)' : 'Total (including Maintenance Deposit)'),
+      totalIncl.toFixed(2),
+      ''
+    ])
+
     const ws = XLSX.utils.aoa_to_sheet(aoa)
     // Column widths for readability
     ws['!cols'] = [{ wch: 6 }, { wch: 10 }, { wch: 28 }, { wch: 16 }, { wch: 50 }]

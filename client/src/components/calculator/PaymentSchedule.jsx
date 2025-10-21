@@ -12,7 +12,8 @@ function translateLabel(label, language) {
     'Equal Installment': 'قسط متساوي',
     'First Year': 'السنة الأولى',
     'Handover': 'التسليم',
-    'Maintenance Fee': 'رسوم الصيانة',
+    'Maintenance Fee': 'وديعة الصيانة',
+    'Maintenance Deposit': 'وديعة الصيانة',
     'Garage Fee': 'رسوم الجراج'
   }
   if (map[label]) return map[label]
@@ -67,9 +68,20 @@ export default function PaymentSchedule({ schedule = [], totals = null, language
         {totals && (
           <tfoot>
             <tr>
-              <td colSpan="3" style={{ padding: 12, fontWeight: 700, background: '#fbfaf7', textAlign: 'right' }}>{t('total', language)}</td>
+              <td colSpan="3" style={{ padding: 12, fontWeight: 700, background: '#fbfaf7', textAlign: 'right' }}>
+                {rtl ? 'الإجمالي (بدون وديعة الصيانة)' : 'Total (excluding Maintenance Deposit)'}
+              </td>
               <td style={{ padding: 12, fontWeight: 700, background: '#fbfaf7', textAlign: 'right' }}>
-                {Number(totals.totalNominal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {Number(totals.totalNominalExcludingMaintenance ?? totals.totalNominal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </td>
+              <td style={{ padding: 12, fontWeight: 700, background: '#fbfaf7' }}></td>
+            </tr>
+            <tr>
+              <td colSpan="3" style={{ padding: 12, fontWeight: 700, background: '#fbfaf7', textAlign: 'right' }}>
+                {rtl ? 'الإجمالي (شامل وديعة الصيانة)' : 'Total (including Maintenance Deposit)'}
+              </td>
+              <td style={{ padding: 12, fontWeight: 700, background: '#fbfaf7', textAlign: 'right' }}>
+                {Number(totals.totalNominalIncludingMaintenance ?? totals.totalNominal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </td>
               <td style={{ padding: 12, fontWeight: 700, background: '#fbfaf7' }}></td>
             </tr>

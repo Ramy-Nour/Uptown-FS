@@ -1764,13 +1764,18 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
             <div class="meta"><strong>${tOfferDate}:</strong> ${offer_date || ''}   <strong>${tFirstPayment}:</strong> ${first_payment_date || ''}</div>
             ${unitLine ? `<div class="meta"><strong>${tUnit}:</strong> ${unitLine}</div>` : ''}
             ${consultantLine}
-            ${unitTotalsBox}
-            <div style="clear:both;"></div>
+            <div style="display:flex; ${rtl ? 'flex-direction:row-reverse;' : ''} gap:12px; align-items:flex-start;">
+              <div style="flex:1;">
+                <div class="buyers">
+                  ${buyersHtml || (rtl ? '<div>لا يوجد بيانات عملاء</div>' : '<div>No client data</div>')}
+                </div>
+              </div>
+              <div style="width:42%;">${unitTotalsBox}</div>
+            </div>
           </div>
 
-          <div class="section">
-            <h3 style="${rtl ? 'text-align:right;' : ''}">${tBuyers}</h3>
-            <div class="buyers">
+          <!-- Clients block moved up into the header section alongside the unit totals to optimize page space. -->
+  <div class="buyers">
               ${buyersHtml || (rtl ? '<div>لا يوجد بيانات عملاء</div>' : '<div>No client data</div>')}
             </div>
           </div>

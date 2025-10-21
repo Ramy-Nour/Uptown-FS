@@ -1182,7 +1182,8 @@ app.post('/api/generate-plan', validate(generatePlanSchema), async (req, res) =>
       maintMonth = Number(effInputs.maintenancePaymentMonth)
       if (!Number.isFinite(maintMonth) || maintMonth < 0) {
         const hy = Number(effInputs.handoverYear) || 0
-        maintMonth = hy > 0 ? hy * 12 : 0
+        // Default to handover; if handoverYear is not set/zero, use 12 months by policy.
+        maintMonth = hy > 0 ? hy * 12 : 12
       }
     }
     if (maintAmt > 0) pushEntry('Maintenance Deposit', maintMonth, maintAmt, baseDate)

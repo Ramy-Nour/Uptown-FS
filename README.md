@@ -121,6 +121,8 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-10-21 06:35] Client Offer PDF — consultant name reliability:
+  - API: Simplified consultant identity resolution to rely strictly on users.name and users.email. We initialize from the authenticated user context and, if a deal_id is provided, prefer the deal creator from DB. Fallback reads the current user from DB using name/email columns only. This ensures the consultant’s name appears in the PDF whenever it’s present in the users table.
 - [2025-10-21 06:25] Consultant UX — export buttons visibility and Unit Block section placement:
   - Client: PaymentSchedule export buttons (XLSX/CSV/Checks) are now visible only to financial_admin; they are hidden for property_consultant and sales_manager while keeping the functionality available under the admin role.
   - Client: Moved the Unit Block/Unit Info section to the end of the page (below the schedule) to improve perceived streaming and page flow.

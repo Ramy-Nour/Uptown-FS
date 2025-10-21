@@ -1518,8 +1518,14 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
     } = req.body || {}
 
     // Determine consultant (creator)
-    let consultant = { name: null, email: null }
+    // Initialize from authenticated request context first
+    let consultant = {
+      name: (req.user?.name && String(req.user.name).trim()) ? req.user.name : null,
+      email: req.user?.email || null
+    }
+
     const dealId = Number(req.body?.deal_id)
+    // If a deal_id is provided, prefer the deal's creator from DB (uses users.name and email only)
     if (Number.isFinite(dealId) && dealId > 0) {
       try {
         const q = await pool.query(`
@@ -1535,25 +1541,22 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
         }
       } catch { /* ignore */ }
     }
-    if (!consultant.email) {
-      // Fallback to current user (DB), then derive from req.user if DB has no record
+
+    // If still missing, read current user from DB using name/email columns only
+    if (!consultant.email || !consultant.name) {
       try {
         const u = await pool.query(`
           SELECT email,
-                 COALESCE(NULLIF(TRIM(CONCAT(COALESCE(first_name,''),' ',COALESCE(last_name,''))),''), name, email) AS full_name
+                 COALESCE(NULLIF(TRIM(name),''), email) AS full_name
           FROM users WHERE id=$1 LIMIT 1
         `, [req.user.id])
         if (u.rows.length) {
-          consultant = { name: u.rows[0].full_name || null, email: u.rows[0].email || null }
+          consultant = {
+            name: u.rows[0].full_name || consultant.name || null,
+            email: u.rows[0].email || consultant.email || null
+          }
         }
       } catch { /* ignore */ }
-      if (!consultant.email) {
-        // Derive from authenticated request context
-        const fullFromReq = [req.user?.first_name, req.user?.last_name].filter(Boolean).join(' ').trim()
-        const derivedName = fullFromReq || (req.user?.name || null)
-        const derivedEmail = req.user?.email || null
-        consultant = { name: derivedName, email: derivedEmail }
-      }
     }
 
     // If deal_id provided, try to derive from DB

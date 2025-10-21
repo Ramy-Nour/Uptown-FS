@@ -121,6 +121,8 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-10-21 07:10] Hotfix — generate-plan ReferenceError:
+  - API: Fixed a typo in /api/generate-plan where stdPVComputed was misspelled as stdPvComputed, causing a 500 error when computing the effective standard plan PV. Plans now generate successfully.
 - [2025-10-21 07:00] Maintenance Deposit — always sourced from unit model pricing:
   - API: /api/generate-plan now ignores consultant-entered maintenance amounts when a unitId is present and always uses the unit’s approved model pricing maintenance_price. Timing (date/month) remains configurable; default is Handover month when not specified.
   - API: /api/documents/client-offer continues to auto-resolve maintenance for the header totals box using unit_id.

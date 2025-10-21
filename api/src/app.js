@@ -991,7 +991,7 @@ app.post('/api/generate-plan', validate(generatePlanSchema), async (req, res) =>
         effectiveStdPlan = {
           totalPrice,
           financialDiscountRate: rowRate,
-          calculatedPV: Number(stdPvComputed.toFixed(2))
+          calculatedPV: Number(stdPVComputed.toFixed(2))
         }
         annualRateUsedMeta = rowRate
         durationYearsUsedMeta = rowDur

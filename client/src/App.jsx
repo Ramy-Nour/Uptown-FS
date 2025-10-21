@@ -1667,9 +1667,26 @@ export default function App(props) {
               onExportCSV={exportScheduleCSV}
               onExportXLSX={exportScheduleXLSX}
               onGenerateChecks={generateChecksSheetXLSX}
+              role={role}
             />
           )}
         </section>
+      {/* Move Unit Block/Unit Info section to the end of the page to reduce streaming contention */}
+        {!embedded && (
+          <UnitInfoSection
+            role={role}
+            styles={styles}
+            mode={mode}
+            inputs={inputs}
+            unitInfo={unitInfo}
+            setUnitInfo={setUnitInfo}
+            setStdPlan={setStdPlan}
+            setInputs={setInputs}
+            setCurrency={setCurrency}
+            setFeeSchedule={setFeeSchedule}
+            setUnitPricingBreakdown={setUnitPricingBreakdown}
+          />
+        )}
       </div>
     </div>
   )

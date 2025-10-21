@@ -121,6 +121,9 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-10-21 06:25] Consultant UX — export buttons visibility and Unit Block section placement:
+  - Client: PaymentSchedule export buttons (XLSX/CSV/Checks) are now visible only to financial_admin; they are hidden for property_consultant and sales_manager while keeping the functionality available under the admin role.
+  - Client: Moved the Unit Block/Unit Info section to the end of the page (below the schedule) to improve perceived streaming and page flow.
 - [2025-10-21 06:10] Client Offer PDF — performance, Arabic reliability, and UI improvements:
   - API: Reuse a singleton Puppeteer browser instance and switch setContent waitUntil to 'load' to reduce export latency and avoid intermittent stalls on Arabic PDFs behind sandboxed environments.
   - API: Unit totals box now shows dual totals — excluding Maintenance Deposit and including Maintenance Deposit — to align with the payment plan totals presentation.

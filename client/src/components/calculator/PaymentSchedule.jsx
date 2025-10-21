@@ -34,7 +34,7 @@ function translateLabel(label, language) {
   return label
 }
 
-export default function PaymentSchedule({ schedule = [], totals = null, language = 'en', onExportCSV, onExportXLSX, onGenerateChecks }) {
+export default function PaymentSchedule({ schedule = [], totals = null, language = 'en', onExportCSV, onExportXLSX, onGenerateChecks, role }) {
   const rtl = String(language) === 'ar'
   return (
     <div style={wrapDefault} dir={rtl ? 'rtl' : 'ltr'}>
@@ -88,17 +88,19 @@ export default function PaymentSchedule({ schedule = [], totals = null, language
           </tfoot>
         )}
       </table>
-      <div style={{ display: 'flex', gap: 8, padding: 10, justifyContent: rtl ? 'flex-end' : 'flex-start' }}>
-        <button type="button" onClick={onExportXLSX} disabled={!schedule.length} style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #d1d9e6', background: '#fff', cursor: 'pointer' }}>
-          {t('export_xlsx', language)}
-        </button>
-        <button type="button" onClick={onGenerateChecks} disabled={!schedule.length} style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #d1d9e6', background: '#fff', cursor: 'pointer' }}>
-          {t('generate_checks_sheet', language)}
-        </button>
-        <button type="button" onClick={onExportCSV} disabled={!schedule.length} style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #d1d9e6', background: '#fff', cursor: 'pointer' }}>
-          {t('export_csv', language)}
-        </button>
-      </div>
+      {role === 'financial_admin' && (
+        <div style={{ display: 'flex', gap: 8, padding: 10, justifyContent: rtl ? 'flex-end' : 'flex-start' }}>
+          <button type="button" onClick={onExportXLSX} disabled={!schedule.length} style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #d1d9e6', background: '#fff', cursor: 'pointer' }}>
+            {t('export_xlsx', language)}
+          </button>
+          <button type="button" onClick={onGenerateChecks} disabled={!schedule.length} style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #d1d9e6', background: '#fff', cursor: 'pointer' }}>
+            {t('generate_checks_sheet', language)}
+          </button>
+          <button type="button" onClick={onExportCSV} disabled={!schedule.length} style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #d1d9e6', background: '#fff', cursor: 'pointer' }}>
+            {t('export_csv', language)}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

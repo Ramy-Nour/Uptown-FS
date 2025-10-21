@@ -1512,7 +1512,7 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
       try {
         const q = await pool.query(`
           SELECT u.email,
-                 COALESCE(NULLIF(TRIM(CONCAT(COALESCE(u.first_name,''),' ',COALESCE(u.last_name,''))),''), u.name, u.email) AS full_name
+                 COALESCE(NULLIF(TRIM(u.name),''), u.email) AS full_name
           FROM deals d
           JOIN users u ON u.id = d.created_by
           WHERE d.id=$1
@@ -1774,8 +1774,8 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
               </tbody>
             </table>
             <div class="totals">
-              <div><strong>${rtl ? 'الإجمالي (بدون وديعة الصيانة)' : 'Total (excluding Maintenance Deposit)'}:</strong> ${f(Number(totals?.totalNominalExcludingMaintenance ?? totals?.totalNominal || 0))} ${currency || ''}</div>
-              <div><strong>${rtl ? 'الإجمالي (شامل وديعة الصيانة)' : 'Total (including Maintenance Deposit)'}:</strong> ${f(Number(totals?.totalNominalIncludingMaintenance ?? totals?.totalNominal || 0))} ${currency || ''}</div>
+              <div><strong>${rtl ? 'الإجمالي (بدون وديعة الصيانة)' : 'Total (excluding Maintenance Deposit)'}:</strong> ${f(Number(((totals?.totalNominalExcludingMaintenance ?? totals?.totalNominal) || 0)))} ${currency || ''}</div>
+              <div><strong>${rtl ? 'الإجمالي (شامل وديعة الصيانة)' : 'Total (including Maintenance Deposit)'}:</strong> ${f(Number(((totals?.totalNominalIncludingMaintenance ?? totals?.totalNominal) || 0)))} ${currency || ''}</div>
             </div>
           </div>
 

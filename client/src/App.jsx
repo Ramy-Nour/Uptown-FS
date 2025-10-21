@@ -678,6 +678,9 @@ export default function App(props) {
       }
       if (upb && typeof upb === 'object') {
         setUnitPricingBreakdown({ ...upb })
+        // Auto-fill Maintenance Deposit amount in the fee schedule from unit/model pricing
+        const maint = Number(upb.maintenance || 0)
+        setFeeSchedule(fs => ({ ...fs, maintenancePaymentAmount: maint }))
       }
       if (curr) {
         setCurrency(curr)
@@ -1122,7 +1125,8 @@ export default function App(props) {
         first_payment_date: inputs.firstPaymentDate || inputs.offerDate || new Date().toISOString().slice(0, 10),
         unit: {
           unit_code: unitInfo.unit_code || '',
-          unit_type: unitInfo.unit_type || ''
+          unit_type: unitInfo.unit_type || '',
+          unit_id: Number(unitInfo.unit_id) || null
         },
         // Include unit pricing breakdown for PDF header box
         unit_pricing_breakdown: {

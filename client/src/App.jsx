@@ -678,6 +678,9 @@ export default function App(props) {
       }
       if (upb && typeof upb === 'object') {
         setUnitPricingBreakdown({ ...upb })
+        // Auto-fill Maintenance Deposit amount in the fee schedule from unit/model pricing
+        const maint = Number(upb.maintenance || 0)
+        setFeeSchedule(fs => ({ ...fs, maintenancePaymentAmount: maint }))
       }
       if (curr) {
         setCurrency(curr)

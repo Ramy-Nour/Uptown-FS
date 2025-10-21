@@ -121,6 +121,15 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-10-21 05:10] Backend stability and schema alignment:
+  - Fixed a server crash in Client Offer PDF totals block by adding explicit parentheses around mixed ?? and || expressions in template strings.
+  - Adjusted consultant name lookup to rely on users.name and users.email only (no first_name/last_name columns required). If users.name is empty, the PDF falls back to the authenticated user's name or finally to email.
+- [2025-10-21 05:05] Codespaces/CORS/Ports guide (Docker):
+  - Added a Troubleshooting section with exact commands for Docker Compose, Codespaces port visibility, curl preflight (OPTIONS) checks, and how to set CORS_ORIGINS correctly when needed.
+  - Clarified that our API CORS layer already allows *.app.github.dev unless CORS_ORIGINS is explicitly set (then it becomes a strict allow-list).
+- [2025-10-21 05:00] CSV/XLSX/PDF nullish coalescing fixes:
+  - Updated client (App.jsx) and server (app.js) to wrap nullish coalescing expressions mixed with logical OR to keep Babel/Node parsers happy.
+
 - [2025-10-20 23:55] Client Offer PDF — Unit totals box:
   - API: /api/documents/client-offer now renders a unit totals table (Unit Type, Price, Garden, Roof, Storage, Garage, Maintenance Deposit, Total). Optional rows are shown only when > 0; labels localized EN/AR.
   - Client: exportClientOfferPdf sends unit_pricing_breakdown derived from the selected unit.
@@ -335,6 +344,51 @@ Notes
 - Merge conflicts:
   - Use VS Code Merge Editor; prefer “Accept Current” when keeping local branch
   - Remove all conflict markers <<<<<<<, =======, >>>>>>> before committing
+
+### Docker/Codespaces — Reachability & CORS checklist
+
+1) Verify containers and published ports
+- docker compose ps
+- docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+  - Expect API to publish 3001 on the host (e.g., 0.0.0.0:3001->3000/tcp).
+
+2) Ensure Codespaces ports are public
+- gp ports list
+- gp ports visibility 3001:public
+- gp ports visibility 5173:public
+
+3) Make sure client uses the correct API URL
+- In Codespaces, the API URL is:
+  - https://<your-codespace>-3001.app.github.dev
+- The client reads VITE_API_URL. Set it if needed:
+  - echo 'VITE_API_URL="https://<your-codespace>-3001.app.github.dev"' >> client/.env
+  - docker compose up -d --build client
+
+4) Test API from inside API container (confirms app is running)
+- docker compose exec app_api sh -lc 'apk add --no-cache curl 2>/dev/null || true; curl -i http://127.0.0.1:3000/api/health'
+  - Expect 200 OK
+
+5) Test API from Codespaces host (confirms port forwarding)
+- export API_HOST="<your-codespace>-3001.app.github.dev"
+- curl -i https://$API_HOST/api/health
+  - Expect 200 OK. If 502, check port mapping (compose) and that app listens on 0.0.0.0 in container.
+
+6) Validate CORS (only meaningful after 200 OK)
+- export FE_ORIGIN="https://<your-codespace>-5173.app.github.dev"
+- Preflight:
+  curl -i -X OPTIONS "https://$API_HOST/api/health" \
+    -H "Origin: $FE_ORIGIN" \
+    -H "Access-Control-Request-Method: GET"
+- Actual:
+  curl -i "https://$API_HOST/api/health" -H "Origin: $FE_ORIGIN"
+
+By default, our CORS layer allows *.app.github.dev. If you explicitly set CORS_ORIGINS, it becomes a strict allow-list. Include your FE origin when setting CORS_ORIGINS:
+- In docker-compose.yml (API service):
+  environment:
+    - CORS_ORIGINS=https://<your-codespace>-5173.app.github.dev,http://localhost:5173
+
+Then rebuild:
+- docker compose up -d --build
 
 ---
 

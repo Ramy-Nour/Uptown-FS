@@ -49,6 +49,18 @@ const libre = require('libreoffice-convert')
 
 const app = express()
 
+// Puppeteer singleton (reuse browser instance to reduce latency)
+let browserPromise = null
+async function getBrowser() {
+  if (!browserPromise) {
+    browserPromise = puppeteer.launch({
+      headless: 'new',
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    })
+  }
+  return browserPromise
+}
+
 // Correlation ID + request logging
 app.use((req, res, next) => {
   // Assign a correlation ID if not present
@@ -1712,12 +1724,18 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
       if (Number(upb.storage || 0) > 0) addRow(L('Storage', 'غرفة التخزين'), upb.storage)
       if (Number(upb.garage || 0) > 0) addRow(L('Garage', 'الجراج'), upb.garage)
       // Maintenance Deposit may be provided separately in fee inputs; include from upb.maintenance if present
-      if (Number(upb.maintenance || 0) > 0) addRow(L('Maintenance Deposit', 'وديعة الصيانة'), upb.maintenance)
-      const totalAll = (Number(upb.base||0)+Number(upb.garden||0)+Number(upb.roof||0)+Number(upb.storage||0)+Number(upb.garage||0)+Number(upb.maintenance||0))
+      const maint = Number(upb.maintenance || 0)
+      if (maint > 0) addRow(L('Maintenance Deposit', 'وديعة الصيانة'), maint)
+      const totalExcl = (Number(upb.base||0)+Number(upb.garden||0)+Number(upb.roof||0)+Number(upb.storage||0)+Number(upb.garage||0))
+      const totalIncl = totalExcl + maint
       rows.push(`
         <tr>
-          <td style="padding:6px 8px; background:#cba86c; font-weight:900;">${L('Total', 'الإجمالي')}</td>
-          <td style="padding:6px 8px; text-align:${rtl ? 'left' : 'right'}; font-weight:900;">${f(totalAll)} ${currency || ''}</td>
+          <td style="padding:6px 8px; background:#cba86c; font-weight:900;">${L('Total (excluding Maintenance Deposit)', 'الإجمالي (بدون وديعة الصيانة)')}</td>
+          <td style="padding:6px 8px; text-align:${rtl ? 'left' : 'right'}; font-weight:900;">${f(totalExcl)} ${currency || ''}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 8px; background:#cba86c; font-weight:900;">${L('Total (including Maintenance Deposit)', 'الإجمالي (شامل وديعة الصيانة)')}</td>
+          <td style="padding:6px 8px; text-align:${rtl ? 'left' : 'right'}; font-weight:900;">${f(totalIncl)} ${currency || ''}</td>
         </tr>
       `)
       unitTotalsBox = `
@@ -1788,13 +1806,11 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
       </html>
     `
 
-    // Render with Puppeteer
-    const browser = await puppeteer.launch({
-      headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    })
+    // Render with Puppeteer (reuse a singleton browser to improve performance)
+    const browser = await getBrowser()
     const page = await browser.newPage()
-    await page.setContent(html, { waitUntil: 'networkidle0' })
+    // Use 'load' to avoid hanging on networkidle behind sandbox; our HTML is static
+    await page.setContent(html, { waitUntil: 'load' })
     // Localized footer: Page X of Y (EN) / صفحة س من ص (AR)
     const footerTemplate = `
       <div style="width:100%; font-size:10px; color:#6b7280; padding:6px 10px; ${rtl ? 'direction:rtl; text-align:left;' : 'direction:ltr; text-align:right;'}">
@@ -1810,7 +1826,7 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
       footerTemplate,
       margin: { top: '14mm', right: '12mm', bottom: '18mm', left: '12mm' }
     })
-    await browser.close()
+    await page.close()
 
     const filename = `client_offer_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`
     res.setHeader('Content-Type', 'application/pdf')

@@ -34,7 +34,10 @@ export default function InputsForm({
   buildPayload,
   setPreview,
   setPreviewError,
-  role
+  role,
+  // additional one-time fees (maintenance deposit)
+  feeSchedule,
+  setFeeSchedule
 }) {
   const input = (err) => styles.input ? styles.input(err) : { padding: '10px 12px', borderRadius: 10, border: '1px solid #dfe5ee', outline: 'none', width: '100%', fontSize: 14, background: '#fbfdff' }
   const select = (err) => styles.select ? styles.select(err) : { padding: '10px 12px', borderRadius: 10, border: '1px solid #dfe5ee', outline: 'none', width: '100%', fontSize: 14, background: '#fbfdff' }
@@ -291,6 +294,43 @@ export default function InputsForm({
           <label style={styles.label}>{t('additional_handover_payment', language)}</label>
           <input type="number" value={inputs.additionalHandoverPayment} onChange={e => setInputs(s => ({ ...s, additionalHandoverPayment: e.target.value }))} style={input(errors.additionalHandoverPayment)} />
           {errors.additionalHandoverPayment && <small style={styles.error}>{errors.additionalHandoverPayment}</small>}
+        </div>
+
+        {/* Maintenance Deposit controls (amount + optional calendar date) */}
+        <div style={styles.blockFull}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={styles.label}>{isRTL(language) ? 'وديعة الصيانة (المبلغ)' : 'Maintenance Deposit (Amount)'}</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={feeSchedule?.maintenancePaymentAmount ?? ''}
+                onChange={e => setFeeSchedule(s => ({ ...s, maintenancePaymentAmount: e.target.value }))}
+                style={input()}
+                placeholder={isRTL(language) ? 'مثال: 50000' : 'e.g., 50000'}
+              />
+              <small style={styles.metaText}>
+                {isRTL(language)
+                  ? 'لا تدخل نسبة مئوية. هذه الرسوم ليست جزءًا من حساب القيمة الحالية ولكن تُضاف في جدول السداد.'
+                  : 'Enter a fixed amount. This fee is not part of PV calculation but is appended to the payment schedule.'}
+              </small>
+            </div>
+            <div>
+              <label style={styles.label}>{isRTL(language) ? 'تاريخ وديعة الصيانة (اختياري)' : 'Maintenance Deposit Date (optional)'}</label>
+              <input
+                type="date"
+                value={feeSchedule?.maintenancePaymentDate || ''}
+                onChange={e => setFeeSchedule(s => ({ ...s, maintenancePaymentDate: e.target.value }))}
+                style={input()}
+              />
+              <small style={styles.metaText}>
+                {isRTL(language)
+                  ? 'إذا تُرك فارغًا، يتم تحديد موعد وديعة الصيانة افتراضيًا عند التسليم.'
+                  : 'If left empty, the maintenance deposit defaults to the Handover date.'}
+              </small>
+            </div>
+          </div>
         </div>
 
         <div style={styles.blockFull}>

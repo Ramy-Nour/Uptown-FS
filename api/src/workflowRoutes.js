@@ -451,18 +451,30 @@ router.patch(
       const unitId = Number(row.unit_id) || null
       const newPrice = Number(row.price) || 0
       const newArea = row.area != null ? Number(row.area) : null
+      const newUnitTypeName = typeof row.unit_type === 'string' ? row.unit_type.trim() : null
+      let resolvedUnitTypeId = null
       if (unitId) {
-        const params = [newPrice, unitId]
-        let sql = `UPDATE units SET base_price=$1, updated_at=now() WHERE id=$2`
-        if (newArea != null && Number.isFinite(newArea) && newArea > 0) {
-          // include area update when valid
-          sql = `UPDATE units SET base_price=$1, area=$3, updated_at=now() WHERE id=$2`
-          params.push(unitId) // will adjust below
-          // reorder params properly: [price, unitId, area] -> fix to [price, unitId, area]
-          params[1] = unitId
-          params.push(newArea)
+        // Try to resolve unit_type_id from name when provided
+        if (newUnitTypeName) {
+          const utRes = await client.query('SELECT id FROM unit_types WHERE name ILIKE $1 LIMIT 1', [newUnitTypeName])
+          if (utRes.rows.length > 0) {
+            resolvedUnitTypeId = Number(utRes.rows[0].id)
+          }
         }
+
+        // Build dynamic UPDATE for units
+        const sets = []
+        const params = []
+        if (Number.isFinite(newPrice)) { params.push(newPrice); sets.push(`base_price=${params.length}`) }
+        if (newArea != null && Number.isFinite(newArea) && newArea > 0) { params.push(newArea); sets.push(`area=${params.length}`) }
+        if (newUnitTypeName) { params.push(newUnitTypeName); sets.push(`unit_type=${params.length}`) }
+        if (resolvedUnitTypeId != null) { params.push(resolvedUnitTypeId); sets.push(`unit_type_id=${params.length}`) }
+
+        params.push(unitId)
+        const sql = `UPDATE units SET ${sets.join(', ')}, updated_at=now() WHERE id=${params.length}`
         const upd = await client.query(sql, params)
+
+        // Log propagate in standard_pricing_history
         await client.query(
           `INSERT INTO standard_pricing_history
            (standard_pricing_id, change_type, changed_by, old_values, new_values)
@@ -476,8 +488,27 @@ router.patch(
               unit_id: unitId,
               new_base_price: newPrice,
               new_area: newArea,
+              new_unit_type: newUnitTypeName || null,
+              new_unit_type_id: resolvedUnitTypeId,
             }),
           ]
+        )
+
+        // Additional units audit entry: record change source in unit_inventory_changes
+        const payload = {
+          source: 'standard_pricing_approval',
+          standard_pricing_id: id,
+          updates: {
+            base_price: Number.isFinite(newPrice) ? newPrice : undefined,
+            area: (newArea != null && Number.isFinite(newArea) && newArea > 0) ? newArea : undefined,
+            unit_type: newUnitTypeName || undefined,
+            unit_type_id: resolvedUnitTypeId != null ? resolvedUnitTypeId : undefined
+          }
+        }
+        await client.query(
+          `INSERT INTO unit_inventory_changes (unit_id, action, payload, status, requested_by, approved_by, reason)
+           VALUES ($1, 'update', $2::jsonb, 'approved', $3, $3, 'propagate_from_standard_pricing_approval')`,
+          [unitId, JSON.stringify(payload), req.user.id]
         )
       }
       await client.query('COMMIT')

@@ -49,6 +49,18 @@ const libre = require('libreoffice-convert')
 
 const app = express()
 
+// Puppeteer singleton (reuse browser instance to reduce latency)
+let browserPromise = null
+async function getBrowser() {
+  if (!browserPromise) {
+    browserPromise = puppeteer.launch({
+      headless: 'new',
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    })
+  }
+  return browserPromise
+}
+
 // Correlation ID + request logging
 app.use((req, res, next) => {
   // Assign a correlation ID if not present
@@ -1506,8 +1518,14 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
     } = req.body || {}
 
     // Determine consultant (creator)
-    let consultant = { name: null, email: null }
+    // Initialize from authenticated request context first
+    let consultant = {
+      name: (req.user?.name && String(req.user.name).trim()) ? req.user.name : null,
+      email: req.user?.email || null
+    }
+
     const dealId = Number(req.body?.deal_id)
+    // If a deal_id is provided, prefer the deal's creator from DB (uses users.name and email only)
     if (Number.isFinite(dealId) && dealId > 0) {
       try {
         const q = await pool.query(`
@@ -1523,25 +1541,22 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
         }
       } catch { /* ignore */ }
     }
-    if (!consultant.email) {
-      // Fallback to current user (DB), then derive from req.user if DB has no record
+
+    // If still missing, read current user from DB using name/email columns only
+    if (!consultant.email || !consultant.name) {
       try {
         const u = await pool.query(`
           SELECT email,
-                 COALESCE(NULLIF(TRIM(CONCAT(COALESCE(first_name,''),' ',COALESCE(last_name,''))),''), name, email) AS full_name
+                 COALESCE(NULLIF(TRIM(name),''), email) AS full_name
           FROM users WHERE id=$1 LIMIT 1
         `, [req.user.id])
         if (u.rows.length) {
-          consultant = { name: u.rows[0].full_name || null, email: u.rows[0].email || null }
+          consultant = {
+            name: u.rows[0].full_name || consultant.name || null,
+            email: u.rows[0].email || consultant.email || null
+          }
         }
       } catch { /* ignore */ }
-      if (!consultant.email) {
-        // Derive from authenticated request context
-        const fullFromReq = [req.user?.first_name, req.user?.last_name].filter(Boolean).join(' ').trim()
-        const derivedName = fullFromReq || (req.user?.name || null)
-        const derivedEmail = req.user?.email || null
-        consultant = { name: derivedName, email: derivedEmail }
-      }
     }
 
     // If deal_id provided, try to derive from DB
@@ -1712,12 +1727,18 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
       if (Number(upb.storage || 0) > 0) addRow(L('Storage', 'غرفة التخزين'), upb.storage)
       if (Number(upb.garage || 0) > 0) addRow(L('Garage', 'الجراج'), upb.garage)
       // Maintenance Deposit may be provided separately in fee inputs; include from upb.maintenance if present
-      if (Number(upb.maintenance || 0) > 0) addRow(L('Maintenance Deposit', 'وديعة الصيانة'), upb.maintenance)
-      const totalAll = (Number(upb.base||0)+Number(upb.garden||0)+Number(upb.roof||0)+Number(upb.storage||0)+Number(upb.garage||0)+Number(upb.maintenance||0))
+      const maint = Number(upb.maintenance || 0)
+      if (maint > 0) addRow(L('Maintenance Deposit', 'وديعة الصيانة'), maint)
+      const totalExcl = (Number(upb.base||0)+Number(upb.garden||0)+Number(upb.roof||0)+Number(upb.storage||0)+Number(upb.garage||0))
+      const totalIncl = totalExcl + maint
       rows.push(`
         <tr>
-          <td style="padding:6px 8px; background:#cba86c; font-weight:900;">${L('Total', 'الإجمالي')}</td>
-          <td style="padding:6px 8px; text-align:${rtl ? 'left' : 'right'}; font-weight:900;">${f(totalAll)} ${currency || ''}</td>
+          <td style="padding:6px 8px; background:#cba86c; font-weight:900;">${L('Total (excluding Maintenance Deposit)', 'الإجمالي (بدون وديعة الصيانة)')}</td>
+          <td style="padding:6px 8px; text-align:${rtl ? 'left' : 'right'}; font-weight:900;">${f(totalExcl)} ${currency || ''}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 8px; background:#cba86c; font-weight:900;">${L('Total (including Maintenance Deposit)', 'الإجمالي (شامل وديعة الصيانة)')}</td>
+          <td style="padding:6px 8px; text-align:${rtl ? 'left' : 'right'}; font-weight:900;">${f(totalIncl)} ${currency || ''}</td>
         </tr>
       `)
       unitTotalsBox = `
@@ -1746,13 +1767,18 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
             <div class="meta"><strong>${tOfferDate}:</strong> ${offer_date || ''}   <strong>${tFirstPayment}:</strong> ${first_payment_date || ''}</div>
             ${unitLine ? `<div class="meta"><strong>${tUnit}:</strong> ${unitLine}</div>` : ''}
             ${consultantLine}
-            ${unitTotalsBox}
-            <div style="clear:both;"></div>
+            <div style="display:flex; ${rtl ? 'flex-direction:row-reverse;' : ''} gap:12px; align-items:flex-start;">
+              <div style="flex:1;">
+                <div class="buyers">
+                  ${buyersHtml || (rtl ? '<div>لا يوجد بيانات عملاء</div>' : '<div>No client data</div>')}
+                </div>
+              </div>
+              <div style="width:42%;">${unitTotalsBox}</div>
+            </div>
           </div>
 
-          <div class="section">
-            <h3 style="${rtl ? 'text-align:right;' : ''}">${tBuyers}</h3>
-            <div class="buyers">
+          <!-- Clients block moved up into the header section alongside the unit totals to optimize page space. -->
+  <div class="buyers">
               ${buyersHtml || (rtl ? '<div>لا يوجد بيانات عملاء</div>' : '<div>No client data</div>')}
             </div>
           </div>
@@ -1788,13 +1814,11 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
       </html>
     `
 
-    // Render with Puppeteer
-    const browser = await puppeteer.launch({
-      headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    })
+    // Render with Puppeteer (reuse a singleton browser to improve performance)
+    const browser = await getBrowser()
     const page = await browser.newPage()
-    await page.setContent(html, { waitUntil: 'networkidle0' })
+    // Use 'load' to avoid hanging on networkidle behind sandbox; our HTML is static
+    await page.setContent(html, { waitUntil: 'load' })
     // Localized footer: Page X of Y (EN) / صفحة س من ص (AR)
     const footerTemplate = `
       <div style="width:100%; font-size:10px; color:#6b7280; padding:6px 10px; ${rtl ? 'direction:rtl; text-align:left;' : 'direction:ltr; text-align:right;'}">
@@ -1810,7 +1834,7 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
       footerTemplate,
       margin: { top: '14mm', right: '12mm', bottom: '18mm', left: '12mm' }
     })
-    await browser.close()
+    await page.close()
 
     const filename = `client_offer_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`
     res.setHeader('Content-Type', 'application/pdf')

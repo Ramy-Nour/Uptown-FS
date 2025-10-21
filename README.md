@@ -121,6 +121,16 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-10-21 06:35] Client Offer PDF — consultant name reliability:
+  - API: Simplified consultant identity resolution to rely strictly on users.name and users.email. We initialize from the authenticated user context and, if a deal_id is provided, prefer the deal creator from DB. Fallback reads the current user from DB using name/email columns only. This ensures the consultant’s name appears in the PDF whenever it’s present in the users table.
+- [2025-10-21 06:25] Consultant UX — export buttons visibility and Unit Block section placement:
+  - Client: PaymentSchedule export buttons (XLSX/CSV/Checks) are now visible only to financial_admin; they are hidden for property_consultant and sales_manager while keeping the functionality available under the admin role.
+  - Client: Moved the Unit Block/Unit Info section to the end of the page (below the schedule) to improve perceived streaming and page flow.
+- [2025-10-21 06:10] Client Offer PDF — performance, Arabic reliability, and UI improvements:
+  - API: Reuse a singleton Puppeteer browser instance and switch setContent waitUntil to 'load' to reduce export latency and avoid intermittent stalls on Arabic PDFs behind sandboxed environments.
+  - API: Unit totals box now shows dual totals — excluding Maintenance Deposit and including Maintenance Deposit — to align with the payment plan totals presentation.
+  - Client: Export button for Property Consultant now shows a progress indicator (%) while the PDF is generated. Progress ramps to completion when the file is ready and the button is disabled during processing.
+  - Client: Added Maintenance Deposit inputs (Amount and optional Date) in the consultant Inputs panel. If date is omitted, the API defaults the maintenance due to the Handover date. The generated plan now consistently includes the Maintenance Deposit row when an amount is present.
 - [2025-10-21 05:10] Backend stability and schema alignment:
   - Fixed a server crash in Client Offer PDF totals block by adding explicit parentheses around mixed ?? and || expressions in template strings.
   - Adjusted consultant name lookup to rely on users.name and users.email only (no first_name/last_name columns required). If users.name is empty, the PDF falls back to the authenticated user's name or finally to email.

@@ -10,6 +10,7 @@ import ClientInfoForm from './components/calculator/ClientInfoFormMin.jsx'
 import UnitInfoSection from './components/calculator/UnitInfoSection.jsx'
 import ContractDetailsForm from './components/calculator/ContractDetailsForm.jsx'
 import InputsForm from './components/calculator/InputsForm.jsx'
+import LoadingButton from './components/LoadingButton.jsx'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 const LS_KEY = 'uptown_calc_form_state_v2'
@@ -329,6 +330,8 @@ export default function App(props) {
   // Document generation state
   const [docLoading, setDocLoading] = useState(false)
   const [docError, setDocError] = useState('')
+  const [docProgress, setDocProgress] = useState(0)
+  const docProgressTimer = useRef(null)
 
   // Centrally-managed acceptance thresholds (TM-approved, loaded from API)
   const [thresholdsCfg, setThresholdsCfg] = useState({})
@@ -1083,7 +1086,19 @@ export default function App(props) {
   async function exportClientOfferPdf() {
     try {
       setDocError('')
+      setDocProgress(0)
       setDocLoading(true)
+      // Begin indeterminate progress (ramps to 85%)
+      if (docProgressTimer.current) {
+        clearInterval(docProgressTimer.current)
+      }
+      docProgressTimer.current = setInterval(() => {
+        setDocProgress(p => {
+          const next = p + Math.random() * 7
+          return next >= 85 ? 85 : next
+        })
+      }, 350)
+
       // Build buyers[] from clientInfo (up to 4)
       const numBuyersRaw = Number(clientInfo.number_of_buyers)
       const numBuyers = Math.min(Math.max(numBuyersRaw || 1, 1), 4)
@@ -1133,7 +1148,11 @@ export default function App(props) {
         } catch {}
         throw new Error(errMsg)
       }
+      // Nudge progress near completion while reading blob
+      setDocProgress(p => Math.max(p, 92))
       const blob = await resp.blob()
+      setDocProgress(100)
+
       const ts = new Date().toISOString().replace(/[:.]/g, '-')
       const filename = `client_offer_${ts}.pdf`
       const url = URL.createObjectURL(blob)
@@ -1148,6 +1167,11 @@ export default function App(props) {
       setDocError(e.message || String(e))
     } finally {
       setDocLoading(false)
+      if (docProgressTimer.current) {
+        clearInterval(docProgressTimer.current)
+        docProgressTimer.current = null
+      }
+      setTimeout(() => setDocProgress(0), 800)
     }
   }
 
@@ -1486,6 +1510,8 @@ export default function App(props) {
           setPreview={setPreview}
           setPreviewError={setPreviewError}
           role={role}
+          feeSchedule={feeSchedule}
+          setFeeSchedule={setFeeSchedule}
         />
 
         
@@ -1555,13 +1581,26 @@ export default function App(props) {
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {/* Client Offer PDF — Property Consultant only */}
               {authUser?.role === 'property_consultant' && (
-                <button
-                  type="button"
-                  onClick={exportClientOfferPdf}
-                  style={styles.btnPrimary}
-                >
-                  {isRTL(language) ? 'تصدير عرض العميل (PDF)' : 'Export Client Offer (PDF)'}
-                </button>
+                <>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                    <LoadingButton
+                      variant="primary"
+                      loading={docLoading}
+                      onClick={exportClientOfferPdf}
+                      style={{ ...(styles.btnPrimary || {}), minWidth: 220 }}
+                    >
+                      {isRTL(language) ? 'تصدير عرض العميل (PDF)' : 'Export Client Offer (PDF)'}
+                    </LoadingButton>
+                    {docLoading && (
+                      <div style={{ width: 160 }}>
+                        <div style={{ height: 6, background: '#ead9bd', borderRadius: 8, overflow: 'hidden' }}>
+                          <div style={{ width: `${Math.min(100, Math.max(0, Math.round(docProgress)))}%`, height: '100%', background: '#A97E34', transition: 'width 300ms ease' }} />
+                        </div>
+                        <small style={{ color: '#6b7280' }}>{Math.round(docProgress)}%</small>
+                      </div>
+                    )}
+                  </span>
+                </>
               )}
               {/* Reservation Form — Financial Admin only */}
               {authUser?.role === 'financial_admin' && (
@@ -1628,9 +1667,26 @@ export default function App(props) {
               onExportCSV={exportScheduleCSV}
               onExportXLSX={exportScheduleXLSX}
               onGenerateChecks={generateChecksSheetXLSX}
+              role={role}
             />
           )}
         </section>
+      {/* Move Unit Block/Unit Info section to the end of the page to reduce streaming contention */}
+        {!embedded && (
+          <UnitInfoSection
+            role={role}
+            styles={styles}
+            mode={mode}
+            inputs={inputs}
+            unitInfo={unitInfo}
+            setUnitInfo={setUnitInfo}
+            setStdPlan={setStdPlan}
+            setInputs={setInputs}
+            setCurrency={setCurrency}
+            setFeeSchedule={setFeeSchedule}
+            setUnitPricingBreakdown={setUnitPricingBreakdown}
+          />
+        )}
       </div>
     </div>
   )

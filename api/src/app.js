@@ -836,6 +836,9 @@ app.post('/api/generate-plan', validate(generatePlanSchema), async (req, res) =>
       effInputs.installmentFrequency = nf
     }
 
+    // Will hold auto-resolved maintenance amount when unitId provided
+    let maintFromPricing = 0
+
     if (standardPricingId || unitId) {
       // Resolve nominal base from approved pricing and authoritative rate/duration/frequency from global standard_plan
       let row = null
@@ -880,6 +883,9 @@ app.post('/api/generate-plan', validate(generatePlanSchema), async (req, res) =>
       if (!row) {
         return bad(res, 404, 'Approved standard price not found for the selected unit/model')
       }
+
+      // Persist maintenance from pricing to use later if consultant didn't enter one
+      maintFromPricing = Number(row.maintenance_price) || 0
 
       const totalPrice =
         (Number(row.price) || 0) +
@@ -985,7 +991,7 @@ app.post('/api/generate-plan', validate(generatePlanSchema), async (req, res) =>
         effectiveStdPlan = {
           totalPrice,
           financialDiscountRate: rowRate,
-          calculatedPV: Number(stdPVComputed.toFixed(2))
+          calculatedPV: Number(stdPvComputed.toFixed(2))
         }
         annualRateUsedMeta = rowRate
         durationYearsUsedMeta = rowDur
@@ -1153,7 +1159,12 @@ app.post('/api/generate-plan', validate(generatePlanSchema), async (req, res) =>
     }
 
     // Additional one-time fees (NOT included in PV calculation — appended only to schedule)
-    const maintAmt = Number(effInputs.maintenancePaymentAmount) || 0
+    // Auto-resolve Maintenance Deposit from unit pricing when consultant didn't enter one
+    let maintAmt = Number(effInputs.maintenancePaymentAmount) || 0
+    if (!(maintAmt > 0) && (Number(unitId) > 0) && maintFromPricing > 0) {
+      maintAmt = maintFromPricing
+    }
+
     // Support explicit maintenance calendar date; otherwise compute by month offset (default: handover)
     const maintDateStr = effInputs.maintenancePaymentDate || null
     let maintMonth

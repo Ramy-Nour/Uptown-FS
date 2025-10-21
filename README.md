@@ -121,6 +121,10 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-10-21 06:50] Maintenance Deposit auto-inclusion and PDF portrait:
+  - API: /api/generate-plan now auto-populates the Maintenance Deposit from the unit’s approved model pricing when unitId is provided and the consultant did not enter an amount. The schedule includes a “Maintenance Deposit” line at the default handover date unless an explicit maintenance date/month is provided.
+  - API: /api/documents/client-offer auto-resolves the unit pricing breakdown (including maintenance) from DB when unit_id is sent, so the PDF totals box always reflects maintenance without relying on consultant input.
+  - PDF: Explicitly uses A4 portrait orientation (landscape=false). Header layout adjusted to reduce whitespace; clients and unit totals appear side by side.
 - [2025-10-21 06:35] Client Offer PDF — consultant name reliability:
   - API: Simplified consultant identity resolution to rely strictly on users.name and users.email. We initialize from the authenticated user context and, if a deal_id is provided, prefer the deal creator from DB. Fallback reads the current user from DB using name/email columns only. This ensures the consultant’s name appears in the PDF whenever it’s present in the users table.
 - [2025-10-21 06:25] Consultant UX — export buttons visibility and Unit Block section placement:

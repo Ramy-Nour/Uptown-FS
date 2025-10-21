@@ -1122,7 +1122,8 @@ export default function App(props) {
         first_payment_date: inputs.firstPaymentDate || inputs.offerDate || new Date().toISOString().slice(0, 10),
         unit: {
           unit_code: unitInfo.unit_code || '',
-          unit_type: unitInfo.unit_type || ''
+          unit_type: unitInfo.unit_type || '',
+          unit_id: Number(unitInfo.unit_id) || null
         },
         // Include unit pricing breakdown for PDF header box
         unit_pricing_breakdown: {

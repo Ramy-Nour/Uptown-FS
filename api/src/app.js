@@ -1969,101 +1969,100 @@ app.post('/api/documents/reservation-form', authLimiter, authMiddleware, require
       })
     }
 
-    // Render HTML
-    const lang = 'en'
-    const rtl = false
-    const dir = 'ltr'
-    const f = (s) => Number(s || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    const css = `
-      <style>
-        @page { size: A4; margin: 16mm 14mm; }
-        html { direction: ${dir}; }
-        body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
-        h1,h2,h3 { margin: 0 0 8px; }
-        .header { display:flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-        .brand { font-size: 16px; color: #0f172a; font-weight: 700; }
-        .meta { color: #6b7280; font-size: 12px; }
-        .section { margin: 14px 0; }
-        table { width: 100%; border-collapse: collapse; }
-        thead { display: table-header-group; }
-        th { text-align: left; background: #f1f5f9; color: #0f172a; font-size: 12px; border-bottom: 1px solid #e2e8f0; padding: 8px; }
-        td { font-size: 12px; border-bottom: 1px solid #e2e8f0; padding: 8px; page-break-inside: avoid; }
-        .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-        .box { border:1px solid #e2e8f0; border-radius: 12px; background:#fff; padding: 10px; }
-        .foot { margin-top: 12px; color:#6b7280; font-size: 11px; }
-        .summary { display:flex; gap:12px; align-items:stretch; }
-        .summary .box { flex:1; }
-      </style>
-    `
-    const buyersHtml = buyers.map((b, idx) => `
-      <div class="box">
-        <div><strong>Buyer ${idx + 1}:</strong> ${b.buyer_name || '-'}</div>
-        <div><strong>Phone:</strong> ${[b.phone_primary, b.phone_secondary].filter(Boolean).join(' / ') || '-'}</div>
-        <div><strong>Email:</strong> ${b.email || '-'}</div>
-      </div>
-    `).join('')
-
+    // Build Tailwind-based HTML (matching attached form style)
     const html = `
-      <html lang="${lang}" dir="${dir}">
-        <head>
-          <meta charset="UTF-8" />
-          ${css}
-        </head>
-        <body>
-          <div class="header">
-            <div class="brand">Reservation Form</div>
-            <div class="meta">Generated: ${new Date().toISOString().slice(0,19).replace('T',' ')}</div>
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+        <title>Reservation Form</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+        <style>
+          html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          body { font-family: 'Inter', sans-serif; }
+        </style>
+      </head>
+      <body class="bg-gray-100 p-4 sm:p-8">
+        <div class="container mx-auto max-w-4xl bg-white shadow-lg rounded-2xl overflow-hidden">
+          <div class="p-6 sm:p-8 border-b border-gray-200">
+            <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">Reservation Form</h1>
+            <p class="mt-2 text-gray-600">This document summarizes the reservation details for the selected unit.</p>
           </div>
 
-          <div class="section summary">
-            <div class="box">
-              <h3>Reservation Details</h3>
-              <div><strong>Date:</strong> ${reservationDate} (${dayOfWeek})</div>
-              <div><strong>Preliminary Payment:</strong> ${f(preliminaryPayment)} ${currency || ''}</div>
-              <div><strong>Down Payment:</strong> ${f(downPayment)} ${currency || ''}</div>
-              <div><strong>Total Unit Value (incl. maintenance):</strong> ${f(totalIncl)} ${currency || ''}</div>
-              <div><strong>Remaining Amount:</strong> ${f(remainingAmount)} ${currency || ''}</div>
+          <!-- Reservation Summary -->
+          <div class="px-6 sm:px-8 py-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="bg-gray-50 rounded-xl p-4 border border-gray-200">
+              <h2 class="text-lg font-semibold text-gray-700 mb-2">Reservation Details</h2>
+              <div class="space-y-1 text-gray-800">
+                <div><span class="font-medium">Date:</span> ${reservationDate} <span class="text-gray-500">(${dayOfWeek})</span></div>
+                <div><span class="font-medium">Preliminary Payment:</span> ${Number(preliminaryPayment).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</div>
+                <div><span class="font-medium">Down Payment:</span> ${Number(downPayment).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</div>
+                <div><span class="font-medium">Total Unit Value (incl. maintenance):</span> ${Number(totalIncl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</div>
+                <div><span class="font-medium">Remaining Amount:</span> ${Number(remainingAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</div>
+              </div>
             </div>
-            <div class="box">
-              <h3>Unit</h3>
-              <div><strong>Code:</strong> ${unit.unit_code || '-'}</div>
-              <div><strong>Type:</strong> ${unit.unit_type || '-'}</div>
+            <div class="bg-gray-50 rounded-xl p-4 border border-gray-200">
+              <h2 class="text-lg font-semibold text-gray-700 mb-2">Unit</h2>
+              <div class="space-y-1 text-gray-800">
+                <div><span class="font-medium">Code:</span> ${unit.unit_code || '-'}</div>
+                <div><span class="font-medium">Type:</span> ${unit.unit_type || '-'}</div>
+              </div>
             </div>
           </div>
 
-          <div class="section">
-            <h3>Buyers</h3>
-            <div class="grid2">
-              ${buyersHtml || '<div class="box">No client data</div>'}
+          <!-- Buyers -->
+          <div class="px-6 sm:px-8 pb-6">
+            <h2 class="text-lg font-semibold text-gray-700 mb-3">Buyers</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              ${
+                buyers.length
+                  ? buyers.map((b, i) => `
+                    <div class="rounded-xl border border-gray-200 p-4">
+                      <div class="text-sm text-gray-500 mb-1">Buyer ${i + 1}</div>
+                      <div class="text-gray-800"><span class="font-medium">Name:</span> ${b.buyer_name || '-'}</div>
+                      <div class="text-gray-800"><span class="font-medium">Phone:</span> ${[b.phone_primary, b.phone_secondary].filter(Boolean).join(' / ') || '-'}</div>
+                      <div class="text-gray-800"><span class="font-medium">Email:</span> ${b.email || '-'}</div>
+                    </div>
+                  `).join('')
+                  : '<div class="text-gray-500">No client data</div>'
+              }
             </div>
           </div>
 
-          <div class="section">
-            <h3>Pricing Breakdown</h3>
-            <table>
-              <thead>
-                <tr>
-                  <th>Label</th>
-                  <th style="text-align:right">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr><td>Base</td><td style="text-align:right">${f(Number(upb?.base||0))} ${currency || ''}</td></tr>
-                ${(Number(upb?.garden||0)>0)?`<tr><td>Garden</td><td style="text-align:right">${f(Number(upb?.garden||0))} ${currency || ''}</td></tr>`:''}
-                ${(Number(upb?.roof||0)>0)?`<tr><td>Roof</td><td style="text-align:right">${f(Number(upb?.roof||0))} ${currency || ''}</td></tr>`:''}
-                ${(Number(upb?.storage||0)>0)?`<tr><td>Storage</td><td style="text-align:right">${f(Number(upb?.storage||0))} ${currency || ''}</td></tr>`:''}
-                ${(Number(upb?.garage||0)>0)?`<tr><td>Garage</td><td style="text-align:right">${f(Number(upb?.garage||0))} ${currency || ''}</td></tr>`:''}
-                ${(Number(upb?.maintenance||0)>0)?`<tr><td>Maintenance Deposit</td><td style="text-align:right">${f(Number(upb?.maintenance||0))} ${currency || ''}</td></tr>`:''}
-                <tr><td style="font-weight:700">Total (excl. maintenance)</td><td style="text-align:right; font-weight:700">${f(totalExcl)} ${currency || ''}</td></tr>
-                <tr><td style="font-weight:700">Total (incl. maintenance)</td><td style="text-align:right; font-weight:700">${f(totalIncl)} ${currency || ''}</td></tr>
-              </tbody>
-            </table>
+          <!-- Pricing Breakdown -->
+          <div class="px-6 sm:px-8 pb-8">
+            <h2 class="text-lg font-semibold text-gray-700 mb-3">Pricing Breakdown</h2>
+            <div class="rounded-xl border border-gray-200 overflow-hidden">
+              <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                  <tr>
+                    <th class="text-left text-xs font-medium text-gray-500 uppercase tracking-wider p-3">Label</th>
+                    <th class="text-right text-xs font-medium text-gray-500 uppercase tracking-wider p-3">Amount</th>
+                  </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-100">
+                  <tr><td class="p-3">Base</td><td class="p-3 text-right">${Number(upb?.base||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>
+                  ${Number(upb?.garden||0)>0 ? `<tr><td class="p-3">Garden</td><td class="p-3 text-right">${Number(upb?.garden||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>` : ''}
+                  ${Number(upb?.roof||0)>0 ? `<tr><td class="p-3">Roof</td><td class="p-3 text-right">${Number(upb?.roof||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>` : ''}
+                  ${Number(upb?.storage||0)>0 ? `<tr><td class="p-3">Storage</td><td class="p-3 text-right">${Number(upb?.storage||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>` : ''}
+                  ${Number(upb?.garage||0)>0 ? `<tr><td class="p-3">Garage</td><td class="p-3 text-right">${Number(upb?.garage||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>` : ''}
+                  ${Number(upb?.maintenance||0)>0 ? `<tr><td class="p-3">Maintenance Deposit</td><td class="p-3 text-right">${Number(upb?.maintenance||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>` : ''}
+                  <tr class="bg-gray-50"><td class="p-3 font-semibold">Total (excl. maintenance)</td><td class="p-3 text-right font-semibold">${Number(totalExcl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>
+                  <tr class="bg-gray-50"><td class="p-3 font-semibold">Total (incl. maintenance)</td><td class="p-3 text-right font-semibold">${Number(totalIncl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
 
-          <div class="foot">
+          <div class="px-6 sm:px-8 pb-8 text-gray-500 text-sm border-t border-gray-100">
             This reservation form is generated automatically based on the consultant's saved plan and pricing. Values are indicative and subject to contract.
           </div>
-        </body>
+        </div>
+      </body>
       </html>
     `
 

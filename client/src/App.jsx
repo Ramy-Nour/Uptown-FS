@@ -19,11 +19,13 @@ import InputsForm from './components/calculator/InputsForm.jsx'
 import LoadingButton from './components/LoadingButton.jsx'
 import DiscountHint from './components/DiscountHint.jsx'
 import TypeAndUnitPicker from './components/TypeAndUnitPicker.jsx'
+import CustomNotesSection from './components/calculator/CustomNotesSection.jsx'
 import { fetchLatestStandardPlan, generatePlan } from './services/calculatorApi.js'
 import { fetchHealth, fetchMessage } from './services/systemApi.js'
 import { useDynamicPayments } from './hooks/useDynamicPayments.js'
 import { useUnitSearch } from './hooks/useUnitSearch.js'
 import { useCalculatorEmbedding } from './hooks/useCalculatorEmbedding.js'
+import { useAcceptanceThresholds } from './hooks/useAcceptanceThresholds.js'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 const LS_KEY = 'uptown_calc_form_state_v2'
@@ -238,9 +240,8 @@ export default function App(props) {
   const [docProgress, setDocProgress] = useState(0)
   const docProgressTimer = useRef(null)
 
-  // Centrally-managed acceptance thresholds (TM-approved, loaded from API)
-  const [thresholdsCfg, setThresholdsCfg] = useState({})
-  useEffect(() => {
+  // Centrally-managed acceptance thresholds (TM-approved, loaded from API) via hook
+  const thresholdsCfg = useAcceptanceThreshol_codeuseEffect(() => {
     let mounted = true
     ;(async () => {
       try {
@@ -992,19 +993,13 @@ export default function App(props) {
           />
         )}
 
-        {(role === 'contract_manager' || role === 'contract_person') && (
-          <section style={styles.section}>
-            <h2 style={styles.sectionTitle}>Custom Text Notes</h2>
-            <div>
-              <label style={styles.label}>Down Payment Explanation (<span style={styles.arInline}>[[بيان الباقي من دفعة التعاقد]]</span>)</label>
-              <textarea dir="auto" style={styles.textarea()} value={customNotes.dp_explanation} onChange={e => setCustomNotes(s => ({ ...s, dp_explanation: e.target.value }))} placeholder='مثال: "يسدد الباقي على شيكين"' />
-            </div>
-            <div style={{ marginTop: 12 }}>
-              <label style={styles.label}>Power of Attorney Clause (<span style={styles.arInline}>[[بيان التوكيل]]</span>)</label>
-              <textarea style={styles.textarea()} value={customNotes.poa_clause} onChange={e => setCustomNotes(s => ({ ...s, poa_clause: e.target.value }))} placeholder='بنود قانونية خاصة إن وجدت' />
-            </div>
-          </section>
-        )}
+        <CustomNotesSection
+          styles={styles}
+          language={language}
+          role={role}
+          customNotes={customNotes}
+          setCustomNotes={setCustomNotes}
+        />
 
         {/* Results Table */}
         <section style={styles.section} dir={isRTL(language) ? 'rtl' : 'ltr'}>

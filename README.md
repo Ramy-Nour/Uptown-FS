@@ -287,6 +287,17 @@ Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track 
   - Rollback guidance:
     - If needed, remove the hook imports and reinsert the original unit search effect and embedding useEffect from git history.
     - Ensure any removed state variables are re-added if rolling back (unitsCatalog/unitQuery/etc.).
+
+- [2025-10-23 13:52] Frontend refactor — App.jsx modularization (step 9: acceptance thresholds hook + Custom Notes component):
+  - Added client/src/hooks/useAcceptanceThresholds.js and replaced the inline acceptance thresholds fetch/useEffect.
+    - App.jsx now calls const thresholdsCfg = useAcceptanceThresholds() and uses it in comparison/evaluation.
+  - Added client/src/components/calculator/CustomNotesSection.jsx and replaced the inline custom notes section.
+    - Props: styles, language, role, customNotes, setCustomNotes.
+    - Behavior identical; just modularized.
+  - App.jsx imports these for cleaner structure. Line count reduced further (~1170 lines).
+  - Rollback guidance:
+    - If needed, remove the hook/component imports and paste back the original inline useEffect and custom notes JSX from git history.
+    - Ensure state bindings (customNotes/setCustomNotes and thresholdsCfg) are restored when rolling back.
 - [2025-10-21 07:20] Standard Pricing approval — propagate to unit:
   - API: On approving a Standard Pricing record, the server now propagates the approved price (and area when valid) to the related unit (units.base_price and optionally units.area), and logs a 'propagate' entry in standard_pricing_history. This mirrors the unit-model pricing propagation pattern and ensures approved standards immediately reflect on the unit.
 - [2025-10-21 07:05] Top-Management approvals for Standard Pricing:

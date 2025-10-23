@@ -135,6 +135,37 @@ export default function Approvals() {
                 </td>
                 <td style={td}>{d.created_by_email || '-'}</td>
                 <td style={td}>
+                  {/* Override timeline badge */}
+                  {(() => {
+                    const stages = [
+                      { key: 'requested', label: 'Req', ts: d?.override_requested_at },
+                      { key: 'sm', label: 'SM', ts: d?.manager_review_at },
+                      { key: 'fm', label: 'FM', ts: d?.fm_review_at },
+                      { key: 'tm', label: 'TM', ts: d?.override_approved_at }
+                    ]
+                    const activeIdx = stages.findIndex(s => !!s.ts)
+                    const circle = (active) => ({
+                      width: 10, height: 10, borderRadius: 9999,
+                      background: active ? '#A97E34' : '#e5e7eb',
+                      border: `2px solid ${active ? '#A97E34' : '#d1d5db'}`
+                    })
+                    const line = (active) => ({
+                      height: 2, width: 16, background: active ? '#A97E34' : '#e5e7eb'
+                    })
+                    return (
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginRight: 8 }}>
+                        {stages.map((s, i) => (
+                          <React.Fragment key={s.key}>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                              <div style={circle(i <= activeIdx)} />
+                              <div style={{ fontSize: 10, color: i <= activeIdx ? '#A97E34' : '#6b7280' }}>{s.label}</div>
+                            </div>
+                            {i < stages.length - 1 && <div style={line(i < activeIdx)} />}
+                          </React.Fragment>
+                        ))}
+                      </div>
+                    )
+                  })()}
                   <LoadingButton disabled={busyId === d.id} onClick={() => approve(d.id)}>
                     Approve
                   </LoadingButton>

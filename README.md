@@ -574,6 +574,17 @@ Troubleshooting quick tips
 
 ## Roadmap (next sessions)
 
+Planned enhancements
+- Override Timeline UI refinements
+  - Improve visuals: larger circles, labels under nodes, responsive layout, and hover tooltips with timestamps and approver names.
+  - Show the same override timeline on the Sales Manager Approvals page (implemented initial compact timeline badge).
+- Unit Lifecycle Timeline (future)
+  - Add a similar timeline to track unit state across Blocked → Reserved → Contracted (and back if expired/unblocked).
+  - Integrate with blocks table and reservation/contract events to display timestamps per transition.
+- Contract Cancellation Flow (future)
+  - Design and implement contract cancellation workflow with approvals and audit trail.
+  - Update documents and notifications to reflect cancellation and unit state changes.
+
 - Polish Client Offer PDF (server-rendered):
   - Add branded header/logo, consistent typography, page headers/footers, and proper pagination (repeat table headers on page break).
   - Improve RTL/Arabic typography and spacing; verify Noto Arabic fallback coverage.

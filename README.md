@@ -126,6 +126,10 @@ Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track 
   - API: No change required. The server already defaults to Handover when month is invalid; the client now sends the correct month when the date is omitted.
 - [2025-10-23 09:15] Unit Block internal error (500) — ensure blocks table exists:
   - DB: Added migration 041_blocks_table.sql to create the blocks table with required columns and indexes. Some environments relied on initDb but had migrations drift; this guarantees the table and trigger exist so /api/blocks/request no longer returns 500 due to missing relation.
+- [2025-10-23 09:35] Blocked-unit edit rules and Reservation Form flow:
+  - Client: When a unit is blocked (approved), property_consultant cannot edit client identity fields (name, email, phone) and cannot edit Unit & Project Information. Consultants can still adjust the payment plan and other client fields (e.g., address).
+  - Client: Financial Admin sees blocked units and can generate the Reservation Form using the data previously entered by the consultant (buyers, unit, and payment plan). FA cannot edit these fields directly; they should request edits from the consultant via workflow (future enhancement to add explicit “Request Edits” action).
+  - Client: App now passes blocked_until/available through unitInfo and computes unitBlocked to drive field-level locks.
 - [2025-10-21 07:20] Standard Pricing approval — propagate to unit:
   - API: On approving a Standard Pricing record, the server now propagates the approved price (and area when valid) to the related unit (units.base_price and optionally units.area), and logs a 'propagate' entry in standard_pricing_history. This mirrors the unit-model pricing propagation pattern and ensures approved standards immediately reflect on the unit.
 - [2025-10-21 07:05] Top-Management approvals for Standard Pricing:

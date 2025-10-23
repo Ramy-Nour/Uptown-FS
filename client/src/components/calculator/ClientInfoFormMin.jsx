@@ -7,7 +7,7 @@ import { t, isRTL } from '../../lib/i18n.js'
  * Restores all fields from the original form with same labels and autocomplete hints.
  * Adds support for multiple buyers (1..4). For buyers 2..N, fields are suffixed with _2, _3, _4 respectively.
  */
-export default function ClientInfoFormMinimal({ role, clientInfo, setClientInfo, styles, language = 'en' }) {
+export default function ClientInfoFormMinimal({ role, clientInfo, setClientInfo, styles, language = 'en', unitBlocked = false }) {
   const input = (err) => styles.input ? styles.input(err) : { padding: '10px 12px', borderRadius: 10, border: '1px solid #dfe5ee', outline: 'none', width: '100%', fontSize: 14, background: '#fbfdff' }
   const textarea = (err) => styles.textarea ? styles.textarea(err) : { padding: '10px 12px', borderRadius: 10, border: '1px solid #dfe5ee', outline: 'none', width: '100%', fontSize: 14, background: '#fbfdff', minHeight: 80, resize: 'vertical' }
 
@@ -37,6 +37,8 @@ export default function ClientInfoFormMinimal({ role, clientInfo, setClientInfo,
             style={input()}
             value={clientInfo[`buyer_name${suffix}`] || ''}
             onChange={set(`buyer_name${suffix}`)}
+            disabled={role === 'property_consultant' && unitBlocked}
+            title={role === 'property_consultant' && unitBlocked ? 'Locked after unit is blocked (consultant cannot change client name)' : undefined}
           />
         </div>
         <div>
@@ -108,6 +110,8 @@ export default function ClientInfoFormMinimal({ role, clientInfo, setClientInfo,
             style={input()}
             value={clientInfo[`phone_primary${suffix}`] || ''}
             onChange={set(`phone_primary${suffix}`)}
+            disabled={role === 'property_consultant' && unitBlocked}
+            title={role === 'property_consultant' && unitBlocked ? 'Locked after unit is blocked (consultant cannot change client phone)' : undefined}
           />
         </div>
         <div>
@@ -132,6 +136,8 @@ export default function ClientInfoFormMinimal({ role, clientInfo, setClientInfo,
             style={input()}
             value={clientInfo[`email${suffix}`] || ''}
             onChange={set(`email${suffix}`)}
+            disabled={role === 'property_consultant' && unitBlocked}
+            title={role === 'property_consultant' && unitBlocked ? 'Locked after unit is blocked (consultant cannot change client email)' : undefined}
           />
         </div>
       </div>

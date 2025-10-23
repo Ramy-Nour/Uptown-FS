@@ -1538,7 +1538,14 @@ export default function App(props) {
         
 
         {/* Data Entry UI — New Sections */}
-        <ClientInfoForm role={role} clientInfo={clientInfo} setClientInfo={setClientInfo} styles={styles} language={language} />
+        <ClientInfoForm
+          role={role}
+          clientInfo={clientInfo}
+          setClientInfo={setClientInfo}
+          styles={styles}
+          language={language}
+          unitBlocked={Boolean(unitInfo?.blocked_until) || (Number(unitInfo?.unit_id) > 0 && (unitInfo?.available === false))}
+        />
 
         {!embedded && (
           <UnitInfoSection

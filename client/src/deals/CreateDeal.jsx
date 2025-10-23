@@ -102,7 +102,9 @@ export default function CreateDeal() {
               has_roof: u.has_roof || false,
               roof_area: u.roof_area || '',
               garage_area: u.garage_area || '',
-              unit_id: u.id
+              unit_id: u.id,
+              available: u.available,
+              blocked_until: u.blocked_until || null
             },
             stdPlan: {
               totalPrice: Number(approvedStd.totalPrice) || stdTotal,

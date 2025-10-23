@@ -655,8 +655,24 @@ router.post('/generate-plan', authMiddleware, validate(generatePlanSchema), asyn
     const result = calculateByMode(mode, effectiveStdPlan, effInputs)
 
     const policyLimit = await getActivePolicyLimitPercent()
-    const npvTolerancePercent = 98
-    const toleranceValue = (Number(effectiveStdPlan.totalPrice) || 0) * (npvTolerancePercent / 100)
+    // Load active acceptance thresholds from DB (latest row)
+    let pvTolerancePercent = 98
+    let firstYearMinPct = 35
+    let secondYearMinPct = 50
+    let thirdYearMinPct = 65
+    let handoverMinPct = 65
+    try {
+      const thr = await pool.query('SELECT * FROM payment_thresholds ORDER BY id DESC LIMIT 1')
+      const row = thr.rows[0]
+      if (row) {
+        if (row.pv_tolerance_percent != null) pvTolerancePercent = Number(row.pv_tolerance_percent) || pvTolerancePercent
+        if (row.first_year_percent_min != null) firstYearMinPct = Number(row.first_year_percent_min)
+        if (row.second_year_percent_min != null) secondYearMinPct = Number(row.second_year_percent_min)
+        if (row.third_year_percent_min != null) thirdYearMinPct = Number(row.third_year_percent_min)
+        if (row.handover_percent_min != null) handoverMinPct = Number(row.handover_percent_min)
+      }
+    } catch {}
+    const toleranceValue = (Number(effectiveStdPlan.totalPrice) || 0) * (pvTolerancePercent / 100)
     const npvWarning = (Number(result.calculatedPV) || 0) < toleranceValue
 
     const schedule = []
@@ -769,7 +785,7 @@ router.post('/generate-plan', authMiddleware, validate(generatePlanSchema), asyn
     const annualRate = Number(effectiveStdPlan.financialDiscountRate) || 0
     const standardPV = Number(effectiveStdPlan.calculatedPV) || 0
     const proposedPV = Number(result.calculatedPV) || 0
-    const pvTolerancePercent = 98
+    // pvTolerancePercent loaded earlier from DB (fallback 98)
     const EPS = 1e-2
     const pvPass = proposedPV + EPS >= (standardPV * (pvTolerancePercent / 100))
     const pvDifference = standardPV - proposedPV
@@ -801,7 +817,7 @@ router.post('/generate-plan', authMiddleware, validate(generatePlanSchema), asyn
     const percentY3 = pct(paidY3, totalNominalForConditions)
     const percentHandover = pct(paidByHandover, totalNominalForConditions)
 
-    const stdTargetY1 = Number(effectiveStdPlan?.targetPaymentAfter1Year) || ((Number(effectiveStdPlan.totalPrice) || 0) * (35 / 100))
+    const stdTargetY1 = Number(effectiveStdPlan?.targetPaymentAfter1Year) || ((Number(effectiveStdPlan.totalPrice) || 0) * (firstYearMinPct / 100))
     const cond1Pass = paidY1 >= stdTargetY1 - 1e-9
 
     const withinRange = (value, min, max) => {
@@ -810,10 +826,10 @@ router.post('/generate-plan', authMiddleware, validate(generatePlanSchema), asyn
       return true
     }
 
-    const cond2Pass = withinRange(percentHandover, 65, null)
-    const cond3Pass = withinRange(percentY1, 35, null)
-    const cond4Pass = withinRange(percentY2, 50, null)
-    const cond5Pass = withinRange(percentY3, 65, null)
+    const cond2Pass = withinRange(percentHandover, handoverMinPct, null)
+    const cond3Pass = withinRange(percentY1, firstYearMinPct, null)
+    const cond4Pass = withinRange(percentY2, secondYearMinPct, null)
+    const cond5Pass = withinRange(percentY3, thirdYearMinPct, null)
 
     const evaluation = {
       decision: (pvPass && cond1Pass && cond2Pass && cond3Pass && cond4Pass && cond5Pass) ? 'ACCEPT' : 'REJECT',
@@ -827,19 +843,19 @@ router.post('/generate-plan', authMiddleware, validate(generatePlanSchema), asyn
       conditions: [
         { key: 'payment_after_y1', label: 'Payment After 1 Year', status: cond1Pass ? 'PASS' : 'FAIL', required: stdTargetY1, actual: paidY1 },
         { key: 'handover_percent', label: 'Payment by Handover', status: cond2Pass ? 'PASS' : 'FAIL',
-          required: { min: 65, max: null },
+          required: { min: handoverMinPct, max: null },
           actual: { percent: percentHandover, amount: paidByHandover }, handoverYear: Number(effInputs.handoverYear) || 0
         },
         { key: 'cumulative_y1', label: 'Cumulative by End of Year 1', status: cond3Pass ? 'PASS' : 'FAIL',
-          required: { min: 35, max: null },
+          required: { min: firstYearMinPct, max: null },
           actual: { percent: percentY1, amount: paidY1 }
         },
         { key: 'cumulative_y2', label: 'Cumulative by End of Year 2', status: cond4Pass ? 'PASS' : 'FAIL',
-          required: { min: 50, max: null },
+          required: { min: secondYearMinPct, max: null },
           actual: { percent: percentY2, amount: paidY2 }
         },
         { key: 'cumulative_y3', label: 'Cumulative by End of Year 3', status: cond5Pass ? 'PASS' : 'FAIL',
-          required: { min: 65, max: null },
+          required: { min: thirdYearMinPct, max: null },
           actual: { percent: percentY3, amount: paidY3 }
         }
       ],

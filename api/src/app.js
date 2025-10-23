@@ -53,6 +53,26 @@ const libre = require('libreoffice-convert')
 
 const app = express()
 
+// Core middleware (must be early)
+app.use(helmet())
+app.use(cors()) // Defaults allow Codespaces *.app.github.dev unless overridden via CORS_ORIGINS upstream/proxy
+app.use(express.json({ limit: '2mb' }))
+app.use(express.urlencoded({ extended: true }))
+
+// Basic health/message endpoints for reachability checks
+app.get('/api/health', (req, res) => res.json({ status: 'ok' }))
+app.get('/api/message', (req, res) => res.json({ message: 'Hello from API' }))
+
+// Mount primary route modules
+app.use('/api/auth', authRoutes)
+app.use('/api/deals', dealsRoutes)
+app.use('/api/units', unitsRoutes)
+app.use('/api/inventory', inventoryRoutes)
+app.use('/api/standard-plan', standardPlanRoutes)
+app.use('/api', planningRoutes) // /calculate, /generate-plan
+app.use('/api/notifications', notificationsRoutes)
+app.use('/api/blocks', blockManagementRoutes) // Unit block workflow
+
 // Puppeteer singleton (reuse browser instance to reduce latency)
 let browserPromise = null
 async function getBrowser() {

@@ -198,10 +198,19 @@ router.get('/pending-sm', authMiddleware, async (req, res) => {
     if (!(role === 'sales_manager' || role === 'admin' || role === 'superadmin')) {
       return res.status(403).json({ error: { message: 'Sales Manager role required' } })
     }
+    // Include reviewer emails for timeline tooltips
     const rows = await pool.query(
-      `SELECT d.*, u.email as created_by_email
+      `SELECT 
+         d.*,
+         cu.email AS created_by_email,
+         mu.email AS manager_review_by_email,
+         fu.email AS fm_review_by_email,
+         tu.email AS override_approved_by_email
        FROM deals d
-       LEFT JOIN users u ON u.id = d.created_by
+       LEFT JOIN users cu ON cu.id = d.created_by
+       LEFT JOIN users mu ON mu.id = d.manager_review_by
+       LEFT JOIN users fu ON fu.id = d.fm_review_by
+       LEFT JOIN users tu ON tu.id = d.override_approved_by
        WHERE d.status='pending_approval'
        ORDER BY d.id DESC`
     )

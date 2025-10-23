@@ -21,7 +21,10 @@ import DiscountHint from './components/DiscountHint.jsx'
 import TypeAndUnitPicker from './components/TypeAndUnitPicker.jsx'
 import { fetchLatestStandardPlan, generatePlan } from './services/calculatorApi.js'
 import { fetchHealth, fetchMessage } from './services/systemApi.js'
-import { useDynamicPayments } from './hooks/useDynamicPayments
+import { useDynamicPayments } from './hooks/useDynamicPayments.js'
+import { useUnitSearch } from './hooks/useUnitSearch.js'
+import { useCalculatorEmbedding } from './hooks/useCalculatorEmbedding.js'
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 const LS_KEY = 'uptown_calc_form_state_v2'
 
@@ -188,11 +191,16 @@ export default function App(props) {
     maintenance: 0,
     totalExclMaintenance: 0
   })
-  // Units catalog (typeahead)
-  const [unitsCatalog, setUnitsCatalog] = useState([])
-  const [unitQuery, setUnitQuery] = useState('')
-  const [unitSearchLoading, setUnitSearchLoading] = useState(false)
-  const [unitDropdownOpen, setUnitDropdownOpen] = useState(false)
+  // Units catalog (typeahead) via hook
+  const {
+    unitsCatalog,
+    unitQuery,
+    unitSearchLoading,
+    unitDropdownOpen,
+    setUnitQuery,
+    setUnitDropdownOpen
+  } = useUnitSearch()
+
   const [contractInfo, setContractInfo] = useState({
     reservation_form_date: '',
     contract_date: '',
@@ -263,33 +271,6 @@ export default function App(props) {
       if (saved.customNotes) setCustomNotes(saved.customNotes)
     }
   }, [])
-
-  // Typeahead: search units on query change (debounced)
-  useEffect(() => {
-    let t = null
-    const run = async () => {
-      const q = unitQuery.trim()
-      if (!q) {
-        setUnitsCatalog([])
-        return
-      }
-      try {
-        setUnitSearchLoading(true)
-        const resp = await fetchWithAuth(`${API_URL}/api/units?search=${encodeURIComponent(q)}&page=1&pageSize=20`)
-        const data = await resp.json()
-        if (resp.ok) {
-          setUnitsCatalog(data.units || [])
-          setUnitDropdownOpen(true)
-        }
-      } catch {
-        // ignore
-      } finally {
-        setUnitSearchLoading(false)
-      }
-    }
-    t = setTimeout(run, 300)
-    return () => t && clearTimeout(t)
-  }, [unitQuery])
 
   // Load global Standard Plan on mount to populate rate/duration/frequency for consultants
   useEffect(() => {
@@ -514,88 +495,13 @@ export default function App(props) {
   const snapshot = useMemo(() => ({
     mode, language, currency, stdPlan, inputs, firstYearPayments, subsequentYears, clientInfo, unitInfo, contractInfo, customNotes, feeSchedule
   }), [mode, language, currency, stdPlan, inputs, firstYearPayments, subsequentYears, clientInfo, unitInfo, contractInfo, customNotes, feeSchedule])
-  usePersistCalculatorState(LS_KEY, snapshot)rsist on change (moved to hook)
-  const snapshot = useMemo(() => ({
-    mode, language, currency, stdPlan, inputs, firstYearPayments, subsequentYears, clientInfo, unitInfo, contractInfo, customNotes, feeSchedule
-  }), [mode, language, currency, stdPlan, inputs, firstYearPayments, subsequentYears, clientuts, firstYearPayments, subsequentYears, clientInfo, unitInfo, contractInfo, customNotes, feeSchedule])
+  usePersistCalculatorState(LS_KEY, snapshot)
 
-  // Expose imperative APIs for embedding contexts
-  useEffect(() => {
-    const getSnapshot = () => {
-      const base = {
-        mode,
-        language,
-        currency,
-        stdPlan,
-        inputs,
-        firstYearPayments,
-        subsequentYears,
-        clientInfo,
-        unitInfo,
-        contractInfo,
-        customNotes
-      }
-      const payload = buildCalculationPayload({ mode, stdPlan, unitInfo, inputs, firstYearPayments, subsequentYears })
-      const out = {
-        ...base,
-        payload,
-        generatedPlan: genResult || null,
-        preview
-      }
-      return out
-    }
-    const applyClientInfo = (partial) => {
-      if (!partial || typeof partial !== 'object') return
-      setClientInfo(s => ({
-        ...s,
-        ...partial
-      }))
-    }
-    const applyUnitInfo = (partial) => {
-      if (!partial || typeof partial !== 'object') return
-      setUnitInfo(s => ({
-        ...s,
-        ...partial
-      }))
-    }
-    const applyUnitPrefill = (payload) => {
-      if (!payload || typeof payload !== 'object') return
-      const { unitInfo: ui, stdPlan: sp, unitPricingBreakdown: upb, currency: curr } = payload
-      if (ui && typeof ui === 'object') {
-        setUnitInfo(s => ({ ...s, ...ui }))
-      }
-      if (sp && typeof sp === 'object') {
-        setStdPlan(s => ({ ...s, ...sp }))
-      }
-      if (upb && typeof upb === 'object') {
-        setUnitPricingBreakdown({ ...upb })
-        // Auto-fill Maintenance Deposit amount in the fee schedule from unit/model pricing
-        const maint = Number(upb.maintenance || 0)
-        setFeeSchedule(fs => ({ ...fs, maintenancePaymentAmount: maint }))
-      }
-      if (curr) {
-        setCurrency(curr)
-      }
-    }
-    window.__uptown_calc_getSnapshot = getSnapshot
-    window.__uptown_calc_applyClientInfo = applyClientInfo
-    window.__uptown_calc_applyUnitInfo = applyUnitInfo
-    window.__uptown_calc_applyUnitPrefill = applyUnitPrefill
-    return () => {
-      if (window.__uptown_calc_getSnapshot === getSnapshot) {
-        delete window.__uptown_calc_getSnapshot
-      }
-      if (window.__uptown_calc_applyClientInfo === applyClientInfo) {
-        delete window.__uptown_calc_applyClientInfo
-      }
-      if (window.__uptown_calc_applyUnitInfo === applyUnitInfo) {
-        delete window.__uptown_calc_applyUnitInfo
-      }
-      if (window.__uptown_calc_applyUnitPrefill === applyUnitPrefill) {
-        delete window.__uptown_calc_applyUnitPrefill
-      }
-    }
-  }, [mode, language, currency, stdPlan, inputs, firstYearPayments, subsequentYears, clientInfo, unitInfo, contractInfo, customNotes, genResult, preview])
+  // Expose imperative APIs for embedding contexts (moved to hook)
+  useCalculatorEmbedding({
+    mode, language, currency, stdPlan, inputs, firstYearPayments, subsequentYears, clientInfo, unitInfo, contractInfo, customNotes,
+    genResult, preview, setClientInfo, setUnitInfo, setStdPlan, setUnitPricingBreakdown, setFeeSchedule, setCurrency
+  })
 
   // Initial health check
   useEffect(() => {

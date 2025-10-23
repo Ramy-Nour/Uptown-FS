@@ -450,6 +450,112 @@ API integration tests:
 
 ---
 
+## User Guide — Pages, Flows, and Actions
+
+This section describes how each primary page works, who can use it, and the key buttons and actions available. Use this as a quick help reference per role. Links and labels are given as they appear in the app.
+
+General notes
+- Roles: property_consultant, sales_manager, financial_admin, financial_manager, contract_person, admin/superadmin (admin pages).
+- Date pickers accept calendar dates; if a date is optional and left empty, defaults are applied as documented (e.g., Maintenance Deposit defaults to the Handover date).
+- The app supports English and Arabic. Toggle “Language for Written Amounts” in Calculator to affect number-to-words output.
+
+1) Calculator Page
+- Purpose: Build payment plans, evaluate acceptance, prepare client offer exports.
+- Who: All roles can view; some inputs are locked based on role.
+- Key inputs
+  - Offer Date and First Payment Date: required; First Payment defaults to Offer Date.
+  - Mode: choose calculation mode (four options with inline explanations).
+  - Down Payment Type: “percentage” is disabled in PV-target modes to avoid circular dependency.
+  - Installment Frequency and Plan Duration (years): required.
+  - Handover Year and Additional Handover Payment: optional; if amount > 0 and year > 0, “Handover” appears in schedule.
+  - Maintenance Deposit (Amount + optional Date): not part of PV; if date is empty, it defaults to Handover.
+- Buttons
+  - Calculate (Generate Plan): builds the schedule and shows acceptance evaluation.
+  - Export Client Offer (PDF): Property Consultant only; shows a progress bar during generation.
+  - Export CSV / Export XLSX / Generate Checks Sheet: Financial Admin only; disabled for other roles.
+- Results
+  - Payment Schedule table with Month/Label/Amount/Date/Written Amount.
+  - Totals box shows both “Total (excluding Maintenance Deposit)” and “Total (including Maintenance Deposit)”.
+  - Acceptance Evaluation (server-side) shows PV comparison, conditions, and decision.
+
+2) Deals → Create Deal
+- Purpose: Prepare a full deal record using the embedded calculator and selected unit.
+- Who: Consultants/Sales Managers prepare; downstream actions by managers/admins.
+- Flow
+  - Select a unit from Inventory (or arrive with unit_id in URL). Unit summary shows model, code, prices, and totals.
+  - Use the embedded Calculator to generate a Payment Plan.
+  - Required minimal fields: Client Name, Client Primary Phone, Unit Model, Unit Code or Unit Number.
+- Buttons
+  - Change Unit: navigates back to Inventory.
+  - Request Unit Block: Consultants/Sales Managers can request a temporary hold (block) on the unit.
+  - Save as Draft: creates a draft deal.
+  - Save and Submit: creates and submits the deal; requires a generated plan.
+- Errors
+  - “Please generate a payment plan before submitting.” if plan missing.
+  - “Missing required fields: …” for minimal fields not supplied.
+
+3) Deals → Block Requests
+- Purpose: Manage pending unit block requests.
+- Who:
+  - Property Consultant: sees only their own pending requests; can cancel own.
+  - Sales Manager: sees requests from consultants in their team; can cancel any pending.
+  - Financial Manager: sees all pending requests; can approve or reject inline.
+- Buttons per request row
+  - Approve / Reject (FM only): PATCH /api/blocks/:id/approve with action approve|reject.
+  - Cancel: Consultant (own only) or Sales Manager (any pending).
+- Outcomes
+  - Approve: unit becomes unavailable; block listed under “Current Blocks”.
+  - Reject/cancel: request removed from pending list.
+
+4) Inventory (Deals → Inventory)
+- Purpose: Browse and select units for a deal.
+- Who: Consultants/Sales Managers/Financial Managers.
+- Actions
+  - Filter/search: type ahead to find units.
+  - Select unit: navigates to Create Deal with unit prefilled.
+- Notes
+  - If inventory appears in Admin pages but not under Deals → Inventory, ensure pricing drafts are linked to a Unit Model and approved, and units are AVAILABLE.
+
+5) Dashboard (Deals → Dashboard)
+- Purpose: Overview of deals and proposals with key dates.
+- Who: All roles; sections vary by role.
+- Columns
+  - Offer Date, First Payment Date, decision status, totals.
+- Exports
+  - CSV/XLSX exports include Offer Date and First Payment Date.
+
+6) Admin Pages (various)
+- Purpose: Configuration, pricing, approvals, thresholds.
+- Who: financial_admin, financial_manager, contract_person, admin/superadmin.
+- Examples
+  - Standard Pricing: configure per-model nominal components; approve to propagate to units (base price, area).
+  - Standard Plan: configure annual rate, duration, frequency; becomes authoritative baseline.
+  - Acceptance Thresholds: update min/max percentages; evaluated server-side in plans.
+
+7) Documents
+- Client Offer (PDF)
+  - Who: Property Consultant
+  - Button: Export Client Offer (PDF) from Calculator page.
+  - Content: buyers list, schedule table, totals, optional unit summary box with breakdown and dual totals. Arabic/RTL supported; page footers show Page X of Y.
+- Reservation Form
+  - Who: Financial Admin
+  - Button: Generate Reservation Form (from Calculator page when role permitted).
+- Contract
+  - Who: Contract Person
+  - Button: Generate Contract (from Calculator page when role permitted).
+- Notes: Supported templates live under api/templates; placeholders use <<name>>. Numeric fields gain “*_words” automatically.
+
+8) Notifications
+- Financial Managers receive notifications for block requests, hold reminders/expiry events.
+- Consultants receive notifications for decisions on their block requests.
+
+Troubleshooting quick tips
+- If a button is disabled, check role permissions.
+- For CORS/API reachability in Codespaces, see the Troubleshooting section below.
+- If a unit block request returns an error, ensure the unit is AVAILABLE and that the blocks table exists (migrations run automatically on startup).
+
+---
+
 ## Roadmap (next sessions)
 
 - Polish Client Offer PDF (server-rendered):

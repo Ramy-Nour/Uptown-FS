@@ -132,12 +132,16 @@ Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track 
   - Client: App now passes blocked_until/available through unitInfo and computes unitBlocked to drive field-level locks.
 - [2025-10-23 10:25] Full Override Workflow (Consultant → SM → FM → TM) with notifications and audit:
   - Client: Consultant can request override when Evaluation is REJECT on Deal Detail; the panel shows the workflow stages and provides role-based actions for SM, FM, and TM (Approve/Reject) with optional notes.
+  - Client: Added a visual timeline (sample circles) with dimmed pending stages and orange line/circle for approved stages. Stages show timestamps when completed.
   - API: Notifications added for each decision stage:
     - SM Approve → notify consultant “override_sm_approved”; SM Reject → “override_sm_rejected”.
     - FM Approve → “override_fm_approved”; FM Reject → “override_fm_rejected”.
     - TM Approve → “override_approved”; TM Reject → “override_rejected” (includes role in message).
   - API: All actions write structured entries to deal_history with timestamps and user roles. Rejections clear needs_override and return the decision to consultant with audit trail.
   - Client: Approvals page remains focused on deal approvals; override is handled in Deal Detail with role-specific buttons.
+- [2025-10-23 10:35] Unit Block button activation policy:
+  - Client: Consultant can request a unit block only when the plan is accepted by the automated system (NPV evaluation PASS) or when an override is approved (Top Management approval present). The button is disabled otherwise with a tooltip explaining the condition.
+  - Client: Create Deal page also disables the “Request Unit Block” button until the plan evaluation is ACCEPT.
 - [2025-10-21 07:20] Standard Pricing approval — propagate to unit:
   - API: On approving a Standard Pricing record, the server now propagates the approved price (and area when valid) to the related unit (units.base_price and optionally units.area), and logs a 'propagate' entry in standard_pricing_history. This mirrors the unit-model pricing propagation pattern and ensures approved standards immediately reflect on the unit.
 - [2025-10-21 07:05] Top-Management approvals for Standard Pricing:

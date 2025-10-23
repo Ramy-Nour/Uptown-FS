@@ -368,7 +368,17 @@ export default function CreateDeal() {
                   const u = JSON.parse(localStorage.getItem('auth_user') || '{}')
                   // Only allow Consultants and Sales Managers to request a block
                   if (u?.role === 'property_consultant' || u?.role === 'sales_manager') {
-                    return <button onClick={requestUnitBlock} style={btnPrimary}>Request Unit Block</button>
+                    const canBlock = !!(genResult?.evaluation?.decision === 'ACCEPT')
+                    return (
+                      <button
+                        onClick={requestUnitBlock}
+                        style={{ ...btnPrimary, opacity: canBlock ? 1 : 0.6, cursor: canBlock ? 'pointer' : 'not-allowed' }}
+                        disabled={!canBlock}
+                        title={canBlock ? 'Request a temporary block on this unit' : 'Available after plan is ACCEPTED by the automated evaluation'}
+                      >
+                        Request Unit Block
+                      </button>
+                    )
                   }
                 } catch {}
                 return null

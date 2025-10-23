@@ -576,7 +576,42 @@ export default function DealDetail() {
               {evaluation.decision === 'REJECT' && (
                 <div style={{ marginTop: 12, padding: '10px 12px', border: '1px dashed #d1d9e6', borderRadius: 10 }}>
                   <strong>Override Workflow</strong>
-                  <div style={{ marginTop: 6, color: '#6b7280' }}>
+
+                  {/* Stage timeline: Request → SM → FM → TM */}
+                  {(() => {
+                    const stages = [
+                      { key: 'requested', label: 'Requested', ts: deal?.override_requested_at },
+                      { key: 'sm', label: 'Sales Manager', ts: deal?.manager_review_at },
+                      { key: 'fm', label: 'Financial Manager', ts: deal?.fm_review_at },
+                      { key: 'tm', label: 'Top Management', ts: deal?.override_approved_at }
+                    ]
+                    const circle = (active) => ({
+                      width: 16, height: 16, borderRadius: 9999,
+                      background: active ? '#A97E34' : '#e5e7eb',
+                      border: `2px solid ${active ? '#A97E34' : '#d1d5db'}`
+                    })
+                    const line = (active) => ({
+                      height: 2, flex: 1, background: active ? '#A97E34' : '#e5e7eb'
+                    })
+                    const activeIdx = stages.findIndex(s => !!s.ts)
+                    return (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+                        {stages.map((s, i) => (
+                          <React.Fragment key={s.key}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <div style={circle(i <= activeIdx)} />
+                              <div style={{ fontSize: 12, color: i <= activeIdx ? '#A97E34' : '#6b7280' }}>
+                                {s.label}{s.ts ? ` (${new Date(s.ts).toLocaleString()})` : ''}
+                              </div>
+                            </div>
+                            {i < stages.length - 1 && <div style={line(i < activeIdx)} />}
+                          </React.Fragment>
+                        ))}
+                      </div>
+                    )
+                  })()}
+
+                  <div style={{ marginTop: 8, color: '#6b7280' }}>
                     Request → Sales Manager review → Financial Manager review → Top Management decision
                   </div>
                   <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -850,7 +885,45 @@ export default function DealDetail() {
         )}
         <LoadingButton onClick={printSchedule}>Print Schedule</LoadingButton>
         {(role === 'property_consultant' && deal.status === 'approved') && (
-          <LoadingButton onClick={() => generateDocFromSaved('pricing_form')}>Print Offer (Pricing Form PDF)</LoadingButton>
+          <>
+            <LoadingButton onClick={() => generateDocFromSaved('pricing_form')}>Print Offer (Pricing Form PDF)</LoadingButton>
+            {/* Allow Request Unit Block only when plan accepted or override approved */}
+            {(() => {
+              const snap = deal?.details?.calculator
+              const acceptedBySystem = snap?.generatedPlan?.evaluation?.decision === 'ACCEPT'
+              const overrideApproved = !!deal?.override_approved_at
+              const canBlock = acceptedBySystem || overrideApproved
+              const unitId = Number(snap?.unitInfo?.unit_id) || 0
+              if (!unitId) return null
+              return (
+                <LoadingButton
+                  onClick={async () => {
+                    const durationStr = window.prompt('Block duration in days (default 7):', '7')
+                    if (durationStr === null) return
+                    const durationDays = Number(durationStr) || 7
+                    const reason = window.prompt('Reason for block (optional):', '') || ''
+                    try {
+                      const resp = await fetchWithAuth(`${API_URL}/api/blocks/request`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ unitId: unitId, durationDays, reason })
+                      })
+                      const data = await resp.json()
+                      if (!resp.ok) notifyError(data?.error?.message || 'Failed to request unit block')
+                      else notifySuccess('Block request submitted for approval.')
+                    } catch (err) {
+                      notifyError(err, 'Failed to request unit block')
+                    }
+                  }}
+                  disabled={!canBlock}
+                  style={{ opacity: canBlock ? 1 : 0.6 }}
+                  title={canBlock ? 'Request a block on this unit' : 'Available after plan is ACCEPTED or override is approved'}
+                >
+                  Request Unit Block
+                </LoadingButton>
+              )
+            })()}
+          </>
         )}
         {(role === 'financial_admin' && deal.status === 'approved') && (
           <>

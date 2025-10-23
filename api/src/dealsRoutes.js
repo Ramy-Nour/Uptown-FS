@@ -619,6 +619,7 @@ router.post('/:id/override-sm-approve', authMiddleware, async (req, res) => {
     }
     const q = await pool.query('SELECT * FROM deals WHERE id=$1', [id])
     if (q.rows.length === 0) return res.status(404).json({ error: { message: 'Deal not found' } })
+    const dealRow = q.rows[0]
 
     const upd = await pool.query(
       `UPDATE deals
@@ -637,6 +638,13 @@ router.post('/:id/override-sm-approve', authMiddleware, async (req, res) => {
     }
     await logHistory(id, req.user.id, 'override_sm_approved', JSON.stringify(note))
 
+    // Notify consultant that SM approved and FM review is next
+    try {
+      await emitNotification('override_sm_approved', dealRow.created_by, 'deals', id, 'Override approved by Sales Manager')
+    } catch (notifyErr) {
+      console.error('Emit notification error (override_sm_approved):', notifyErr)
+    }
+
     return res.json({ ok: true, deal: upd.rows[0] })
   } catch (e) {
     console.error('POST /api/deals/:id/override-sm-approve error', e)
@@ -654,6 +662,7 @@ router.post('/:id/override-sm-reject', authMiddleware, async (req, res) => {
     }
     const q = await pool.query('SELECT * FROM deals WHERE id=$1', [id])
     if (q.rows.length === 0) return res.status(404).json({ error: { message: 'Deal not found' } })
+    const dealRow = q.rows[0]
 
     const notes = typeof req.body?.notes === 'string' ? req.body.notes : null
 
@@ -675,6 +684,13 @@ router.post('/:id/override-sm-reject', authMiddleware, async (req, res) => {
       at: new Date().toISOString()
     }
     await logHistory(id, req.user.id, 'override_sm_rejected', JSON.stringify(note))
+
+    // Notify consultant of rejection
+    try {
+      await emitNotification('override_sm_rejected', dealRow.created_by, 'deals', id, 'Override rejected by Sales Manager')
+    } catch (notifyErr) {
+      console.error('Emit notification error (override_sm_rejected):', notifyErr)
+    }
 
     return res.json({ ok: true, deal: upd.rows[0] })
   } catch (e) {
@@ -723,6 +739,13 @@ router.post('/:id/override-fm-approve', authMiddleware, async (req, res) => {
     }
     await logHistory(id, req.user.id, 'override_fm_approved', JSON.stringify(note))
 
+    // Notify consultant that FM approved and TM review is next
+    try {
+      await emitNotification('override_fm_approved', deal.created_by, 'deals', id, 'Override approved by Financial Manager')
+    } catch (notifyErr) {
+      console.error('Emit notification error (override_fm_approved):', notifyErr)
+    }
+
     return res.json({ ok: true, deal: upd.rows[0] })
   } catch (e) {
     console.error('POST /api/deals/:id/override-fm-approve error', e)
@@ -740,6 +763,7 @@ router.post('/:id/override-fm-reject', authMiddleware, async (req, res) => {
     }
     const q = await pool.query('SELECT * FROM deals WHERE id=$1', [id])
     if (q.rows.length === 0) return res.status(404).json({ error: { message: 'Deal not found' } })
+    const dealRow = q.rows[0]
 
     const notes = typeof req.body?.notes === 'string' ? req.body.notes : null
 
@@ -761,6 +785,13 @@ router.post('/:id/override-fm-reject', authMiddleware, async (req, res) => {
       at: new Date().toISOString()
     }
     await logHistory(id, req.user.id, 'override_fm_rejected', JSON.stringify(note))
+
+    // Notify consultant of rejection
+    try {
+      await emitNotification('override_fm_rejected', dealRow.created_by, 'deals', id, 'Override rejected by Financial Manager')
+    } catch (notifyErr) {
+      console.error('Emit notification error (override_fm_rejected):', notifyErr)
+    }
 
     return res.json({ ok: true, deal: upd.rows[0] })
   } catch (e) {
@@ -804,6 +835,13 @@ router.post('/:id/override-approve', authMiddleware, validate(overrideApproveSch
     }
     await logHistory(id, req.user.id, 'override_approved', JSON.stringify(note))
 
+    // Notify consultant of final approval
+    try {
+      await emitNotification('override_approved', deal.created_by, 'deals', id, 'Override approved by Top Management')
+    } catch (notifyErr) {
+      console.error('Emit notification error (override_approved):', notifyErr)
+    }
+
     return res.json({ ok: true, deal: upd.rows[0] })
   } catch (e) {
     console.error('POST /api/deals/:id/override-approve error', e)
@@ -844,6 +882,13 @@ router.post('/:id/override-reject', authMiddleware, validate(overrideApproveSche
       at: new Date().toISOString()
     }
     await logHistory(id, req.user.id, 'override_rejected', JSON.stringify(note))
+
+    // Notify consultant of rejection (stage may be SM/FM/TM)
+    try {
+      await emitNotification('override_rejected', deal.created_by, 'deals', id, `Override rejected by ${role.replace('_', ' ')}`)
+    } catch (notifyErr) {
+      console.error('Emit notification error (override_rejected):', notifyErr)
+    }
 
     return res.json({ ok: true, deal: upd.rows[0] })
   } catch (e) {

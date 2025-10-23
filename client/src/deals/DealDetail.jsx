@@ -571,6 +571,155 @@ export default function DealDetail() {
                   </ul>
                 </div>
               </div>
+
+              {/* Override Workflow — visible when evaluation REJECT */}
+              {evaluation.decision === 'REJECT' && (
+                <div style={{ marginTop: 12, padding: '10px 12px', border: '1px dashed #d1d9e6', borderRadius: 10 }}>
+                  <strong>Override Workflow</strong>
+                  <div style={{ marginTop: 6, color: '#6b7280' }}>
+                    Request → Sales Manager review → Financial Manager review → Top Management decision
+                  </div>
+                  <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {(role === 'property_consultant' || role === 'admin' || role === 'superadmin') && (
+                      <LoadingButton
+                        onClick={async () => {
+                          const reason = window.prompt('Provide a reason for override request (optional):', '')
+                          try {
+                            const resp = await fetchWithAuth(`${API_URL}/api/deals/${id}/request-override`, {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ reason: reason || '' })
+                            })
+                            const data = await resp.json()
+                            if (!resp.ok) notifyError(data?.error?.message || 'Failed to request override')
+                            else { notifySuccess('Override requested. Waiting for Sales Manager review.'); await load() }
+                          } catch (err) {
+                            notifyError(err, 'Failed to request override')
+                          }
+                        }}
+                        variant="primary"
+                      >
+                        Request Override
+                      </LoadingButton>
+                    )}
+                    {(role === 'sales_manager' || role === 'admin' || role === 'superadmin') && (
+                      <>
+                        <LoadingButton
+                          onClick={async () => {
+                            const notes = window.prompt('Notes (optional):', '')
+                            try {
+                              const resp = await fetchWithAuth(`${API_URL}/api/deals/${id}/override-sm-approve`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ notes: notes || '' })
+                              })
+                              const data = await resp.json()
+                              if (!resp.ok) notifyError(data?.error?.message || 'Failed to approve override')
+                              else { notifySuccess('Override approved (SM). Forwarded to FM.'); await load() }
+                            } catch (err) {
+                              notifyError(err, 'Failed to approve override')
+                            }
+                          }}
+                        >
+                          SM Approve
+                        </LoadingButton>
+                        <LoadingButton
+                          onClick={() => setPromptRejectId(id)}
+                          style={{ marginLeft: 8 }}
+                        >
+                          SM Reject
+                        </LoadingButton>
+                      </>
+                    )}
+                    {(role === 'financial_manager' || role === 'admin' || role === 'superadmin') && (
+                      <>
+                        <LoadingButton
+                          onClick={async () => {
+                            const notes = window.prompt('Notes (optional):', '')
+                            try {
+                              const resp = await fetchWithAuth(`${API_URL}/api/deals/${id}/override-fm-approve`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ notes: notes || '' })
+                              })
+                              const data = await resp.json()
+                              if (!resp.ok) notifyError(data?.error?.message || 'Failed to approve override')
+                              else { notifySuccess('Override approved (FM). Forwarded to Top Management.'); await load() }
+                            } catch (err) {
+                              notifyError(err, 'Failed to approve override')
+                            }
+                          }}
+                        >
+                          FM Approve
+                        </LoadingButton>
+                        <LoadingButton
+                          onClick={async () => {
+                            const notes = window.prompt('Rejection reason (optional):', '')
+                            try {
+                              const resp = await fetchWithAuth(`${API_URL}/api/deals/${id}/override-fm-reject`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ notes: notes || '' })
+                              })
+                              const data = await resp.json()
+                              if (!resp.ok) notifyError(data?.error?.message || 'Failed to reject override')
+                              else { notifySuccess('Override rejected (FM).'); await load() }
+                            } catch (err) {
+                              notifyError(err, 'Failed to reject override')
+                            }
+                          }}
+                          style={{ marginLeft: 8 }}
+                        >
+                          FM Reject
+                        </LoadingButton>
+                      </>
+                    )}
+                    {(role === 'ceo' || role === 'chairman' || role === 'vice_chairman' || role === 'top_management' || role === 'admin' || role === 'superadmin') && (
+                      <>
+                        <LoadingButton
+                          onClick={async () => {
+                            const notes = window.prompt('Approval notes (optional):', '')
+                            try {
+                              const resp = await fetchWithAuth(`${API_URL}/api/deals/${id}/override-approve`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ notes: notes || '' })
+                              })
+                              const data = await resp.json()
+                              if (!resp.ok) notifyError(data?.error?.message || 'Failed to approve override')
+                              else { notifySuccess('Override approved (TM).'); await load() }
+                            } catch (err) {
+                              notifyError(err, 'Failed to approve override')
+                            }
+                          }}
+                        >
+                          TM Approve
+                        </LoadingButton>
+                        <LoadingButton
+                          onClick={async () => {
+                            const notes = window.prompt('Rejection reason (optional):', '')
+                            try {
+                              const resp = await fetchWithAuth(`${API_URL}/api/deals/${id}/override-reject`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ notes: notes || '' })
+                              })
+                              const data = await resp.json()
+                              if (!resp.ok) notifyError(data?.error?.message || 'Failed to reject override')
+                              else { notifySuccess('Override rejected (TM).'); await load() }
+                            } catch (err) {
+                              notifyError(err, 'Failed to reject override')
+                            }
+                          }}
+                          style={{ marginLeft: 8 }}
+                        >
+                          TM Reject
+                        </LoadingButton>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

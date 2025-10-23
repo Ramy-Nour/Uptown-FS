@@ -130,11 +130,14 @@ Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track 
   - Client: When a unit is blocked (approved), property_consultant cannot edit client identity fields (name, email, phone) and cannot edit Unit & Project Information. Consultants can still adjust the payment plan and other client fields (e.g., address).
   - Client: Financial Admin sees blocked units and can generate the Reservation Form using the data previously entered by the consultant (buyers, unit, and payment plan). FA cannot edit these fields directly; they should request edits from the consultant via workflow (future enhancement to add explicit “Request Edits” action).
   - Client: App now passes blocked_until/available through unitInfo and computes unitBlocked to drive field-level locks.
-- [2025-10-23 09:55] “Request Edits” workflow action:
-  - API: Added POST /api/deals/:id/request-edits (roles: financial_admin, financial_manager). Logs a 'request_edits' entry in deal_history with reason, fields, and comment, and notifies the deal creator.
-  - Client: Deal Detail adds a structured “Request Edits From Consultant” modal for Financial Admin on approved deals with checkboxes (Address, Payment Plan, Maintenance Deposit Date, Offer/First Payment Dates) plus an “Other” field and a free-hand Comment. Sends request to the new API route.
-  - Client: Deal Detail shows an “Edits Requested” banner on deals with outstanding edit requests and provides a “Mark Edits Addressed” action for consultants.
-  - API: Added POST /api/deals/:id/edits-addressed (roles: property_consultant, sales_manager) to log 'edits_addressed' in history. The banner is hidden once edits are marked addressed.
+- [2025-10-23 10:25] Full Override Workflow (Consultant → SM → FM → TM) with notifications and audit:
+  - Client: Consultant can request override when Evaluation is REJECT on Deal Detail; the panel shows the workflow stages and provides role-based actions for SM, FM, and TM (Approve/Reject) with optional notes.
+  - API: Notifications added for each decision stage:
+    - SM Approve → notify consultant “override_sm_approved”; SM Reject → “override_sm_rejected”.
+    - FM Approve → “override_fm_approved”; FM Reject → “override_fm_rejected”.
+    - TM Approve → “override_approved”; TM Reject → “override_rejected” (includes role in message).
+  - API: All actions write structured entries to deal_history with timestamps and user roles. Rejections clear needs_override and return the decision to consultant with audit trail.
+  - Client: Approvals page remains focused on deal approvals; override is handled in Deal Detail with role-specific buttons.
 - [2025-10-21 07:20] Standard Pricing approval — propagate to unit:
   - API: On approving a Standard Pricing record, the server now propagates the approved price (and area when valid) to the related unit (units.base_price and optionally units.area), and logs a 'propagate' entry in standard_pricing_history. This mirrors the unit-model pricing propagation pattern and ensures approved standards immediately reflect on the unit.
 - [2025-10-21 07:05] Top-Management approvals for Standard Pricing:

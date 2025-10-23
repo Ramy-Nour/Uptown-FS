@@ -226,9 +226,18 @@ Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track 
     - fetchLatestStandardPlan(API_URL)
     - calculateForUnit({ mode, unitId, inputs }, API_URL)
     - generatePlan(payload, API_URL)
-  - Next step (optional): wire App.jsx and TypeAndUnitPicker.jsx to use these services instead of direct fetchWithAuth calls.
+  - Wired TypeAndUnitPicker to use calculateForUnit service instead of direct fetchWithAuth for unit-based calculations.
   - Rollback guidance:
     - If any API code breaks, call fetchWithAuth directly as before, and remove the service import.
+
+- [2025-10-23 12:58] Frontend refactor — App.jsx document generation via helper:
+  - Extended client/src/lib/docExports.js with generateDocumentFile(documentType, body, API_URL) which wraps /api/generate-document and returns { blob, filename }.
+  - App.jsx now uses generateDocumentFile in the Reservation Form and Contract buttons:
+    - Builds document body with existing buildDocumentBody(documentType).
+    - Calls generateDocumentFile and triggers the download.
+  - Rollback guidance:
+    - If needed, remove the import and restore the original generateDocument(documentType) function from git history.
+    - Alternatively, call fetchWithAuth inline and parse Content-Disposition as previously done.
 - [2025-10-21 07:20] Standard Pricing approval — propagate to unit:
   - API: On approving a Standard Pricing record, the server now propagates the approved price (and area when valid) to the related unit (units.base_price and optionally units.area), and logs a 'propagate' entry in standard_pricing_history. This mirrors the unit-model pricing propagation pattern and ensures approved standards immediately reflect on the unit.
 - [2025-10-21 07:05] Top-Management approvals for Standard Pricing:

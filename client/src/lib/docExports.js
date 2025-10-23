@@ -178,3 +178,35 @@ export async function generateClientOfferPdf(body, API_URL, onProgress) {
     return { blob, filename }
   }
 }
+
+/**
+ * Generate a DOCX-based PDF via /api/generate-document using a template or documentType.
+ * Returns { blob, filename } to be downloaded by the caller.
+ */
+export async function generateDocumentFile(documentType, body, API_URL) {
+  const resp = await fetchWithAuth(`${API_URL}/api/generate-document`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  })
+  if (!resp.ok) {
+    let errMsg = 'Failed to generate document'
+    try {
+      const j = await resp.json()
+      errMsg = j?.error?.message || errMsg
+    } catch {}
+    throw new Error(errMsg)
+  }
+  const blob = await resp.blob()
+  const cd = resp.headers.get('Content-Disposition') || ''
+  const match = /filename\*=UTF-8''([^;]+)|filename=\"?([^\\";]+)\"?/i.exec(cd)
+  let filename = ''
+  if (match) {
+    filename = decodeURIComponent(match[1] || match[2] || '')
+  }
+  if (!filename) {
+    const ts = new Date().toISOString().replace(/[:.]/g, '-')
+    filename = `${documentType}_${ts}.pdf`
+  }
+  return { blob, filename }
+}

@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { fetchWithAuth } from './lib/apiClient.js'
 import BrandHeader from './lib/BrandHeader.jsx'
 import { t, isRTL, applyDocumentDirection } from './lib/i18n.js'
-import { exportScheduleCSV, exportScheduleXLSX, generateChecksSheetXLSX, generateClientOfferPdf } from './lib/docExports.js'
+import { exportScheduleCSV, exportScheduleXLSX, generateChecksSheetXLSX, generateClientOfferPdf, generateDocumentFile } from './lib/docExports_code.jnews</'
+
 import { useCalculatorSummaries } from './hooks/useCalculatorSummaries.js'
 import { useComparison } from './hooks/useComparison.js'
 import { loadSavedCalculatorState, usePersistCalculatorState } from './hooks/useCalculatorPersistence.js'
@@ -1314,7 +1315,24 @@ export default function App(props) {
               {authUser?.role === 'financial_admin' && (
                 <button
                   type="button"
-                  onClick={() => generateDocument('reservation_form')}
+                  onClick={async () => {
+                    try {
+                      setDocError('')
+                      setDocLoading(true)
+                      const { valid, body } = buildDocumentBody('reservation_form')
+                      if (!valid) { setDocError('Please fix validation errors before generating the document.'); setDocLoading(false); return }
+                      const { blob, filename } = await generateDocumentFile('reservation_form', body, API_URL)
+                      const url = URL.createObjectURL(blob)
+                      const a = document.createElement('a')
+                      a.href = url; a.download = filename
+                      document.body.appendChild(a); a.click(); document.body.removeChild(a)
+                      URL.revokeObjectURL(url)
+                    } catch (e) {
+                      setDocError(e.message || String(e))
+                    } finally {
+                      setDocLoading(false)
+                    }
+                  }}
                   style={styles.btnPrimary}
                 >
                   {t('generate_reservation_form', language)}
@@ -1324,7 +1342,24 @@ export default function App(props) {
               {authUser?.role === 'contract_person' && (
                 <button
                   type="button"
-                  onClick={() => generateDocument('contract')}
+                  onClick={async () => {
+                    try {
+                      setDocError('')
+                      setDocLoading(true)
+                      const { valid, body } = buildDocumentBody('contract')
+                      if (!valid) { setDocError('Please fix validation errors before generating the document.'); setDocLoading(false); return }
+                      const { blob, filename } = await generateDocumentFile('contract', body, API_URL)
+                      const url = URL.createObjectURL(blob)
+                      const a = document.createElement('a')
+                      a.href = url; a.download = filename
+                      document.body.appendChild(a); a.click(); document.body.removeChild(a)
+                      URL.revokeObjectURL(url)
+                    } catch (e) {
+                      setDocError(e.message || String(e))
+                    } finally {
+                      setDocLoading(false)
+                    }
+                  }}
                   style={styles.btnPrimary}
                 >
                   {t('generate_contract', language)}

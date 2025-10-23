@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { fetchWithAuth } from '../lib/apiClient.js'
+import { calculateForUnit } from '../services/calculatorApi.js'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
@@ -98,27 +99,22 @@ export default function TypeAndUnitPicker({
             }
             // Pull standard financials for this unit via approved standard (server will resolve from unitId)
             try {
-              const resp = await fetchWithAuth(`${API_URL}/api/calculate`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  mode,
-                  unitId: Number(u.id),
-                  inputs: {
-                    salesDiscountPercent: Number(inputs.salesDiscountPercent) || 0,
-                    dpType: inputs.dpType || 'percentage',
-                    downPaymentValue: Number(inputs.downPaymentValue) || 20,
-                    planDurationYears: Number(inputs.planDurationYears) || 5,
-                    installmentFrequency: inputs.installmentFrequency || 'monthly',
-                    additionalHandoverPayment: Number(inputs.additionalHandoverPayment) || 0,
-                    handoverYear: Number(inputs.handoverYear) || 2,
-                    splitFirstYearPayments: !!inputs.splitFirstYearPayments,
-                    firstYearPayments: [],
-                    subsequentYears: []
-                  }
-                })
-              })
-              await resp.json().catch(() => ({}))
+              await calculateForUnit({
+                mode,
+                unitId: Number(u.id),
+                inputs: {
+                  salesDiscountPercent: Number(inputs.salesDiscountPercent) || 0,
+                  dpType: inputs.dpType || 'percentage',
+                  downPaymentValue: Number(inputs.downPaymentValue) || 20,
+                  planDurationYears: Number(inputs.planDurationYears) || 5,
+                  installmentFrequency: inputs.installmentFrequency || 'monthly',
+                  additionalHandoverPayment: Number(inputs.additionalHandoverPayment) || 0,
+                  handoverYear: Number(inputs.handoverYear) || 2,
+                  splitFirstYearPayments: !!inputs.splitFirstYearPayments,
+                  firstYearPayments: [],
+                  subsequentYears: []
+                }
+              }, API_URL)
               setInputs(s => ({
                 ...s,
                 planDurationYears: s.planDurationYears || 5,

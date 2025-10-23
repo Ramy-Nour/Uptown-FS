@@ -733,10 +733,14 @@ router.post('/generate-plan', authMiddleware, validate(generatePlanSchema), asyn
       } catch {}
     }
     if (!Number.isFinite(maintMonth)) {
-      maintMonth = Number(effInputs.maintenancePaymentMonth)
-      if (!Number.isFinite(maintMonth) || maintMonth < 0) {
+      // Treat empty string or 0 as "not provided" and fallback to Handover (or 12 months)
+      const mRaw = effInputs.maintenancePaymentMonth
+      const mNum = (mRaw === '' || mRaw == null) ? NaN : Number(mRaw)
+      if (!Number.isFinite(mNum) || mNum <= 0) {
         const hy = Number(effInputs.handoverYear) || 0
         maintMonth = hy > 0 ? hy * 12 : 12
+      } else {
+        maintMonth = mNum
       }
     }
     if (maintAmt > 0) pushEntry('Maintenance Deposit', maintMonth, maintAmt, baseDate)

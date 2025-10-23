@@ -385,8 +385,8 @@ export default function App(props) {
 
   // moved payload builder to lib/payloadBuilders.js
   function buildPayload() {
-    return buildCalculationPayload({ mode, stdPlan, unitInfo, inputs, firstYearPayments, subsequentYears })_code
- new </}
+    return buildCalculationPayload({ mode, stdPlan, unitInfo, inputs, firstYearPayments, subsequentYears })
+  }
 
   // Client-side inline validation (mirrors server-side constraints)
   function validateForm() {
@@ -484,54 +484,7 @@ export default function App(props) {
     }
   }
 
-  // moved exports to lib/docExports.js = buildDocumentBody(documentType)
-    if (!valid) {
-      setDocError('Please fix validation errors before generating the document.')
-      return
-    }
-    setDocLoading(true)
-    setDocError('')
-    try {
-      const resp = await fetchWithAuth(`${API_URL}/api/generate-document`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      })
-      if (!resp.ok) {
-        // Try to parse JSON error
-        let errMsg = 'Failed to generate document'
-        try {
-          const j = await resp.json()
-          errMsg = j?.error?.message || errMsg
-        } catch {}
-        throw new Error(errMsg)
-      }
-      // Expect a file (pdf/docx). Get filename from Content-Disposition if available.
-      const blob = await resp.blob()
-      const cd = resp.headers.get('Content-Disposition') || ''
-      const match = /filename\*=UTF-8''([^;]+)|filename=\\"?([^\\\";]+)\\"?/i.exec(cd)
-      let filename = ''
-      if (match) {
-        filename = decodeURIComponent(match[1] || match[2] || '')
-      }
-      if (!filename) {
-        const ts = new Date().toISOString().replace(/[:.]/g, '-')
-        filename = `${documentType}_${ts}.pdf`
-      }
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = filename
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-    } catch (e) {
-      setDocError(e.message || String(e))
-    } finally {
-      setDocLoading(false)
-    }
-  }
+  // (removed legacy inline document generation block; replaced by generateDocumentFile helper usage)
 
   async function exportClientOfferPdf() {
     try {
@@ -597,123 +550,7 @@ export default function App(props) {
     }
   }
 
-  function exportScheduleXLSX() {
-    if (!genResult?.schedule?.length) return
-    const aoa = [
-      ['#', 'Month', 'Label', 'Amount', 'Written Amount'],
-      ...genResult.schedule.map((row, i) => {
-        const amt = Number(row.amount || 0)
-        const written = (language === 'ar')
-          ? numberToArabic(amt, 'جنيه مصري', 'قرش')
-          : (row.writtenAmount || '')
-        return [
-          i + 1,
-          row.month,
-          row.label,
-          amt.toFixed(2),
-          written
-        ]
-      })
-    ]
-    // Append dual totals
-    const totalIncl = Number(((genResult?.totals?.totalNominalIncludingMaintenance ?? genResult?.totals?.totalNominal)) || 0)
-    const totalExcl = Number(genResult?.totals?.totalNominalExcludingMaintenance ?? totalIncl)
-    aoa.push([])
-    aoa.push([
-      '', '', (language === 'ar' ? 'الإجمالي (بدون وديعة الصيانة)' : 'Total (excluding Maintenance Deposit)'),
-      totalExcl.toFixed(2),
-      ''
-    ])
-    aoa.push([
-      '', '', (language === 'ar' ? 'الإجمالي (شامل وديعة الصيانة)' : 'Total (including Maintenance Deposit)'),
-      totalIncl.toFixed(2),
-      ''
-    ])
-
-    const ws = XLSX.utils.aoa_to_sheet(aoa)
-    // Column widths for readability
-    ws['!cols'] = [{ wch: 6 }, { wch: 10 }, { wch: 28 }, { wch: 16 }, { wch: 50 }]
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Schedule')
-    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
-    const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    const ts = new Date().toISOString().replace(/[:.]/g, '-')
-    a.download = `payment_schedule_${ts}.xlsx`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-  }
-
-  // Generate Checks Sheet (formatted for check printing)
-  function generateChecksSheetXLSX() {
-    if (!genResult?.schedule?.length) return
-
-    const title = 'Checks Sheet'
-    const buyer = clientInfo.buyer_name || ''
-    const unit = unitInfo.unit_code || unitInfo.unit_number || ''
-    const curr = currency || ''
-
-    const headerRows = [
-      [title],
-      [`Buyer: ${buyer}     Unit: ${unit}     Currency: ${curr}`],
-      [], // spacer
-      ['#', 'Cheque No.', 'Date', 'Pay To', 'Amount', 'Amount in Words', 'Notes']
-    ]
-
-    const bodyRows = genResult.schedule.map((row, i) => {
-      const amount = Number(row.amount || 0)
-      const amountStr = amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-      return [
-        i + 1,       // #
-        '',          // Cheque No. (to be filled manually)
-        '',          // Date (to be filled manually)
-        buyer,       // Pay To
-        amountStr,   // Amount
-        row.writtenAmount || '', // Amount in Words
-        language === 'ar'
-          ? `${row.label} (شهر ${getArabicMonth(row.month)})`
-          : `${row.label} (Month ${row.month})` // Notes
-      ]
-    })
-
-    const aoa = [...headerRows, ...bodyRows]
-    const ws = XLSX.utils.aoa_to_sheet(aoa)
-
-    // Set column widths suitable for checks
-    ws['!cols'] = [
-      { wch: 5 },   // #
-      { wch: 14 },  // Cheque No.
-      { wch: 14 },  // Date
-      { wch: 28 },  // Pay To
-      { wch: 16 },  // Amount
-      { wch: 60 },  // Amount in Words
-      { wch: 30 },  // Notes
-    ]
-
-    // Merge title and metadata lines across all columns
-    ws['!merges'] = [
-      { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }, // A1:G1
-      { s: { r: 1, c: 0 }, e: { r: 1, c: 6 } }, // A2:G2
-    ]
-
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Checks')
-    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
-    const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    const ts = new Date().toISOString().replace(/[:.]/g, '-')
-    a.download = `checks_sheet_${ts}.xlsx`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-  }
+  // (removed inline exportScheduleXLSX and generateChecksSheetXLSX; using helpers from lib/docExports.js)
 
   // Computed summaries (from preview)
   const summaries = useCalculatorSummaries(preview)

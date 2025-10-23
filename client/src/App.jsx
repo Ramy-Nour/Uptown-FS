@@ -2,7 +2,10 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { fetchWithAuth } from './lib/apiClient.js'
 import BrandHeader from './lib/BrandHeader.jsx'
 import { t, isRTL, applyDocumentDirection } from './lib/i18n.js'
-import { exportScheduleCSV, exportScheduleXLSX, generateChecksSheetXLSX } from './lib/docExports.js'
+import { exportScheduleCSV, exportScheduleXLSX, generateChecksSheetXLSX, generateClientOfferPdf } from './lib/docExports.js'
+import { useCalculatorSummaries } from './hooks/useCalculatorSummaries.js'
+import { useComparison } from './hooks/useComparison.js'
+import { loadSavedCalculatorState, usePersistCalculatorState } from './hooks/useCalculatorPersistence.js'
 import EvaluationPanel from './components/calculator/EvaluationPanel.jsx'
 import PaymentSchedule from './components/calculator/PaymentSchedule.jsx'
 import ClientInfoForm from './components/calculator/ClientInfoFormMin.jsx'
@@ -334,25 +337,20 @@ export default function App(props) {
 
   // Load persisted state
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(LS_KEY)
-      if (raw) {
-        const saved = JSON.parse(raw)
-        if (saved) {
-          if (saved.mode) setMode(saved.mode)
-          if (saved.language) setLanguage(saved.language)
-          if (saved.currency) setCurrency(saved.currency)
-          if (saved.stdPlan) setStdPlan(saved.stdPlan)
-          if (saved.inputs) setInputs(saved.inputs)
-          if (Array.isArray(saved.firstYearPayments)) setFirstYearPayments(saved.firstYearPayments)
-          if (Array.isArray(saved.subsequentYears)) setSubsequentYears(saved.subsequentYears)
-          if (saved.clientInfo) setClientInfo(saved.clientInfo)
-          if (saved.unitInfo) setUnitInfo(saved.unitInfo)
-          if (saved.contractInfo) setContractInfo(saved.contractInfo)
-          if (saved.customNotes) setCustomNotes(saved.customNotes)
-        }
-      }
-    } catch {}
+    const saved = loadSavedCalculatorState(LS_KEY)
+    if (saved) {
+      if (saved.mode) setMode(saved.mode)
+      if (saved.language) setLanguage(saved.language)
+      if (saved.currency) setCurrency(saved.currency)
+      if (saved.stdPlan) setStdPlan(saved.stdPlan)
+      if (saved.inputs) setInputs(saved.inputs)
+      if (Array.isArray(saved.firstYearPayments)) setFirstYearPayments(saved.firstYearPayments)
+      if (Array.isArray(saved.subsequentYears)) setSubsequentYears(saved.subsequentYears)
+      if (saved.clientInfo) setClientInfo(saved.clientInfo)
+      if (saved.unitInfo) setUnitInfo(saved.unitInfo)
+      if (saved.contractInfo) setContractInfo(saved.contractInfo)
+      if (saved.customNotes) setCustomNotes(saved.customNotes)
+    }
   }, [])
 
   // Typeahead: search units on query change (debounced)
@@ -605,11 +603,10 @@ export default function App(props) {
     )
   }
 
-  // Persist on change
-  useEffect(() => {
-    const snapshot = { mode, language, currency, stdPlan, inputs, firstYearPayments, subsequentYears, clientInfo, unitInfo, contractInfo, customNotes, feeSchedule }
-    localStorage.setItem(LS_KEY, JSON.stringify(snapshot))
-  }, [mode, language, currency, stdPlan, inputs, firstYearPayments, subsequentYears, clientInfo, unitInfo, contractInfo, customNotes, feeSchedule])
+  // Persist on change (moved to hook)
+  const snapshot = useMemo(() => ({
+    mode, language, currency, stdPlan, inputs, firstYearPayments, subsequentYears, clientInfo, unitInfo, contractInfo, customNotes, feeSchedule
+  }), [mode, language, currency, stdPlan, inputs, firstYearPayments, subsequentYears, clientuts, firstYearPayments, subsequentYears, clientInfo, unitInfo, contractInfo, customNotes, feeSchedule])
 
   // Expose imperative APIs for embedding contexts
   useEffect(() => {
@@ -1111,123 +1108,10 @@ export default function App(props) {
   }
 
   // Computed summaries (from preview)
-  const summaries = useMemo(() => {
-    if (!preview) return null
-    const {
-      totalNominalPrice,
-      numEqualInstallments,
-      equalInstallmentAmount,
-      calculatedPV,
-      meta
-    } = preview
-    return {
-      totalNominalPrice,
-      numEqualInstallments,
-      equalInstallmentAmount,
-      calculatedPV,
-      effectiveStartYears: meta?.effectiveStartYears
-    }
-  }, [preview])
+  const summaries = useCalculatorSummaries(preview)
 
   // Comparison: Approved Standard PV vs Current Offer PV
-  const comparison = useMemo(() => {
-    const stdPV = Number(stdPlan.calculatedPV ?? 0)
-    const stdRate = Number(stdPlan.financialDiscountRate ?? 0)
-    const offerPV = Number((preview && preview.calculatedPV) ?? 0)
-    const discountPercent = Number(inputs.salesDiscountPercent ?? 0)
-    const deltaPV = offerPV - stdPV
-    const deltaPercentPV = stdPV ? (deltaPV / stdPV) * 100 : 0
-
-    // Payment structure metrics (percentages of total nominal)
-    const totalsNominal = Number(
-      (preview && preview.totalNominalPrice) ??
-      (genResult && genResult.totals && genResult.totals.totalNominal) ??
-      0
-    )
-
-    // First year sum (if split)
-    let firstYearNominal = 0
-    if (inputs.splitFirstYearPayments) {
-      for (const p of (firstYearPayments || [])) {
-        firstYearNominal += Number(p?.amount) || 0
-      }
-    } else {
-      // If not split, treat down payment as first-year component for percentage context.
-      // When DP is percentage, base it on the CURRENT OFFER total (preview/genResult) not the standard price.
-      const offerTotal = Number(
-        (preview && preview.totalNominalPrice) ??
-        (genResult && genResult.totals && genResult.totals.totalNominal) ??
-        0
-      ) || 0
-      const dpBase = offerTotal > 0 ? offerTotal : (Number(stdPlan.totalPrice) || 0)
-      const actualDP = inputs.dpType === 'percentage'
-        ? dpBase * ((Number(inputs.downPaymentValue) || 0) / 100)
-        : (Number(inputs.downPaymentValue) || 0)
-      firstYearNominal = actualDP
-    }
-
-    // Subsequent year 1 (Year 2 if split) — take first entry in subsequentYears
-    let secondYearNominal = 0
-    if (Array.isArray(subsequentYears) && subsequentYears.length > 0) {
-      secondYearNominal = Number(subsequentYears[0]?.totalNominal) || 0
-    }
-
-    const handoverNominal = Number(inputs.additionalHandoverPayment) || 0
-
-    const pct = (part, total) => {
-      const t = Number(total) || 0
-      const p = Number(part) || 0
-      if (!t || t <= 0) return 0
-      return (p / t) * 100
-    }
-
-    const firstYearPercent = pct(firstYearNominal, totalsNominal)
-    const secondYearPercent = pct(secondYearNominal, totalsNominal)
-    const handoverPercent = pct(handoverNominal, totalsNominal)
-
-    // Use centrally-loaded thresholds
-    const thresholds = thresholdsCfg || {}
-    const check = (value, min, max) => {
-      if (min == null && max == null) return null
-      if (min != null && Number(value) < Number(min)) return false
-      if (max != null && Number(value) > Number(max)) return false
-      return true
-    }
-
-    const pvPass = Number(offerPV || 0) >= Number(stdPV || 0)
-    const fyPass = check(firstYearPercent, thresholds.firstYearPercentMin, thresholds.firstYearPercentMax)
-    const syPass = check(secondYearPercent, thresholds.secondYearPercentMin, thresholds.secondYearPercentMax)
-    const hoPass = check(handoverPercent, thresholds.handoverPercentMin, thresholds.handoverPercentMax)
-
-    // Overall acceptability: PV must be >= standard AND all defined thresholds must pass
-    const overallAcceptable =
-      pvPass &&
-      (fyPass !== false) &&
-      (syPass !== false) &&
-      (hoPass !== false)
-
-    return {
-      stdPV,
-      stdRate,
-      offerPV,
-      discountPercent,
-      deltaPV,
-      deltaPercentPV,
-      totalsNominal,
-      firstYearNominal,
-      secondYearNominal,
-      handoverNominal,
-      firstYearPercent,
-      secondYearPercent,
-      handoverPercent,
-      thresholds,
-      firstYearPass: fyPass,
-      secondYearPass: syPass,
-      handoverPass: hoPass,
-      pvPass,
-      overallAcceptable
-    }
-  }, [stdPlan, preview, inputs, firstYearPayments, subsequentYears, genResult, thresholdsCfg])
+  const comparison = useComparison({ stdPlan, preview, inputs, firstYearPayments, subsequentYears, genResult, thresholdsCfg })
 
   // --- Handlers for dynamic arrays ---
   function addFirstYearPayment() {

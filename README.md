@@ -209,6 +209,26 @@ Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track 
   - Rollback guidance:
     - If needed, remove generateClientOfferPdf from docExports.js and reinsert the original exportClientOfferPdf function into App.jsx from git history.
     - Comment out the import in App.jsx and call the inline function; once stable, remove duplicates.
+
+- [2025-10-23 12:45] Frontend refactor — App.jsx modularization (step 4: hooks + persistence):
+  - Added client/src/hooks/useCalculatorSummaries.js and replaced the in-file useMemo with useCalculatorSummaries(preview).
+  - Added client/src/hooks/useComparison.js and replaced the in-file useMemo with useComparison({ stdPlan, preview, inputs, firstYearPayments, subsequentYears, genResult, thresholdsCfg }).
+  - Added client/src/hooks/useCalculatorPersistence.js:
+    - loadSavedCalculatorState(LS_KEY) used to hydrate the calculator state on mount.
+    - usePersistCalculatorState(LS_KEY, snapshot) used to persist state changes (snapshot built via useMemo).
+  - App.jsx now imports and uses these hooks, reducing in-file logic and improving readability.
+  - Rollback guidance:
+    - If needed, delete the new hooks and restore the original useMemo blocks and localStorage effects from git history.
+    - Temporarily reintroduce the inline logic while keeping imports commented out to test, then remove duplicates when stable.
+
+- [2025-10-23 12:46] Frontend refactor — services layer (calculator API):
+  - Added client/src/services/calculatorApi.js with:
+    - fetchLatestStandardPlan(API_URL)
+    - calculateForUnit({ mode, unitId, inputs }, API_URL)
+    - generatePlan(payload, API_URL)
+  - Next step (optional): wire App.jsx and TypeAndUnitPicker.jsx to use these services instead of direct fetchWithAuth calls.
+  - Rollback guidance:
+    - If any API code breaks, call fetchWithAuth directly as before, and remove the service import.
 - [2025-10-21 07:20] Standard Pricing approval — propagate to unit:
   - API: On approving a Standard Pricing record, the server now propagates the approved price (and area when valid) to the related unit (units.base_price and optionally units.area), and logs a 'propagate' entry in standard_pricing_history. This mirrors the unit-model pricing propagation pattern and ensures approved standards immediately reflect on the unit.
 - [2025-10-21 07:05] Top-Management approvals for Standard Pricing:

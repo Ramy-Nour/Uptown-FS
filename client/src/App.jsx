@@ -2,7 +2,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { fetchWithAuth } from './lib/apiClient.js'
 import BrandHeader from './lib/BrandHeader.jsx'
 import { t, isRTL, applyDocumentDirection } from './lib/i18n.js'
-import { exportScheduleCSV, exportScheduleXLSX, generateChecksSheetXLSX, generateClientOfferPdf, generateDocumentFile } from './lib/docExports_code.jnews</'
+import { exportScheduleCSV, exportScheduleXLSX, generateChecksSheetXLSX, generateClientOfferPdf, generateDocumentFile } from './lib/docExports.js'
+import { buildDocumentBody } from './lib/buildDocumentBody_code.jnews</'
+.jnews</'
 
 import { useCalculatorSummaries } from './hooks/useCalculatorSummaries.js'
 import { useComparison } from './hooks/useComparison.js'
@@ -16,6 +18,7 @@ import InputsForm from './components/calculator/InputsForm.jsx'
 import LoadingButton from './components/LoadingButton.jsx'
 import DiscountHint from './components/DiscountHint.jsx'
 import TypeAndUnitPicker from './components/TypeAndUnitPicker.jsx'
+import { fetchLatestStandardPlan, generatePlan } from './services/calculatorApi.js'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 const LS_KEY = 'uptown_calc_form_state_v2'
@@ -386,21 +389,17 @@ export default function App(props) {
     let mounted = true
     ;(async () => {
       try {
-        const resp = await fetchWithAuth(`${API_URL}/api/standard-plan/latest`)
-        const data = await resp.json()
-        if (!mounted || !resp.ok) return
-        const sp = data?.standardPlan
-        if (sp) {
-          setStdPlan(s => ({
-            ...s,
-            financialDiscountRate: Number(sp.std_financial_rate_percent) || s.financialDiscountRate
-          }))
-          setInputs(s => ({
-            ...s,
-            planDurationYears: s.planDurationYears || Number(sp.plan_duration_years) || 5,
-            installmentFrequency: s.installmentFrequency || sp.installment_frequency || 'monthly'
-          }))
-        }
+        const sp = await fetchLatestStandardPlan(API_URL)
+        if (!mounted || !sp) return
+        setStdPlan(s => ({
+          ...s,
+          financialDiscountRate: Number(sp.std_financial_rate_percent) || s.financialDiscountRate
+        }))
+        setInputs(s => ({
+          ...s,
+          planDurationYears: s.planDurationYears || Number(sp.plan_duration_years) || 5,
+          installmentFrequency: s.installment_frequency || 'monthly'
+        }))
       } catch {}
     })()
     return () => { mounted = false }
@@ -860,15 +859,7 @@ export default function App(props) {
           garagePaymentMonth: Number(feeSchedule.garagePaymentMonth) || 0
         }
       }
-      const resp = await fetchWithAuth(`${API_URL}/api/generate-plan`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      })
-      const data = await resp.json()
-      if (!resp.ok) {
-        throw new Error(data?.error?.message || 'Request failed')
-      }
+      const data = await generatePlan(body, API_URL)
       setGenResult(data)
     } catch (e) {
       setGenError(e.message || String(e))
@@ -1319,8 +1310,16 @@ export default function App(props) {
                     try {
                       setDocError('')
                       setDocLoading(true)
-                      const { valid, body } = buildDocumentBody('reservation_form')
+                      const { valid, payload } = validateForm()
                       if (!valid) { setDocError('Please fix validation errors before generating the document.'); setDocLoading(false); return }
+                      const docPart = buildDocumentBody('reservation_form', { language, currency, clientInfo, unitInfo, stdPlan, genResult, inputs })
+                      const body = {
+                        documentType: 'reservation_form',
+                        language,
+                        currency,
+                        ...payload,
+                        ...docPart
+                      }
                       const { blob, filename } = await generateDocumentFile('reservation_form', body, API_URL)
                       const url = URL.createObjectURL(blob)
                       const a = document.createElement('a')
@@ -1346,8 +1345,16 @@ export default function App(props) {
                     try {
                       setDocError('')
                       setDocLoading(true)
-                      const { valid, body } = buildDocumentBody('contract')
+                      const { valid, payload } = validateForm()
                       if (!valid) { setDocError('Please fix validation errors before generating the document.'); setDocLoading(false); return }
+                      const docPart = buildDocumentBody('contract', { language, currency, clientInfo, unitInfo, stdPlan, genResult, inputs })
+                      const body = {
+                        documentType: 'contract',
+                        language,
+                        currency,
+                        ...payload,
+                        ...docPart
+                      }
                       const { blob, filename } = await generateDocumentFile('contract', body, API_URL)
                       const url = URL.createObjectURL(blob)
                       const a = document.createElement('a')

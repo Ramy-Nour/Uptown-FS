@@ -238,6 +238,17 @@ Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track 
   - Rollback guidance:
     - If needed, remove the import and restore the original generateDocument(documentType) function from git history.
     - Alternatively, call fetchWithAuth inline and parse Content-Disposition as previously done.
+
+- [2025-10-23 13:08] Frontend refactor — App.jsx modularization (step 5: buildDocumentBody util + service wiring):
+  - Added client/src/lib/buildDocumentBody.js and replaced inline builder in App.jsx:
+    - buildDocumentBody(documentType, { language, currency, clientInfo, unitInfo, stdPlan, genResult, inputs }) returns { buyers, data } for the document.
+    - App.jsx now validates via validateForm(), builds payload, and merges docPart into the request body before calling generateDocumentFile.
+  - Wired App.jsx to services:
+    - Standard Plan fetch now uses fetchLatestStandardPlan(API_URL) from client/src/services/calculatorApi.js.
+    - Plan generation now uses generatePlan(payload, API_URL) instead of direct fetchWithAuth.
+  - Rollback guidance:
+    - If needed, delete client/src/lib/buildDocumentBody.js and restore the original buildDocumentBody function in App.jsx from git history.
+    - Revert service imports and switch back to fetchWithAuth calls for /api/standard-plan/latest and /api/generate-plan.
 - [2025-10-21 07:20] Standard Pricing approval — propagate to unit:
   - API: On approving a Standard Pricing record, the server now propagates the approved price (and area when valid) to the related unit (units.base_price and optionally units.area), and logs a 'propagate' entry in standard_pricing_history. This mirrors the unit-model pricing propagation pattern and ensures approved standards immediately reflect on the unit.
 - [2025-10-21 07:05] Top-Management approvals for Standard Pricing:

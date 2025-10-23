@@ -90,9 +90,10 @@ const styles = {
   },
   table: { width: '100%', borderCollapse: 'collapse' },
   th: { textAlign: 'left', padding: 12, borderBottom: '1px solid #ead9bd', fontSize: 13, color: '#5b4630', background: '#f6efe3' },
-  td: { padding: 12, borderBottom: '1px solid '#f2e8d6', fontSize: 14 },
+  td: { padding: 12, borderBottom: '1px solid #f2e8d6', fontSize: 14 },
   tFootCell: { padding: 12, fontWeight: 700, background: '#fbfaf7' },
-  error: { color: '#e11d48' }
+  error: { color: '#e11d48' },
+  arInline: { fontWeight: 600, color: '#5b4630' }
 }
 
 export default styles

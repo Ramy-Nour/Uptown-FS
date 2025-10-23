@@ -298,6 +298,16 @@ Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track 
   - Rollback guidance:
     - If needed, remove the hook/component imports and paste back the original inline useEffect and custom notes JSX from git history.
     - Ensure state bindings (customNotes/setCustomNotes and thresholdsCfg) are restored when rolling back.
+
+- [2025-10-23 14:05] Frontend cleanup — App.jsx fixes and styles polish:
+  - Removed inline duplicate TypeAndUnitPicker definition from App.jsx (the component already exists in client/src/components/TypeAndUnitPicker.jsx).
+  - Restored a small buildPayload() wrapper in App.jsx that delegates to buildCalculationPayload(...) to maintain compatibility with InputsForm prop usage.
+  - Fixed acceptance thresholds hook usage after refactor (useAcceptanceThresholds now correctly assigned to thresholdsCfg).
+  - Styles: corrected a syntax error in client/src/styles/calculatorStyles.js (td.borderBottom had mismatched quotes) and added styles.arInline used by CustomNotesSection.
+  - Rollback guidance:
+    - If needed, reinsert the inline TypeAndUnitPicker block from git history and remove the component import.
+    - If InputsForm requires a different payload shape, adjust buildPayload() accordingly or revert to the original inline builder.
+    - If styling regressions occur, revert calculatorStyles.js to its prior version from git history.
 - [2025-10-21 07:20] Standard Pricing approval — propagate to unit:
   - API: On approving a Standard Pricing record, the server now propagates the approved price (and area when valid) to the related unit (units.base_price and optionally units.area), and logs a 'propagate' entry in standard_pricing_history. This mirrors the unit-model pricing propagation pattern and ensures approved standards immediately reflect on the unit.
 - [2025-10-21 07:05] Top-Management approvals for Standard Pricing:

@@ -171,6 +171,17 @@ Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track 
   - Added client/src/components/ReservationFormModal.jsx and wired it in DealDetail.jsx.
   - The modal handles: date picker, preliminary payment validation, currency override, language toggle (English/Arabic).
   - DealDetail now uses the component and calls the server endpoint to generate the PDF.
+
+- [2025-10-23 11:55] Backend refactor — notifications endpoints modularized:
+  - Created api/src/notificationsRoutes.js and mounted at /api/notifications:
+    - GET /api/notifications
+    - GET /api/notifications/unread-count
+    - PATCH /api/notifications/:id/read
+    - PATCH /api/notifications/mark-all-read
+  - Removed the old inline notifications endpoints from app.js and replaced with the module mount.
+  - Rollback guidance:
+    - If needed, re-enable the inline endpoints from git history and comment out app.use('/api/notifications', notificationsRoutes).
+    - Alternatively, keep the mount and copy routes back into app.js temporarily to test; then remove duplicates once stable.
 - [2025-10-21 07:20] Standard Pricing approval — propagate to unit:
   - API: On approving a Standard Pricing record, the server now propagates the approved price (and area when valid) to the related unit (units.base_price and optionally units.area), and logs a 'propagate' entry in standard_pricing_history. This mirrors the unit-model pricing propagation pattern and ensures approved standards immediately reflect on the unit.
 - [2025-10-21 07:05] Top-Management approvals for Standard Pricing:

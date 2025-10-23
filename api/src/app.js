@@ -34,6 +34,7 @@ import standardPlanRoutes from './standardPlanRoutes.js' // NEW
 import calculateRoutes from './calculateRoutes.js' // NEW
 import documentsRoutes from './documentsRoutes.js'
 import planningRoutes from './planningRoutes.js'
+import notificationsRoutes from './notificationsRoutes.js'
 
 // NEW IMPORTS - Add these
 import roleManagementRoutes from './roleManagement.js'

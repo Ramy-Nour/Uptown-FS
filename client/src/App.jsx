@@ -3,8 +3,9 @@ import { fetchWithAuth } from './lib/apiClient.js'
 import BrandHeader from './lib/BrandHeader.jsx'
 import { t, isRTL, applyDocumentDirection } from './lib/i18n.js'
 import { exportScheduleCSV, exportScheduleXLSX, generateChecksSheetXLSX, generateClientOfferPdf, generateDocumentFile } from './lib/docExports.js'
-import { buildDocumentBody } from './lib/buildDocumentBody_code.jnews</'
-.jnews</'
+import { buildDocumentBody } from './lib/buildDocumentBody.js'
+import { buildCalculationPayload } from './lib/payloadBuilders.js'
+import { validateCalculatorInputs } from './lib/validateCalculatorInputs.js'
 
 import { useCalculatorSummaries } from './hooks/useCalculatorSummaries.js'
 import { useComparison } from './hooks/useComparison.js'
@@ -19,6 +20,7 @@ import LoadingButton from './components/LoadingButton.jsx'
 import DiscountHint from './components/DiscountHint.jsx'
 import TypeAndUnitPicker from './components/TypeAndUnitPicker.jsx'
 import { fetchLatestStandardPlan, generatePlan } from './services/calculatorApi.js'
+import { fetchHealth, fetchMessage } from './services/systemApi.js'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 const LS_KEY = 'uptown_calc_form_state_v2'
@@ -606,6 +608,10 @@ export default function App(props) {
   // Persist on change (moved to hook)
   const snapshot = useMemo(() => ({
     mode, language, currency, stdPlan, inputs, firstYearPayments, subsequentYears, clientInfo, unitInfo, contractInfo, customNotes, feeSchedule
+  }), [mode, language, currency, stdPlan, inputs, firstYearPayments, subsequentYears, clientInfo, unitInfo, contractInfo, customNotes, feeSchedule])
+  usePersistCalculatorState(LS_KEY, snapshot)rsist on change (moved to hook)
+  const snapshot = useMemo(() => ({
+    mode, language, currency, stdPlan, inputs, firstYearPayments, subsequentYears, clientInfo, unitInfo, contractInfo, customNotes, feeSchedule
   }), [mode, language, currency, stdPlan, inputs, firstYearPayments, subsequentYears, clientuts, firstYearPayments, subsequentYears, clientInfo, unitInfo, contractInfo, customNotes, feeSchedule])
 
   // Expose imperative APIs for embedding contexts
@@ -624,7 +630,7 @@ export default function App(props) {
         contractInfo,
         customNotes
       }
-      const payload = buildPayload()
+      const payload = buildCalculationPayload({ mode, stdPlan, unitInfo, inputs, firstYearPayments, subsequentYears })
       const out = {
         ...base,
         payload,
@@ -691,8 +697,8 @@ export default function App(props) {
     async function load() {
       try {
         const [healthRes, msgRes] = await Promise.all([
-          fetchWithAuth(`${API_URL}/api/health`).then(r => r.json()),
-          fetchWithAuth(`${API_URL}/api/message`).then(r => r.json())
+          fetchHealth(API_URL),
+          fetchMessage(API_URL)
         ])
         setHealth(healthRes)
         setMessage(msgRes.message)
@@ -703,37 +709,7 @@ export default function App(props) {
     load()
   }, [])
 
-  function buildPayload() {
-    return {
-      mode,
-      // Pass unitId so server can load approved standard for this unit for comparison
-      unitId: Number(unitInfo.unit_id) || undefined,
-      stdPlan: {
-        totalPrice: Number(stdPlan.totalPrice),
-        financialDiscountRate: Number(stdPlan.financialDiscountRate),
-        calculatedPV: Number(stdPlan.calculatedPV)
-      },
-      inputs: {
-        salesDiscountPercent: Number(inputs.salesDiscountPercent),
-        dpType: inputs.dpType,
-        downPaymentValue: Number(inputs.downPaymentValue),
-        planDurationYears: Number(inputs.planDurationYears),
-        installmentFrequency: inputs.installmentFrequency,
-        additionalHandoverPayment: Number(inputs.additionalHandoverPayment),
-        handoverYear: Number(inputs.handoverYear),
-        splitFirstYearPayments: !!inputs.splitFirstYearPayments,
-        firstYearPayments: firstYearPayments.map(p => ({
-          amount: Number(p.amount) || 0,
-          month: Number(p.month) || 0,
-          type: p.type || 'regular'
-        })),
-        subsequentYears: subsequentYears.map(y => ({
-          totalNominal: Number(y.totalNominal) || 0,
-          frequency: y.frequency || 'annually'
-        }))
-      }
-    }
-  }
+  // moved payload builder to lib/payloadBuilders.js
 
   // Client-side inline validation (mirrors server-side constraints)
   function validateForm() {
@@ -743,12 +719,9 @@ export default function App(props) {
     if (!inputs.offerDate) {
       setInputs(s => ({ ...s, offerDate: todayStr }))
     } else {
-      // Basic YYYY-MM-DD validation
       const d = new Date(inputs.offerDate)
       const iso = isFinite(d.getTime()) ? new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10) : ''
-      if (!iso) {
-        e.offerDate = 'Invalid date'
-      }
+      if (!iso) e.offerDate = 'Invalid date'
     }
     // Ensure firstPaymentDate is present; default to offerDate or today
     const baseDefault = inputs.offerDate || todayStr
@@ -757,48 +730,14 @@ export default function App(props) {
     } else {
       const d = new Date(inputs.firstPaymentDate)
       const iso = isFinite(d.getTime()) ? new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10) : ''
-      if (!iso) {
-        e.firstPaymentDate = 'Invalid date'
-      }
+      if (!iso) e.firstPaymentDate = 'Invalid date'
     }
 
-    const payload = buildPayload()
-    const { stdPlan: sp, inputs: inp } = payload
-
-    if (!isFinite(sp.totalPrice) || sp.totalPrice < 0) e.std_totalPrice = 'Must be non-negative number'
-    if (!isFinite(sp.financialDiscountRate)) e.std_financialDiscountRate = 'Must be a number'
-    if (!isFinite(sp.calculatedPV) || sp.calculatedPV < 0) e.std_calculatedPV = 'Must be non-negative number'
-
-    if (!['monthly', 'quarterly', 'bi-annually', 'annually'].includes(inp.installmentFrequency)) {
-      e.installmentFrequency = 'Invalid'
-    }
-    if (!Number.isInteger(inp.planDurationYears) || inp.planDurationYears <= 0) {
-      e.planDurationYears = 'Must be integer >= 1'
-    }
-    if (inp.dpType && !['amount', 'percentage'].includes(inp.dpType)) e.dpType = 'Invalid'
-    if (!isFinite(inp.downPaymentValue) || inp.downPaymentValue < 0) e.downPaymentValue = 'Must be non-negative number'
-    if (!Number.isInteger(inp.handoverYear) || inp.handoverYear <= 0) e.handoverYear = 'Must be integer >= 1'
-    if (!isFinite(inp.additionalHandoverPayment) || inp.additionalHandoverPayment < 0) e.additionalHandoverPayment = 'Must be non-negative number'
-
-    if (inp.splitFirstYearPayments) {
-      firstYearPayments.forEach((p, idx) => {
-        const keyAmt = `fyp_amount_${idx}`
-        const keyMonth = `fyp_month_${idx}`
-        if (!isFinite(Number(p.amount)) || Number(p.amount) < 0) e[keyAmt] = '>= 0'
-        const m = Number(p.month)
-        if (!Number.isInteger(m) || m < 1 || m > 12) e[keyMonth] = '1..12'
-      })
-    }
-
-    subsequentYears.forEach((y, idx) => {
-      const keyTot = `sub_total_${idx}`
-      const keyFreq = `sub_freq_${idx}`
-      if (!isFinite(Number(y.totalNominal)) || Number(y.totalNominal) < 0) e[keyTot] = '>= 0'
-      if (!['monthly', 'quarterly', 'bi-annually', 'annually'].includes(y.frequency)) e[keyFreq] = 'Invalid'
-    })
-
-    setErrors(e)
-    return { valid: Object.keys(e).length === 0, payload }
+    const payload = buildCalculationPayload({ mode, stdPlan, unitInfo, inputs, firstYearPayments, subsequentYears })
+    const vErrors = validateCalculatorInputs(payload, inputs, firstYearPayments, subsequentYears)
+    const allErrors = { ...e, ...vErrors }
+    setErrors(allErrors)
+    return { valid: Object.keys(allErrors).length === 0, payload }
   }
 
   

@@ -249,6 +249,22 @@ Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track 
   - Rollback guidance:
     - If needed, delete client/src/lib/buildDocumentBody.js and restore the original buildDocumentBody function in App.jsx from git history.
     - Revert service imports and switch back to fetchWithAuth calls for /api/standard-plan/latest and /api/generate-plan.
+
+- [2025-10-23 13:20] Frontend refactor — App.jsx modularization (step 6: payload + validation + system services):
+  - Added client/src/lib/payloadBuilders.js:
+    - buildCalculationPayload({ mode, stdPlan, unitInfo, inputs, firstYearPayments, subsequentYears }) centralized payload assembly.
+  - Added client/src/lib/validateCalculatorInputs.js:
+    - validateCalculatorInputs(payload, inputs, firstYearPayments, subsequentYears) returns an errors object, replacing inline validation checks.
+  - App.jsx updates:
+    - Replaced inline buildPayload with buildCalculationPayload import.
+    - Replaced validation logic with validateCalculatorInputs while keeping date defaulting locally (offerDate/firstPaymentDate).
+    - Fixed import for buildDocumentBody (typo corrected).
+    - Snapshot exposure now uses buildCalculationPayload for consistency.
+  - Added client/src/services/systemApi.js and wired App.jsx:
+    - fetchHealth(API_URL), fetchMessage(API_URL) used for initial health/message loading.
+  - Rollback guidance:
+    - If needed, delete payloadBuilders.js and validateCalculatorInputs.js and reinsert the original buildPayload and validateForm from git history.
+    - Revert systemApi imports and switch back to fetchWithAuth directly for /api/health and /api/message.
 - [2025-10-21 07:20] Standard Pricing approval — propagate to unit:
   - API: On approving a Standard Pricing record, the server now propagates the approved price (and area when valid) to the related unit (units.base_price and optionally units.area), and logs a 'propagate' entry in standard_pricing_history. This mirrors the unit-model pricing propagation pattern and ensures approved standards immediately reflect on the unit.
 - [2025-10-21 07:05] Top-Management approvals for Standard Pricing:

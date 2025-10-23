@@ -580,10 +580,10 @@ export default function DealDetail() {
                   {/* Stage timeline: Request → SM → FM → TM */}
                   {(() => {
                     const stages = [
-                      { key: 'requested', label: 'Requested', ts: deal?.override_requested_at },
-                      { key: 'sm', label: 'Sales Manager', ts: deal?.manager_review_at },
-                      { key: 'fm', label: 'Financial Manager', ts: deal?.fm_review_at },
-                      { key: 'tm', label: 'Top Management', ts: deal?.override_approved_at }
+                      { key: 'requested', label: 'Requested', ts: deal?.override_requested_at, title: deal?.override_requested_at ? `Requested at ${new Date(deal.override_requested_at).toLocaleString()}` : 'Requested (pending)' },
+                      { key: 'sm', label: 'Sales Manager', ts: deal?.manager_review_at, title: deal?.manager_review_at ? `SM reviewed at ${new Date(deal.manager_review_at).toLocaleString()} by ${deal?.manager_review_by_name || ''} (${deal?.manager_review_by_role || ''})` : 'Sales Manager (pending)' },
+                      { key: 'fm', label: 'Financial Manager', ts: deal?.fm_review_at, title: deal?.fm_review_at ? `FM reviewed at ${new Date(deal.fm_review_at).toLocaleString()} by ${deal?.fm_review_by_name || ''} (${deal?.fm_review_by_role || ''})` : 'Financial Manager (pending)' },
+                      { key: 'tm', label: 'Top Management', ts: deal?.override_approved_at, title: deal?.override_approved_at ? `TM decision at ${new Date(deal.override_approved_at).toLocaleString()} by ${deal?.override_approved_by_name || ''} (${deal?.override_approved_by_role || ''})` : 'Top Management (pending)' }
                     ]
                     const circle = (active) => ({
                       width: 16, height: 16, borderRadius: 9999,
@@ -599,8 +599,8 @@ export default function DealDetail() {
                         {stages.map((s, i) => (
                           <React.Fragment key={s.key}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <div style={circle(i <= activeIdx)} />
-                              <div style={{ fontSize: 12, color: i <= activeIdx ? '#A97E34' : '#6b7280' }}>
+                              <div style={circle(i <= activeIdx)} title={s.title} />
+                              <div style={{ fontSize: 12, color: i <= activeIdx ? '#A97E34' : '#6b7280' }} title={s.title}>
                                 {s.label}{s.ts ? ` (${new Date(s.ts).toLocaleString()})` : ''}
                               </div>
                             </div>

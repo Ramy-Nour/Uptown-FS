@@ -26,7 +26,8 @@ export default function DealDetail() {
   const role = user?.role || 'user'
 
   // Reservation Form modal state
-  const [reservationModalOpen, setReservationModalOpen] = useState(fa_code  const [reservationForm, setReservationForm] = useState({
+  const [reservationModalOpen, setReservationModalOpen] = useState(false)
+  const [reservationForm, setReservationForm] = useState({
     date: new Date().toISOString().slice(0,10),
     preliminary: '',
     currency: '',

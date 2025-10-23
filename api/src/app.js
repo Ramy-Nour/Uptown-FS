@@ -24,6 +24,7 @@ import commissionPoliciesRoutes from './commissionPoliciesRoutes.js'
 import commissionsRoutes from './commissionsRoutes.js'
 import ocrRoutes from './ocrRoutes.js'
 import { getCleanupMetrics } from './runtimeMetrics.js'
+import { runSchemaCheck } from './utils/schemaCheck.js'
 import workflowRoutes from './workflowRoutes.js'
 import inventoryRoutes from './inventoryRoutes.js'
 import reportsRoutes from './reportsRoutes.js'
@@ -182,6 +183,10 @@ app.use('/api/blocks', blockManagementRoutes)
 app.use('/api/customers', customerRoutes)
 app.use('/api/dashboard', dashboardRoutes)
 
+// Start background schedulers (moved to jobs/scheduler.js)
+import { startSchedulers } from './jobs/scheduler.js'
+startSchedulers()
+
 // Notification endpoints
 app.get('/api/notifications', authLimiter, authMiddleware, async (req, res) => {
   try {
@@ -229,67 +234,9 @@ app.patch('/api/notifications/mark-all-read', authLimiter, authMiddleware, async
   }
 })
 
-// Simple in-process notifier for hold reminders (runs hourly)
-setInterval(async () => {
-  try {
-    const now = new Date()
-    const r = await pool.query(
-      `SELECT h.id, h.unit_id, h.next_notify_at
-       FROM holds h
-       WHERE h.status='approved' AND (h.next_notify_at IS NULL OR h.next_notify_at <= now())`
-    )
-    for (const row of r.rows) {
-      await pool.query(
-        `INSERT INTO notifications (user_id, type, ref_table, ref_id, message)
-         SELECT u.id, 'hold_reminder', 'holds', $1, 'Hold requires decision: unblock or extend.'
-         FROM users u WHERE u.role='financial_manager' AND u.active=TRUE`,
-        [row.id]
-      )
-      await pool.query(
-        `UPDATE holds SET next_notify_at = now() + INTERVAL '7 days' WHERE id=$1`,
-        [row.id]
-      )
-    }
-  } catch (e) {
-    console.error('Hold reminder scheduler error:', e)
-  }
-}, 60 * 60 * 1000)
+// Hold reminder scheduler moved to jobs/scheduler.js (startSchedulers)
 
-// Daily job to expire holds past expires_at (runs every 24 hours)
-setInterval(async () => {
-  try {
-    // Expire approved holds whose expires_at is in the past, and unit not reserved
-    const rows = await pool.query(
-      `SELECT h.id, h.unit_id, h.payment_plan_id
-       FROM holds h
-       WHERE h.status='approved' AND h.expires_at IS NOT NULL AND h.expires_at < now()`
-    )
-    for (const h of rows.rows) {
-      // Check reservation exists
-      let reserved = false
-      if (h.payment_plan_id) {
-        const rf = await pool.query(
-          `SELECT 1 FROM reservation_forms WHERE payment_plan_id=$1 AND status='approved' LIMIT 1`,
-          [h.payment_plan_id]
-        )
-        reserved = rf.rows.length > 0
-      }
-      if (!reserved) {
-        await pool.query('UPDATE holds SET status=\'expired\', updated_at=now() WHERE id=$1', [h.id])
-        await pool.query('UPDATE units SET available=TRUE, updated_at=now() WHERE id=$1', [h.unit_id])
-        // notify FMs
-        await pool.query(
-          `INSERT INTO notifications (user_id, type, ref_table, ref_id, message)
-           SELECT u.id, 'hold_expired', 'holds', $1, 'Hold expired automatically and unit was unblocked.'
-           FROM users u WHERE u.role='financial_manager' AND u.active=TRUE`,
-          [h.id]
-        )
-      }
-    }
-  } catch (e) {
-    console.error('Daily hold expiry job error:', e)
-  }
-}, 24 * 60 * 60 * 1000)
+// Daily hold expiry scheduler moved to jobs/scheduler.js (startSchedulers)
 
 // Health endpoint (now protected by middleware below)
 app.get('/api/health', (req, res) => {
@@ -310,42 +257,7 @@ app.get('/api/metrics', (req, res) => {
   })
 })
 
-// --- Schema capability check utilities ---
-async function getMissingColumns(table, columns) {
-  try {
-    const q = `
-      SELECT column_name
-      FROM information_schema.columns
-      WHERE table_name = $1
-    `
-    const r = await pool.query(q, [table])
-    const present = new Set(r.rows.map(row => row.column_name))
-    return columns.filter(c => !present.has(c))
-  } catch (e) {
-    return columns // if introspection failed, assume all missing
-  }
-}
-
-async function runSchemaCheck() {
-  const required = {
-    units: [
-      'id','code','unit_type','unit_type_id','base_price','currency','model_id','area','orientation',
-      'has_garden','garden_area','has_roof','roof_area','maintenance_price','garage_price','garden_price',
-      'roof_price','storage_price','available','unit_status'
-    ],
-    unit_types: ['id','name'],
-    unit_models: [
-      'id','model_name','model_code','area','orientation','has_garden','garden_area','has_roof','roof_area',
-      'garage_area','garage_standard_code'
-    ]
-  }
-  const missing = {}
-  for (const [table, cols] of Object.entries(required)) {
-    const miss = await getMissingColumns(table, cols)
-    if (miss.length) missing[table] = miss
-  }
-  return missing
-}
+// --- Schema capability check utilities moved to utils/schemaCheck.js ---
 
 // Endpoint to report schema readiness (restricted to admin and superadmin)
 app.get('/api/schema-check', requireRole(['admin','superadmin']), async (req, res) => {

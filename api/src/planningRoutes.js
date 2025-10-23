@@ -123,7 +123,7 @@ router.post('/calculate', authMiddleware, validate(calculateSchema), async (req,
       let priceRow = null
       if (standardPricingId) {
         const r = await pool.query(
-          `SELECT price, std_financial_rate_percent, plan_duration_years, installment_frequency
+          `SELECT price, std_financial_rate_percent, plan_duration_years, installment_frequency, calculated_pv
            FROM standard_pricing
            WHERE status='approved' AND id=$1
            ORDER BY id DESC
@@ -133,7 +133,7 @@ router.post('/calculate', authMiddleware, validate(calculateSchema), async (req,
         priceRow = r.rows[0] || null
       } else if (unitId) {
         const r = await pool.query(
-          `SELECT p.price, p.maintenance_price, p.garage_price, p.garden_price, p.roof_price, p.storage_price
+          `SELECT p.price, p.maintenance_price, p.garage_price, p.garden_price, p.roof_price, p.storage_price, p.calculated_pv
            FROM units u
            JOIN unit_model_pricing p ON p.model_id = u.model_id
            WHERE u.id=$1 AND p.status='approved'
@@ -235,8 +235,12 @@ router.post('/calculate', authMiddleware, validate(calculateSchema), async (req,
           firstYearPayments: [],
           subsequentYears: []
         }
-        const stdPvResult = calculateByMode(CalculationModes.EvaluateCustomPrice, { totalPrice, financialDiscountRate: rowRate, calculatedPV: 0 }, stdInputsForPv)
-        const stdPVComputed = Number(stdPvResult?.calculatedPV) || 0
+        // Prefer FM-stored PV if present to maintain consistency with approved pricing
+        let stdPVComputed = priceRow && priceRow.calculated_pv != null ? Number(priceRow.calculated_pv) : NaN
+        if (!Number.isFinite(stdPVComputed) || stdPVComputed <= 0) {
+          const stdPvResult = calculateByMode(CalculationModes.EvaluateCustomPrice, { totalPrice, financialDiscountRate: rowRate, calculatedPV: 0 }, stdInputsForPv)
+          stdPVComputed = Number(stdPvResult?.calculatedPV) || 0
+        }
         computedPVEqualsTotalNominal = stdPVComputed === totalPrice
 
         effectiveStdPlan = {
@@ -547,12 +551,16 @@ router.post('/generate-plan', authMiddleware, validate(generatePlanSchema), asyn
           firstYearPayments: [],
           subsequentYears: []
         }
-        const stdPvResult = calculateByMode(
-          CalculationModes.EvaluateCustomPrice,
-          { totalPrice, financialDiscountRate: rowRate, calculatedPV: 0 },
-          stdInputsForPv
-        )
-        const stdPVComputed = Number(stdPvResult?.calculatedPV) || 0
+        // Prefer FM-stored PV if present to maintain consistency with approved pricing
+        let stdPVComputed = (row && row.calculated_pv != null) ? Number(row.calculated_pv) : NaN
+        if (!Number.isFinite(stdPVComputed) || stdPVComputed <= 0) {
+          const stdPvResult = calculateByMode(
+            CalculationModes.EvaluateCustomPrice,
+            { totalPrice, financialDiscountRate: rowRate, calculatedPV: 0 },
+            stdInputsForPv
+          )
+          stdPVComputed = Number(stdPvResult?.calculatedPV) || 0
+        }
         computedPVEqualsTotalNominal = stdPVComputed === totalPrice
 
         effectiveStdPlan = {

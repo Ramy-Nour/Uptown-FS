@@ -137,18 +137,6 @@ async function getActivePolicyLimitPercent() {
 }
 
 // moved: Reservation Form PDF endpoint is now in documentsRoutes.js (mounted at /api/documents/reservation-form)
-  }
-
-  if (Array.isArray(inputs.subsequentYears)) {
-    inputs.subsequentYears.forEach((y, idx) => {
-      const total = Number(y?.totalNominal)
-      if (!isFinite(total) || total < 0) errors.push({ field: `subsequentYears[${idx}].totalNominal`, message: 'Must be non-negative number' })
-      if (!allowedFrequencies.has(y?.frequency)) errors.push({ field: `subsequentYears[${idx}].frequency`, message: 'Invalid frequency' })
-    })
-  }
-
-  return errors
-}
 
 /* moved: POST /api/calculate is now in planningRoutes.js (mounted at /api/calculate) */
 

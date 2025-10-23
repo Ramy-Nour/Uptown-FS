@@ -893,4 +893,32 @@ router.post('/:id/request-edits', authMiddleware, validate(editRequestSchema), a
   }
 })
 
+/**
+ * Mark edits addressed (Consultant or Sales Manager).
+ * Logs 'edits_addressed' to history with optional notes.
+ */
+router.post('/:id/edits-addressed', authMiddleware, validate(editsAddressedSchema), async (req, res) => {
+  try {
+    const id = Number(req.params.id)
+    const role = req.user.role
+    if (!['property_consultant', 'sales_manager', 'admin', 'superadmin'].includes(role)) {
+      return res.status(403).json({ error: { message: 'Property Consultant or Sales Manager role required' } })
+    }
+    const q = await pool.query('SELECT id FROM deals WHERE id=$1', [id])
+    if (q.rows.length === 0) return res.status(404).json({ error: { message: 'Deal not found' } })
+    const notes = typeof req.body?.notes === 'string' ? req.body.notes : null
+    const note = {
+      event: 'edits_addressed',
+      by: { id: req.user.id, role },
+      notes,
+      at: new Date().toISOString()
+    }
+    await logHistory(id, req.user.id, 'edits_addressed', JSON.stringify(note))
+    return res.json({ ok: true })
+  } catch (e) {
+    console.error('POST /api/deals/:id/edits-addressed error', e)
+    return res.status(500).json({ error: { message: 'Internal error' } })
+  }
+})
+
 export default router

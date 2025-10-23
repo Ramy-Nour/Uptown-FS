@@ -24,6 +24,17 @@ export default function DealDetail() {
   const user = JSON.parse(localStorage.getItem('auth_user') || '{}')
   const role = user?.role || 'user'
 
+  // Edit request modal state
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editFields, setEditFields] = useState({
+    address: false,
+    payment_plan: false,
+    maintenance_date: false,
+    offer_dates: false,
+    other: ''
+  })
+  const [editReason, setEditReason] = useState('')
+
   async function load() {
     try {
       setError('')
@@ -581,6 +592,53 @@ export default function DealDetail() {
         </div>
       )}
 
+      {/* Outstanding edit request banner */}
+      {(() => {
+        // Find last request_edits and last edits_addressed in history
+        const lastReqIdx = [...history].reverse().findIndex(h => h.action === 'request_edits')
+        const lastAddrIdx = [...history].reverse().findIndex(h => h.action === 'edits_addressed')
+        const outstanding = lastReqIdx !== -1 && (lastAddrIdx === -1 || lastAddrIdx > lastReqIdx)
+        if (!outstanding) return null
+        const isConsultant = role === 'property_consultant' || role === 'sales_manager'
+        const bannerStyle = {
+          border: '1px solid #f59e0b', background: '#fffbeb', color: '#92400e',
+          padding: '10px 12px', borderRadius: 10, marginBottom: 12
+        }
+        return (
+          <div style={bannerStyle}>
+            <div style={{ fontWeight: 700, marginBottom: 4 }}>Edits Requested</div>
+            <div>Financial team has requested edits to this deal. Please review and update the allowed fields (payment plan, address, etc.). Identity and unit data remain locked.</div>
+            {isConsultant && (
+              <div style={{ marginTop: 8 }}>
+                <LoadingButton
+                  onClick={async () => {
+                    const notes = window.prompt('Optional note to confirm edits addressed:', '')
+                    try {
+                      const resp = await fetchWithAuth(`${API_URL}/api/deals/${id}/edits-addressed`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ notes: notes || '' })
+                      })
+                      const data = await resp.json().catch(() => null)
+                      if (!resp.ok) {
+                        notifyError(data?.error?.message || 'Failed to mark edits addressed')
+                      } else {
+                        notifySuccess('Marked edits addressed.')
+                        await load()
+                      }
+                    } catch (err) {
+                      notifyError(err, 'Failed to mark edits addressed')
+                    }
+                  }}
+                >
+                  Mark Edits Addressed
+                </LoadingButton>
+              </div>
+            )}
+          </div>
+        )
+      })()}
+
       {/* Actions — restrict printing offer until approved */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
         {canEdit && !editCalc && <LoadingButton onClick={() => setEditCalc(true)}>Edit in Calculator</LoadingButton>}
@@ -648,29 +706,7 @@ export default function DealDetail() {
         {(role === 'financial_admin' && deal.status === 'approved') && (
           <>
             <LoadingButton onClick={() => generateDocFromSaved('reservation_form')}>Generate Reservation Form (PDF)</LoadingButton>
-            <LoadingButton
-              onClick={async () => {
-                const reason = window.prompt('Describe the edits you need from the consultant (optional):', '')
-                const fieldsStr = window.prompt('Which fields need edits? (comma-separated keys, optional)', 'address, payment_plan')
-                const fields = (fieldsStr || '').split(',').map(s => s.trim()).filter(Boolean)
-                try {
-                  const resp = await fetchWithAuth(`${API_URL}/api/deals/${id}/request-edits`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ reason: reason || '', fields })
-                  })
-                  const data = await resp.json().catch(() => null)
-                  if (!resp.ok) {
-                    notifyError(data?.error?.message || 'Failed to request edits')
-                  } else {
-                    notifySuccess('Edit request sent to consultant.')
-                    await load()
-                  }
-                } catch (err) {
-                  notifyError(err, 'Failed to request edits')
-                }
-              }}
-            >
+            <LoadingButton onClick={() => setShowEditModal(true)}>
               Request Edits From Consultant
             </LoadingButton>
           </>
@@ -776,6 +812,84 @@ export default function DealDetail() {
           </tbody>
         </table>
       </div>
+    {/* Edit Request Modal */}
+      {showEditModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: '#fff', borderRadius: 12, padding: 16, width: 520, maxWidth: '90vw', boxShadow: '0 8px 24px rgba(0,0,0,0.12)' }}>
+            <h3 style={{ marginTop: 0 }}>Request Edits From Consultant</h3>
+            <p style={{ color: '#6b7280', marginTop: 4 }}>Select the fields that need correction and optionally add a comment. Identity and unit data are locked after block approval.</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <input type="checkbox" checked={editFields.address} onChange={e => setEditFields(s => ({ ...s, address: e.target.checked }))} />
+                Address
+              </label>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <input type="checkbox" checked={editFields.payment_plan} onChange={e => setEditFields(s => ({ ...s, payment_plan: e.target.checked }))} />
+                Payment Plan
+              </label>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <input type="checkbox" checked={editFields.maintenance_date} onChange={e => setEditFields(s => ({ ...s, maintenance_date: e.target.checked }))} />
+                Maintenance Deposit Date
+              </label>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <input type="checkbox" checked={editFields.offer_dates} onChange={e => setEditFields(s => ({ ...s, offer_dates: e.target.checked }))} />
+                Offer/First Payment Dates
+              </label>
+            </div>
+            <div style={{ marginTop: 10 }}>
+              <label style={{ display: 'block', fontWeight: 600, fontSize: 13, color: '#374151', marginBottom: 4 }}>Other (specify)</label>
+              <input
+                type="text"
+                value={editFields.other}
+                onChange={e => setEditFields(s => ({ ...s, other: e.target.value }))}
+                style={{ padding: 10, borderRadius: 10, border: '1px solid #d1d9e6', width: '100%' }}
+                placeholder="e.g., POA clause text or custom note"
+              />
+            </div>
+            <div style={{ marginTop: 10 }}>
+              <label style={{ display: 'block', fontWeight: 600, fontSize: 13, color: '#374151', marginBottom: 4 }}>Comment</label>
+              <textarea
+                value={editReason}
+                onChange={e => setEditReason(e.target.value)}
+                style={{ padding: 10, borderRadius: 10, border: '1px solid #d1d9e6', width: '100%', minHeight: 80 }}
+                placeholder="Describe what needs to be changed"
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
+              <LoadingButton onClick={() => { setShowEditModal(false); setEditFields({ address: false, payment_plan: false, maintenance_date: false, offer_dates: false, other: '' }); setEditReason('') }}>Cancel</LoadingButton>
+              <LoadingButton
+                variant="primary"
+                onClick={async () => {
+                  const fields = ['address','payment_plan','maintenance_date','offer_dates'].filter(k => editFields[k])
+                  if (editFields.other && editFields.other.trim()) fields.push(editFields.other.trim())
+                  try {
+                    const resp = await fetchWithAuth(`${API_URL}/api/deals/${id}/request-edits`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ reason: editReason || '', fields, comment: editReason || '' })
+                    })
+                    const data = await resp.json().catch(() => null)
+                    if (!resp.ok) {
+                      notifyError(data?.error?.message || 'Failed to request edits')
+                    } else {
+                      notifySuccess('Edit request sent to consultant.')
+                      setShowEditModal(false)
+                      setEditFields({ address: false, payment_plan: false, maintenance_date: false, offer_dates: false, other: '' })
+                      setEditReason('')
+                      await load()
+                    }
+                  } catch (err) {
+                    notifyError(err, 'Failed to request edits')
+                  }
+                }}
+              >
+                Send Request
+              </LoadingButton>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }

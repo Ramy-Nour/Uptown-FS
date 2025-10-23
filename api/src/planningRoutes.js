@@ -655,7 +655,7 @@ router.post('/generate-plan', authMiddleware, validate(generatePlanSchema), asyn
     const result = calculateByMode(mode, effectiveStdPlan, effInputs)
 
     const policyLimit = await getActivePolicyLimitPercent()
-    const npvTolerancePercent = 70
+    const npvTolerancePercent = 98
     const toleranceValue = (Number(effectiveStdPlan.totalPrice) || 0) * (npvTolerancePercent / 100)
     const npvWarning = (Number(result.calculatedPV) || 0) < toleranceValue
 
@@ -769,7 +769,7 @@ router.post('/generate-plan', authMiddleware, validate(generatePlanSchema), asyn
     const annualRate = Number(effectiveStdPlan.financialDiscountRate) || 0
     const standardPV = Number(effectiveStdPlan.calculatedPV) || 0
     const proposedPV = Number(result.calculatedPV) || 0
-    const pvTolerancePercent = 70
+    const pvTolerancePercent = 98
     const EPS = 1e-2
     const pvPass = proposedPV + EPS >= (standardPV * (pvTolerancePercent / 100))
     const pvDifference = standardPV - proposedPV

@@ -69,6 +69,9 @@ app.use('/api/deals', dealsRoutes)
 app.use('/api/units', unitsRoutes)
 app.use('/api/inventory', inventoryRoutes)
 app.use('/api/standard-plan', standardPlanRoutes)
+app.use('/api/pricing', pricingRoutes) // Unit model pricing (FM/TM)
+app.use('/api/workflow', workflowRoutes) // Queues, approvals, teams
+app.use('/api/config', configRoutes) // System configs (acceptance thresholds)
 app.use('/api', planningRoutes) // /calculate, /generate-plan
 app.use('/api/notifications', notificationsRoutes)
 app.use('/api/blocks', blockManagementRoutes) // Unit block workflow

@@ -240,19 +240,7 @@ export default function App(props) {
   const docProgressTimer = useRef(null)
 
   // Centrally-managed acceptance thresholds (TM-approved, loaded from API) via hook
-  const thresholdsCfg = useAcceptanceThreshol_codeuseEffect(() => {
-    let mounted = true
-    ;(async () => {
-      try {
-        const resp = await fetchWithAuth(`${API_URL}/api/config/acceptance-thresholds`)
-        const data = await resp.json()
-        if (mounted && resp.ok) {
-          setThresholdsCfg(data.thresholds || {})
-        }
-      } catch {}
-    })()
-    return () => { mounted = false }
-  }, [])
+  const thresholdsCfg = useAcceptanceThresholds()
 
   // Load persisted state
   useEffect(() => {

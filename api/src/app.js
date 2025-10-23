@@ -32,6 +32,7 @@ import configRoutes from './configRoutes.js'
 import standardPlanRoutes from './standardPlanRoutes.js' // NEW
 import calculateRoutes from './calculateRoutes.js' // NEW
 import documentsRoutes from './documentsRoutes.js'
+import planningRoutes from './planningRoutes.js'
 
 // NEW IMPORTS - Add these
 import roleManagementRoutes from './roleManagement.js'
@@ -172,6 +173,7 @@ app.use('/api/standard-plan', standardPlanRoutes) // NEW
 // Mount the legacy acceptance evaluator under a non-conflicting path.
 // The main calculation endpoints are defined below as POST /api/calculate and /api/generate-plan.
 app.use('/api/legacy', calculateRoutes) // legacy engine (POST /api/legacy/calculate)
+app.use('/api', planningRoutes) // main calculation and plan generation endpoints
 
 // NEW ROUTE REGISTRATIONS - Add these
 app.use('/api/roles', roleManagementRoutes)

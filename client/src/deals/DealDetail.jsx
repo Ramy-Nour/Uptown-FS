@@ -925,9 +925,20 @@ export default function DealDetail() {
             })()}
           </>
         )}
-        {(role === 'financial_admin' && deal.status === 'approved') && (
+        {(role === 'financial_admin') && (
           <>
-            <LoadingButton onClick={() => generateDocFromSaved('reservation_form')}>Generate Reservation Form (PDF)</LoadingButton>
+            {(() => {
+              const fmApproved = !!deal?.fm_review_at
+              return (
+                <LoadingButton
+                  onClick={() => generateDocFromSaved('reservation_form')}
+                  disabled={!fmApproved}
+                  title={fmApproved ? 'Generate Reservation Form (after FM approval)' : 'Available after Financial Manager approval'}
+                >
+                  Generate Reservation Form (PDF)
+                </LoadingButton>
+              )
+            })()}
             <LoadingButton onClick={() => setShowEditModal(true)}>
               Request Edits From Consultant
             </LoadingButton>

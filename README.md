@@ -142,6 +142,9 @@ Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track 
 - [2025-10-23 10:35] Unit Block button activation policy:
   - Client: Consultant can request a unit block only when the plan is accepted by the automated system (NPV evaluation PASS) or when an override is approved (Top Management approval present). The button is disabled otherwise with a tooltip explaining the condition.
   - Client: Create Deal page also disables the “Request Unit Block” button until the plan evaluation is ACCEPT.
+- [2025-10-23 10:50] Reservation Form — gated by Financial Manager approval:
+  - Client: Financial Admin can generate Reservation Form (PDF) on Deal Detail only after FM approval (fm_review_at present). Button is disabled otherwise with a tooltip.
+  - API/Docs: Existing /api/generate-document supports reservation_form via DOCX template conversion; server-rendered HTML/PDF can be added next if you want to use the pasted Tailwind template.
 - [2025-10-21 07:20] Standard Pricing approval — propagate to unit:
   - API: On approving a Standard Pricing record, the server now propagates the approved price (and area when valid) to the related unit (units.base_price and optionally units.area), and logs a 'propagate' entry in standard_pricing_history. This mirrors the unit-model pricing propagation pattern and ensures approved standards immediately reflect on the unit.
 - [2025-10-21 07:05] Top-Management approvals for Standard Pricing:

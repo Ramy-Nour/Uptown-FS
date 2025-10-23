@@ -1,7 +1,7 @@
 import express from 'express'
 import { pool } from './db.js'
 import { authMiddleware, adminOnly } from './authRoutes.js'
-import { validate, dealCreateSchema, dealUpdateSchema, dealSubmitSchema, dealRejectSchema, overrideRequestSchema, overrideApproveSchema } from './validation.js'
+import { validate, dealCreateSchema, dealUpdateSchema, dealSubmitSchema, dealRejectSchema, overrideRequestSchema, overrideApproveSchema, editRequestSchema } from './validation.js'
 import { emitNotification } from './socket.js'
 
 const router = express.Router()
@@ -848,6 +848,47 @@ router.post('/:id/override-reject', authMiddleware, validate(overrideApproveSche
     return res.json({ ok: true, deal: upd.rows[0] })
   } catch (e) {
     console.error('POST /api/deals/:id/override-reject error', e)
+    return res.status(500).json({ error: { message: 'Internal error' } })
+  }
+})
+
+/**
+ * Request edits from the consultant (Financial Admin or Financial Manager).
+ * Does not modify the deal; logs the request in deal_history and notifies the deal creator.
+ */
+router.post('/:id/request-edits', authMiddleware, validate(editRequestSchema), async (req, res) => {
+  try {
+    const id = Number(req.params.id)
+    const role = req.user.role
+    if (!['financial_admin', 'financial_manager', 'admin', 'superadmin'].includes(role)) {
+      return res.status(403).json({ error: { message: 'Financial Admin or Financial Manager role required' } })
+    }
+    const q = await pool.query('SELECT id, created_by FROM deals WHERE id=$1', [id])
+    if (q.rows.length === 0) return res.status(404).json({ error: { message: 'Deal not found' } })
+    const dealRow = q.rows[0]
+
+    const fields = Array.isArray(req.body?.fields) ? req.body.fields : []
+    const reason = typeof req.body?.reason === 'string' ? req.body.reason : null
+
+    const note = {
+      event: 'request_edits',
+      by: { id: req.user.id, role },
+      fields,
+      reason,
+      at: new Date().toISOString()
+    }
+    await logHistory(id, req.user.id, 'request_edits', JSON.stringify(note))
+
+    // Notify the consultant (deal creator)
+    try {
+      await emitNotification('request_edits', dealRow.created_by, 'deals', id, reason || 'Edits requested by Financial Admin')
+    } catch (notifyErr) {
+      console.error('Emit notification error (request edits):', notifyErr)
+    }
+
+    return res.json({ ok: true })
+  } catch (e) {
+    console.error('POST /api/deals/:id/request-edits error', e)
     return res.status(500).json({ error: { message: 'Internal error' } })
   }
 })

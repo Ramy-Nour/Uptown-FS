@@ -646,7 +646,34 @@ export default function DealDetail() {
           <LoadingButton onClick={() => generateDocFromSaved('pricing_form')}>Print Offer (Pricing Form PDF)</LoadingButton>
         )}
         {(role === 'financial_admin' && deal.status === 'approved') && (
-          <LoadingButton onClick={() => generateDocFromSaved('reservation_form')}>Generate Reservation Form (PDF)</LoadingButton>
+          <>
+            <LoadingButton onClick={() => generateDocFromSaved('reservation_form')}>Generate Reservation Form (PDF)</LoadingButton>
+            <LoadingButton
+              onClick={async () => {
+                const reason = window.prompt('Describe the edits you need from the consultant (optional):', '')
+                const fieldsStr = window.prompt('Which fields need edits? (comma-separated keys, optional)', 'address, payment_plan')
+                const fields = (fieldsStr || '').split(',').map(s => s.trim()).filter(Boolean)
+                try {
+                  const resp = await fetchWithAuth(`${API_URL}/api/deals/${id}/request-edits`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ reason: reason || '', fields })
+                  })
+                  const data = await resp.json().catch(() => null)
+                  if (!resp.ok) {
+                    notifyError(data?.error?.message || 'Failed to request edits')
+                  } else {
+                    notifySuccess('Edit request sent to consultant.')
+                    await load()
+                  }
+                } catch (err) {
+                  notifyError(err, 'Failed to request edits')
+                }
+              }}
+            >
+              Request Edits From Consultant
+            </LoadingButton>
+          </>
         )}
         {(role === 'contract_person' && deal.status === 'approved') && (
           <LoadingButton onClick={() => generateDocFromSaved('contract')}>Generate Contract (PDF)</LoadingButton>

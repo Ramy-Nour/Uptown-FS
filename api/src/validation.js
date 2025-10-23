@@ -184,6 +184,11 @@ export const overrideApproveSchema = Joi.object({
   notes: Joi.string().allow('').optional()
 })
 
+export const editRequestSchema = Joi.object({
+  reason: Joi.string().allow('').optional(),
+  fields: Joi.array().items(Joi.string().min(1)).optional()
+})
+
 // Documents
 export const generateDocumentSchema = Joi.object({
   templateName: Joi.string().min(1).optional(),

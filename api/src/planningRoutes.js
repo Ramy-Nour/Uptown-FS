@@ -817,8 +817,7 @@ router.post('/generate-plan', authMiddleware, validate(generatePlanSchema), asyn
     const percentY3 = pct(paidY3, totalNominalForConditions)
     const percentHandover = pct(paidByHandover, totalNominalForConditions)
 
-    const stdTargetY1 = Number(effectiveStdPlan?.targetPaymentAfter1Year) || ((Number(effectiveStdPlan.totalPrice) || 0) * (firstYearMinPct / 100))
-    const cond1Pass = paidY1 >= stdTargetY1 - 1e-9
+    // Year 1 is enforced via the cumulative percent condition (firstYearMinPct). No separate absolute-amount condition.
 
     const withinRange = (value, min, max) => {
       if (min != null && Number(value) < Number(min)) return false
@@ -832,7 +831,7 @@ router.post('/generate-plan', authMiddleware, validate(generatePlanSchema), asyn
     const cond5Pass = withinRange(percentY3, thirdYearMinPct, null)
 
     const evaluation = {
-      decision: (pvPass && cond1Pass && cond2Pass && cond3Pass && cond4Pass && cond5Pass) ? 'ACCEPT' : 'REJECT',
+      decision: (pvPass && cond2Pass && cond3Pass && cond4Pass && cond5Pass) ? 'ACCEPT' : 'REJECT',
       pv: {
         proposedPV,
         standardPV,
@@ -841,7 +840,6 @@ router.post('/generate-plan', authMiddleware, validate(generatePlanSchema), asyn
         difference: pvDifference
       },
       conditions: [
-        { key: 'payment_after_y1', label: 'Payment After 1 Year', status: cond1Pass ? 'PASS' : 'FAIL', required: stdTargetY1, actual: paidY1 },
         { key: 'handover_percent', label: 'Payment by Handover', status: cond2Pass ? 'PASS' : 'FAIL',
           required: { min: handoverMinPct, max: null },
           actual: { percent: percentHandover, amount: paidByHandover }, handoverYear: Number(effInputs.handoverYear) || 0

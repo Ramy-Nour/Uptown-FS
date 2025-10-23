@@ -1813,7 +1813,6 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
           </div>
 
           
-
           <div class="section">
             <h3 style="${rtl ? 'text-align:right;' : ''}">${tSchedule}</h3>
             <table>
@@ -1875,6 +1874,225 @@ app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole
   } catch (err) {
     console.error('POST /api/documents/client-offer error:', err)
     return bad(res, 500, 'Failed to generate Client Offer PDF')
+  }
+})
+
+// Server-rendered Reservation Form PDF (Financial Admin, gated by FM approval)
+app.post('/api/documents/reservation-form', authLimiter, authMiddleware, requireRole(['financial_admin']), async (req, res) => {
+  try {
+    const dealId = Number(req.body?.deal_id)
+    if (!Number.isFinite(dealId) || dealId <= 0) {
+      return bad(res, 400, 'deal_id must be a positive number')
+    }
+    // Enforce FM approval prior to reservation form generation
+    const dr = await pool.query('SELECT * FROM deals WHERE id=$1', [dealId])
+    if (dr.rows.length === 0) return bad(res, 404, 'Deal not found')
+    const deal = dr.rows[0]
+    if (!deal.fm_review_at) {
+      return bad(res, 403, 'Financial Manager approval required before generating Reservation Form')
+    }
+
+    // Inputs from FA
+    const reservationDate = String(req.body?.reservation_form_date || '').slice(0, 10) || new Date().toISOString().slice(0, 10)
+    const preliminaryPayment = Number(req.body?.preliminary_payment_amount) || 0
+
+    // Day of week
+    let dayOfWeek = ''
+    try {
+      const d = new Date(reservationDate)
+      const names = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+      dayOfWeek = names[d.getDay()] || ''
+    } catch {}
+
+    // Extract calculator snapshot stored on the deal
+    const calc = deal.details?.calculator || {}
+
+    // Down Payment amount (prefer engine field; fallback to schedule entry)
+    let downPayment = Number(calc?.generatedPlan?.downPaymentAmount) || 0
+    if (!(downPayment > 0)) {
+      try {
+        const dpRow = (calc?.generatedPlan?.schedule || []).find(r => String(r.label || '').toLowerCase().includes('down payment'))
+        if (dpRow) downPayment = Number(dpRow.amount) || 0
+      } catch {}
+    }
+
+    // Unit totals: build breakdown and compute total including maintenance
+    let upb = calc?.unitPricingBreakdown || null
+    let totalIncl = 0
+    let currency = calc?.currency || (req.body?.currency || '')
+    let unit = {
+      unit_code: calc?.unitInfo?.unit_code || '',
+      unit_type: calc?.unitInfo?.unit_type || '',
+      unit_id: calc?.unitInfo?.unit_id || null
+    }
+    try {
+      const unitId = Number(unit?.unit_id)
+      if (Number.isFinite(unitId) && unitId > 0) {
+        const r = await pool.query(`
+          SELECT p.price, p.maintenance_price, p.garage_price, p.garden_price, p.roof_price, p.storage_price
+          FROM units u
+          JOIN unit_model_pricing p ON p.model_id = u.model_id
+          WHERE u.id=$1 AND p.status='approved'
+          ORDER BY p.id DESC
+          LIMIT 1
+        `, [unitId])
+        if (r.rows.length) {
+          const row = r.rows[0]
+          upb = {
+            base: Number((upb && upb.base) ?? row.price) || 0,
+            garden: Number((upb && upb.garden) ?? row.garden_price) || 0,
+            roof: Number((upb && upb.roof) ?? row.roof_price) || 0,
+            storage: Number((upb && upb.storage) ?? row.storage_price) || 0,
+            garage: Number((upb && upb.garage) ?? row.garage_price) || 0,
+            maintenance: Number((upb && upb.maintenance) ?? row.maintenance_price) || 0
+          }
+        }
+      }
+    } catch {}
+
+    const totalExcl = (Number(upb?.base||0)+Number(upb?.garden||0)+Number(upb?.roof||0)+Number(upb?.storage||0)+Number(upb?.garage||0))
+    totalIncl = totalExcl + (Number(upb?.maintenance||0))
+
+    // Remaining amount to be paid
+    const remainingAmount = Math.max(0, Number(totalIncl) - Number(preliminaryPayment) - Number(downPayment))
+
+    // Buyers (minimal)
+    const numBuyers = Math.min(Math.max(Number(calc?.clientInfo?.number_of_buyers) || 1, 1), 4)
+    const buyers = []
+    for (let i = 1; i <= numBuyers; i++) {
+      const sfx = i === 1 ? '' : `_${i}`
+      buyers.push({
+        buyer_name: calc?.clientInfo?.[`buyer_name${sfx}`] || '',
+        phone_primary: calc?.clientInfo?.[`phone_primary${sfx}`] || '',
+        phone_secondary: calc?.clientInfo?.[`phone_secondary${sfx}`] || '',
+        email: calc?.clientInfo?.[`email${sfx}`] || ''
+      })
+    }
+
+    // Render HTML
+    const lang = 'en'
+    const rtl = false
+    const dir = 'ltr'
+    const f = (s) => Number(s || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    const css = `
+      <style>
+        @page { size: A4; margin: 16mm 14mm; }
+        html { direction: ${dir}; }
+        body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+        h1,h2,h3 { margin: 0 0 8px; }
+        .header { display:flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .brand { font-size: 16px; color: #0f172a; font-weight: 700; }
+        .meta { color: #6b7280; font-size: 12px; }
+        .section { margin: 14px 0; }
+        table { width: 100%; border-collapse: collapse; }
+        thead { display: table-header-group; }
+        th { text-align: left; background: #f1f5f9; color: #0f172a; font-size: 12px; border-bottom: 1px solid #e2e8f0; padding: 8px; }
+        td { font-size: 12px; border-bottom: 1px solid #e2e8f0; padding: 8px; page-break-inside: avoid; }
+        .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .box { border:1px solid #e2e8f0; border-radius: 12px; background:#fff; padding: 10px; }
+        .foot { margin-top: 12px; color:#6b7280; font-size: 11px; }
+        .summary { display:flex; gap:12px; align-items:stretch; }
+        .summary .box { flex:1; }
+      </style>
+    `
+    const buyersHtml = buyers.map((b, idx) => `
+      <div class="box">
+        <div><strong>Buyer ${idx + 1}:</strong> ${b.buyer_name || '-'}</div>
+        <div><strong>Phone:</strong> ${[b.phone_primary, b.phone_secondary].filter(Boolean).join(' / ') || '-'}</div>
+        <div><strong>Email:</strong> ${b.email || '-'}</div>
+      </div>
+    `).join('')
+
+    const html = `
+      <html lang="${lang}" dir="${dir}">
+        <head>
+          <meta charset="UTF-8" />
+          ${css}
+        </head>
+        <body>
+          <div class="header">
+            <div class="brand">Reservation Form</div>
+            <div class="meta">Generated: ${new Date().toISOString().slice(0,19).replace('T',' ')}</div>
+          </div>
+
+          <div class="section summary">
+            <div class="box">
+              <h3>Reservation Details</h3>
+              <div><strong>Date:</strong> ${reservationDate} (${dayOfWeek})</div>
+              <div><strong>Preliminary Payment:</strong> ${f(preliminaryPayment)} ${currency || ''}</div>
+              <div><strong>Down Payment:</strong> ${f(downPayment)} ${currency || ''}</div>
+              <div><strong>Total Unit Value (incl. maintenance):</strong> ${f(totalIncl)} ${currency || ''}</div>
+              <div><strong>Remaining Amount:</strong> ${f(remainingAmount)} ${currency || ''}</div>
+            </div>
+            <div class="box">
+              <h3>Unit</h3>
+              <div><strong>Code:</strong> ${unit.unit_code || '-'}</div>
+              <div><strong>Type:</strong> ${unit.unit_type || '-'}</div>
+            </div>
+          </div>
+
+          <div class="section">
+            <h3>Buyers</h3>
+            <div class="grid2">
+              ${buyersHtml || '<div class="box">No client data</div>'}
+            </div>
+          </div>
+
+          <div class="section">
+            <h3>Pricing Breakdown</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Label</th>
+                  <th style="text-align:right">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>Base</td><td style="text-align:right">${f(Number(upb?.base||0))} ${currency || ''}</td></tr>
+                ${(Number(upb?.garden||0)>0)?`<tr><td>Garden</td><td style="text-align:right">${f(Number(upb?.garden||0))} ${currency || ''}</td></tr>`:''}
+                ${(Number(upb?.roof||0)>0)?`<tr><td>Roof</td><td style="text-align:right">${f(Number(upb?.roof||0))} ${currency || ''}</td></tr>`:''}
+                ${(Number(upb?.storage||0)>0)?`<tr><td>Storage</td><td style="text-align:right">${f(Number(upb?.storage||0))} ${currency || ''}</td></tr>`:''}
+                ${(Number(upb?.garage||0)>0)?`<tr><td>Garage</td><td style="text-align:right">${f(Number(upb?.garage||0))} ${currency || ''}</td></tr>`:''}
+                ${(Number(upb?.maintenance||0)>0)?`<tr><td>Maintenance Deposit</td><td style="text-align:right">${f(Number(upb?.maintenance||0))} ${currency || ''}</td></tr>`:''}
+                <tr><td style="font-weight:700">Total (excl. maintenance)</td><td style="text-align:right; font-weight:700">${f(totalExcl)} ${currency || ''}</td></tr>
+                <tr><td style="font-weight:700">Total (incl. maintenance)</td><td style="text-align:right; font-weight:700">${f(totalIncl)} ${currency || ''}</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="foot">
+            This reservation form is generated automatically based on the consultant's saved plan and pricing. Values are indicative and subject to contract.
+          </div>
+        </body>
+      </html>
+    `
+
+    const browser = await getBrowser()
+    const page = await browser.newPage()
+    await page.setContent(html, { waitUntil: 'load' })
+    const footerTemplate = `
+      <div style="width:100%; font-size:10px; color:#6b7280; padding:6px 10px; direction:ltr; text-align:right;">
+        Page <span class="pageNumber"></span> of <span class="totalPages"></span>
+      </div>`
+    const headerTemplate = '<div></div>'
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      landscape: false,
+      printBackground: true,
+      displayHeaderFooter: true,
+      headerTemplate,
+      footerTemplate,
+      margin: { top: '14mm', right: '12mm', bottom: '18mm', left: '12mm' }
+    })
+    await page.close()
+
+    const filename = `reservation_form_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+    return res.send(pdfBuffer)
+  } catch (err) {
+    console.error('POST /api/documents/reservation-form error:', err)
+    return bad(res, 500, 'Failed to generate Reservation Form PDF')
   }
 })
 

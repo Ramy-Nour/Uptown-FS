@@ -931,7 +931,48 @@ export default function DealDetail() {
               const fmApproved = !!deal?.fm_review_at
               return (
                 <LoadingButton
-                  onClick={() => generateDocFromSaved('reservation_form')}
+                  onClick={async () => {
+                    const fmApproved = !!deal?.fm_review_at
+                    if (!fmApproved) return
+                    const reservationDate = window.prompt('Reservation date (YYYY-MM-DD):', new Date().toISOString().slice(0,10))
+                    if (reservationDate === null) return
+                    const prelimStr = window.prompt('Preliminary payment amount:', '0')
+                    if (prelimStr === null) return
+                    const preliminary_payment_amount = Number(prelimStr) || 0
+                    try {
+                      setMessage('Generating Reservation Form…'); setShow(true)
+                      const resp = await fetchWithAuth(`${API_URL}/api/documents/reservation-form`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          deal_id: Number(deal.id),
+                          reservation_form_date: reservationDate || new Date().toISOString().slice(0,10),
+                          preliminary_payment_amount
+                        })
+                      })
+                      if (!resp.ok) {
+                        let errMsg = 'Failed to generate reservation form'
+                        try {
+                          const j = await resp.json()
+                          errMsg = j?.error?.message || errMsg
+                        } catch {}
+                        notifyError(errMsg); setShow(false); return
+                      }
+                      const blob = await resp.blob()
+                      const ts = new Date().toISOString().replace(/[:.]/g, '-')
+                      const filename = `reservation_form_${ts}.pdf`
+                      const url = URL.createObjectURL(blob)
+                      const a = document.createElement('a')
+                      a.href = url; a.download = filename
+                      document.body.appendChild(a); a.click(); document.body.removeChild(a)
+                      URL.revokeObjectURL(url)
+                      notifySuccess('Reservation Form generated successfully.')
+                    } catch (err) {
+                      notifyError(err, 'Failed to generate reservation form')
+                    } finally {
+                      setShow(false)
+                    }
+                  }}
                   disabled={!fmApproved}
                   title={fmApproved ? 'Generate Reservation Form (after FM approval)' : 'Available after Financial Manager approval'}
                 >

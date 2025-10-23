@@ -150,6 +150,27 @@ Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track 
     - Currency override (optional)
     - Language (English/Arabic with RTL)
     Then calls the API to generate and download the PDF. Button remains disabled until Financial Manager approval (fm_review_at).
+
+- [2025-10-23 11:40] Backend refactor — modular documents and planning endpoints, plus jobs and schema checks:
+  - Created api/src/documentsRoutes.js and mounted at /api/documents:
+    - POST /api/documents/client-offer
+    - POST /api/documents/reservation-form
+  - Created api/src/planningRoutes.js and mounted at /api:
+    - POST /api/calculate
+    - POST /api/generate-plan
+  - Moved background schedulers to api/src/jobs/scheduler.js and started from app.js via startSchedulers().
+  - Moved schema check utilities to api/src/utils/schemaCheck.js; app.js imports runSchemaCheck and retains /api/schema-check and startup check.
+  - Carefully removed legacy inline route blocks from app.js:
+    - Removed the old Client Offer and Reservation Form endpoints now served by documentsRoutes.
+    - Removed the old /api/calculate and /api/generate-plan endpoints now served by planningRoutes.
+  - If rollback is needed:
+    - Reintroduce the removed blocks from git history, or temporarily comment out the new mounts and re-enable the inline routes in app.js.
+    - Alternatively, disable the scheduler import in app.js and re-enable the in-file setInterval blocks.
+
+- [2025-10-23 11:41] Frontend refactor — modal component extraction:
+  - Added client/src/components/ReservationFormModal.jsx and wired it in DealDetail.jsx.
+  - The modal handles: date picker, preliminary payment validation, currency override, language toggle (English/Arabic).
+  - DealDetail now uses the component and calls the server endpoint to generate the PDF.
 - [2025-10-21 07:20] Standard Pricing approval — propagate to unit:
   - API: On approving a Standard Pricing record, the server now propagates the approved price (and area when valid) to the related unit (units.base_price and optionally units.area), and logs a 'propagate' entry in standard_pricing_history. This mirrors the unit-model pricing propagation pattern and ensures approved standards immediately reflect on the unit.
 - [2025-10-21 07:05] Top-Management approvals for Standard Pricing:

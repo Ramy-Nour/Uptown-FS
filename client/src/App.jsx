@@ -867,10 +867,13 @@ export default function App(props) {
           maintenancePaymentDate: feeSchedule.maintenancePaymentDate || '',
           // Default maintenance due at handover when month is empty (ignored if date is provided)
           maintenancePaymentMonth: (() => {
-            const m = Number(feeSchedule.maintenancePaymentMonth)
-            if (Number.isFinite(m) && m >= 0) return m
+            // Treat empty string as "not provided" so we default to Handover year
+            const mRaw = feeSchedule.maintenancePaymentMonth
+            const m = Number(mRaw)
+            if (mRaw !== '' && Number.isFinite(m) && m >= 0) return m
             const hy = Number(inputs.handoverYear) || 0
-            return hy > 0 ? hy * 12 : 0
+            // Default to Handover year in months; if handover not set, use 12 months policy fallback
+            return hy > 0 ? hy * 12 : 12
           })(),
           garagePaymentAmount: Number(feeSchedule.garagePaymentAmount) || 0,
           garagePaymentMonth: Number(feeSchedule.garagePaymentMonth) || 0

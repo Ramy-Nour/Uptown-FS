@@ -182,6 +182,14 @@ Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track 
   - Rollback guidance:
     - If needed, re-enable the inline endpoints from git history and comment out app.use('/api/notifications', notificationsRoutes).
     - Alternatively, keep the mount and copy routes back into app.js temporarily to test; then remove duplicates once stable.
+
+- [2025-10-23 12:05] Frontend refactor — App.jsx modularization (step 1):
+  - Extracted DiscountHint into client/src/components/DiscountHint.jsx and imported in App.jsx.
+  - Extracted TypeAndUnitPicker into client/src/components/TypeAndUnitPicker.jsx for cleaner unit/type selection logic (currently not directly used if UnitInfoSection encapsulates selection).
+  - App.jsx imports the new components to reduce inline function size and improve readability.
+  - Rollback guidance:
+    - If any UI breaks, revert imports in App.jsx and restore the inline DiscountHint/TypeAndUnitPicker implementations from git history.
+    - Components are self-contained; you can delete the new files and the app will work once inline code is restored.
 - [2025-10-21 07:20] Standard Pricing approval — propagate to unit:
   - API: On approving a Standard Pricing record, the server now propagates the approved price (and area when valid) to the related unit (units.base_price and optionally units.area), and logs a 'propagate' entry in standard_pricing_history. This mirrors the unit-model pricing propagation pattern and ensures approved standards immediately reflect on the unit.
 - [2025-10-21 07:05] Top-Management approvals for Standard Pricing:

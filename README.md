@@ -190,6 +190,17 @@ Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track 
   - Rollback guidance:
     - If any UI breaks, revert imports in App.jsx and restore the inline DiscountHint/TypeAndUnitPicker implementations from git history.
     - Components are self-contained; you can delete the new files and the app will work once inline code is restored.
+
+- [2025-10-23 12:20] Frontend refactor — App.jsx modularization (step 2: exports utils):
+  - Created client/src/lib/docExports.js and moved:
+    - exportScheduleCSV(genResult, language)
+    - exportScheduleXLSX(genResult, language)
+    - generateChecksSheetXLSX(genResult, clientInfo, unitInfo, currency, language)
+  - App.jsx now imports these helpers and calls them from the buttons.
+  - Benefits: reduces App.jsx size and isolates export logic for reuse.
+  - Rollback guidance:
+    - If needed, delete client/src/lib/docExports.js and restore the original inline functions in App.jsx from git history.
+    - Temporarily you can copy the functions back into App.jsx while keeping imports commented to test UI, then remove duplicates once stable.
 - [2025-10-21 07:20] Standard Pricing approval — propagate to unit:
   - API: On approving a Standard Pricing record, the server now propagates the approved price (and area when valid) to the related unit (units.base_price and optionally units.area), and logs a 'propagate' entry in standard_pricing_history. This mirrors the unit-model pricing propagation pattern and ensures approved standards immediately reflect on the unit.
 - [2025-10-21 07:05] Top-Management approvals for Standard Pricing:

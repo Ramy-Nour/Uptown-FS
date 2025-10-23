@@ -1,9 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import * as XLSX from 'xlsx'
 import { fetchWithAuth } from './lib/apiClient.js'
 import BrandHeader from './lib/BrandHeader.jsx'
-import { getArabicMonth, t, isRTL, applyDocumentDirection } from './lib/i18n.js'
-import numberToArabic from './lib/numberToArabic.js'
+import { t, isRTL, applyDocumentDirection } from './lib/i18n.js'
+import { exportScheduleCSV, exportScheduleXLSX, generateChecksSheetXLSX } from './lib/docExports.js'
 import EvaluationPanel from './components/calculator/EvaluationPanel.jsx'
 import PaymentSchedule from './components/calculator/PaymentSchedule.jsx'
 import ClientInfoForm from './components/calculator/ClientInfoFormMin.jsx'
@@ -880,151 +879,7 @@ export default function App(props) {
     }
   }
 
-  function exportScheduleCSV() {
-    if (!genResult?.schedule?.length) return
-    const rows = [
-      ['#', 'Month', 'Label', 'Amount', 'Written Amount'],
-      ...genResult.schedule.map((row, i) => {
-        const amt = Number(row.amount || 0)
-        const written = (language === 'ar')
-          ? numberToArabic(amt, 'جنيه مصري', 'قرش')
-          : (row.writtenAmount || '')
-        return [
-          i + 1,
-          row.month,
-          row.label,
-          amt.toFixed(2),
-          written
-        ]
-      })
-    ]
-    // Append dual totals
-    const totalIncl = Number(((genResult?.totals?.totalNominalIncludingMaintenance ?? genResult?.totals?.totalNominal)) || 0)
-    const totalExcl = Number(genResult?.totals?.totalNominalExcludingMaintenance ?? totalIncl)
-    rows.push([])
-    rows.push([
-      '', '', (language === 'ar' ? 'الإجمالي (بدون وديعة الصيانة)' : 'Total (excluding Maintenance Deposit)'),
-      totalExcl.toFixed(2),
-      ''
-    ])
-    rows.push([
-      '', '', (language === 'ar' ? 'الإجمالي (شامل وديعة الصيانة)' : 'Total (including Maintenance Deposit)'),
-      totalIncl.toFixed(2),
-      ''
-    ])
-
-    const csv = rows.map(r => r.map(cell => {
-      const s = String(cell ?? '')
-      if (/[\",\n]/.test(s)) return `\"${s.replace(/\"/g, '\"\"')}\"`
-      return s
-    }).join(',')).join('\n')
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    const ts = new Date().toISOString().replace(/[:.]/g, '-')
-    a.download = `payment_schedule_${ts}.csv`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-  }
-
-  // Build document generation body (includes calculator inputs + plan if available)
-  function buildDocumentBody(documentType) {
-    const { valid, payload } = validateForm()
-    // Even if not valid, we still send what we have; but generally require valid to ensure server accepts
-
-    // Build buyers[] from clientInfo (supports up to 4 buyers via suffixed keys: _2, _3, _4)
-    const numBuyersRaw = Number(clientInfo.number_of_buyers)
-    const numBuyers = Math.min(Math.max(numBuyersRaw || 1, 1), 4)
-    const buyers = []
-    for (let i = 1; i <= numBuyers; i++) {
-      const sfx = i === 1 ? '' : `_${i}`
-      buyers.push({
-        buyer_name: clientInfo[`buyer_name${sfx}`] || '',
-        nationality: clientInfo[`nationality${sfx}`] || '',
-        id_or_passport: clientInfo[`id_or_passport${sfx}`] || '',
-        id_issue_date: clientInfo[`id_issue_date${sfx}`] || '',
-        birth_date: clientInfo[`birth_date${sfx}`] || '',
-        address: clientInfo[`address${sfx}`] || '',
-        phone_primary: clientInfo[`phone_primary${sfx}`] || '',
-        phone_secondary: clientInfo[`phone_secondary${sfx}`] || '',
-        email: clientInfo[`email${sfx}`] || ''
-      })
-    }
-
-    // Build document data map for placeholders
-    const docData = {
-      // Primary Client info (English) — Buyer 1
-      buyer_name: clientInfo.buyer_name || '',
-      nationality: clientInfo.nationality || '',
-      id_or_passport: clientInfo.id_or_passport || '',
-      id_issue_date: clientInfo.id_issue_date || '',
-      birth_date: clientInfo.birth_date || '',
-      address: clientInfo.address || '',
-      phone_primary: clientInfo.phone_primary || '',
-      phone_secondary: clientInfo.phone_secondary || '',
-      email: clientInfo.email || '',
-      // Dates
-      offer_date: inputs.offerDate || new Date().toISOString().slice(0, 10),
-      first_payment_date: inputs.firstPaymentDate || inputs.offerDate || new Date().toISOString().slice(0, 10),
-      // Client info (Arabic aliases for templates) — Buyer 1
-      'اسم المشترى': clientInfo.buyer_name || '',
-      'الجنسية': clientInfo.nationality || '',
-      'رقم قومي/ رقم جواز': clientInfo.id_or_passport || '',
-      'تاريخ الاصدار': clientInfo.id_issue_date || '',
-      'تاريخ الميلاد': clientInfo.birth_date || '',
-      'العنوان': clientInfo.address || '',
-      'رقم الهاتف': clientInfo.phone_primary || '',
-      'رقم الهاتف (2)': clientInfo.phone_secondary || '',
-      'البريد الالكتروني': clientInfo.email || '',
-      // Unit info (English)
-      unit_type: unitInfo.unit_type || '',
-      unit_code: unitInfo.unit_code || '',
-      unit_number: unitInfo.unit_number || '',
-      floor: unitInfo.floor || '',
-      building_number: unitInfo.building_number || '',
-      block_sector: unitInfo.block_sector || '',
-      zone: unitInfo.zone || '',
-      garden_details: unitInfo.garden_details || '',
-      // Unit info (Arabic aliases)
-      'نوع الوحدة': unitInfo.unit_type || '',
-      'كود الوحدة': unitInfo.unit_code || '',
-      'وحدة رقم': unitInfo.unit_number || '',
-      'الدور': unitInfo.floor || '',
-      'مبنى رقم': unitInfo.building_number || '',
-      'قطاع': unitInfo.block_sector || '',
-      'مجاورة': unitInfo.zone || '',
-      'مساحة الحديقة': unitInfo.garden_details || '',
-      // Calculator summaries (optional)
-      std_total_price: Number(stdPlan.totalPrice) || 0,
-      std_financial_rate_percent: Number(stdPlan.financialDiscountRate) || 0,
-      std_calculated_pv: Number(stdPlan.calculatedPV) || 0,
-      // Multi-buyer structured data
-      buyers
-    }
-
-    const body = {
-      documentType,
-      language,
-      currency,
-      ...payload,
-      data: docData
-    }
-    // Attach generated plan if available so server can reuse without recalculation (optional)
-    if (genResult?.schedule?.length) {
-      body.generatedPlan = {
-        schedule: genResult.schedule,
-        totals: genResult.totals,
-        meta: genResult.meta || {}
-      }
-    }
-    return { valid, body }
-  }
-
-  async function generateDocument(documentType) {
-    const { valid, body } = buildDocumentBody(documentType)
+  // moved exports to lib/docExports.js = buildDocumentBody(documentType)
     if (!valid) {
       setDocError('Please fix validation errors before generating the document.')
       return
@@ -1623,13 +1478,13 @@ export default function App(props) {
               {/* Exports (CSV/XLSX/Checks) — Financial Admin only */}
               {authUser?.role === 'financial_admin' && (
                 <>
-                  <button type="button" onClick={exportScheduleXLSX} disabled={!schedule.length} style={styles.btn}>
+                  <button type="button" onClick={() => exportScheduleXLSX(genResult, language)} disabled={!schedule.length} style={styles.btn}>
                     {t('export_xlsx', language)}
                   </button>
-                  <button type="button" onClick={generateChecksSheetXLSX} disabled={!schedule.length} style={styles.btn}>
+                  <button type="button" onClick={() => generateChecksSheetXLSX(genResult, clientInfo, unitInfo, currency, language)} disabled={!schedule.length} style={styles.btn}>
                     {t('generate_checks_sheet', language)}
                   </button>
-                  <button type="button" onClick={exportScheduleCSV} disabled={!schedule.length} style={styles.btn}>
+                  <button type="button" onClick={() => exportScheduleCSV(genResult, language)} disabled={!schedule.length} style={styles.btn}>
                     {t('export_csv', language)}
                   </button>
                 </>

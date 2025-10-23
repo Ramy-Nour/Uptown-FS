@@ -142,10 +142,14 @@ Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track 
 - [2025-10-23 10:35] Unit Block button activation policy:
   - Client: Consultant can request a unit block only when the plan is accepted by the automated system (NPV evaluation PASS) or when an override is approved (Top Management approval present). The button is disabled otherwise with a tooltip explaining the condition.
   - Client: Create Deal page also disables the “Request Unit Block” button until the plan evaluation is ACCEPT.
-- [2025-10-23 11:05] Reservation Form — server-rendered HTML/PDF and FM approval gate:
-  - API: Added POST /api/documents/reservation-form (role: financial_admin). Requires fm_review_at present on the deal. Builds a Tailwind-like HTML reservation form and generates a PDF via Puppeteer.
-  - Data: Includes Total Unit Value (incl. maintenance), Preliminary Payment (entered by FA), Down Payment (from saved plan), and computes Remaining Amount automatically. Displays Reservation Date and auto Day-of-Week.
-  - Client: Deal Detail now calls the new endpoint, prompting FA for reservation date and preliminary payment. Button remains disabled until FM approval.
+- [2025-10-23 11:22] Reservation Form — Arabic/RTL support and in-app modal UX:
+  - API: /api/documents/reservation-form now supports 'language' ('en'|'ar'), RTL rendering, localized labels and day-of-week, plus 'currency_override'.
+  - Client: Deal Detail shows a modal for Financial Admin to choose:
+    - Reservation Date (date picker)
+    - Preliminary Payment (validated numeric)
+    - Currency override (optional)
+    - Language (English/Arabic with RTL)
+    Then calls the API to generate and download the PDF. Button remains disabled until Financial Manager approval (fm_review_at).
 - [2025-10-21 07:20] Standard Pricing approval — propagate to unit:
   - API: On approving a Standard Pricing record, the server now propagates the approved price (and area when valid) to the related unit (units.base_price and optionally units.area), and logs a 'propagate' entry in standard_pricing_history. This mirrors the unit-model pricing propagation pattern and ensures approved standards immediately reflect on the unit.
 - [2025-10-21 07:05] Top-Management approvals for Standard Pricing:

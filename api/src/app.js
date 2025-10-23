@@ -1895,13 +1895,17 @@ app.post('/api/documents/reservation-form', authLimiter, authMiddleware, require
     // Inputs from FA
     const reservationDate = String(req.body?.reservation_form_date || '').slice(0, 10) || new Date().toISOString().slice(0, 10)
     const preliminaryPayment = Number(req.body?.preliminary_payment_amount) || 0
+    const UIcurrency = (req.body?.currency_override || '').trim()
+    const language = String(req.body?.language || 'en').toLowerCase().startsWith('ar') ? 'ar' : 'en'
+    const rtl = language === 'ar'
 
-    // Day of week
+    // Day of week (localize)
     let dayOfWeek = ''
     try {
       const d = new Date(reservationDate)
-      const names = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
-      dayOfWeek = names[d.getDay()] || ''
+      const namesEn = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+      const namesAr = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت']
+      dayOfWeek = (rtl ? namesAr : namesEn)[d.getDay()] || ''
     } catch {}
 
     // Extract calculator snapshot stored on the deal
@@ -1919,7 +1923,7 @@ app.post('/api/documents/reservation-form', authLimiter, authMiddleware, require
     // Unit totals: build breakdown and compute total including maintenance
     let upb = calc?.unitPricingBreakdown || null
     let totalIncl = 0
-    let currency = calc?.currency || (req.body?.currency || '')
+    let currency = UIcurrency || calc?.currency || ''
     let unit = {
       unit_code: calc?.unitInfo?.unit_code || '',
       unit_type: calc?.unitInfo?.unit_type || '',
@@ -1969,97 +1973,103 @@ app.post('/api/documents/reservation-form', authLimiter, authMiddleware, require
       })
     }
 
-    // Build Tailwind-based HTML (matching attached form style)
+    // i18n helper
+    const L = (en, ar) => rtl ? ar : en
+    const dir = rtl ? 'rtl' : 'ltr'
+    const textAlignLeft = rtl ? 'text-right' : 'text-left'
+    const textAlignRight = rtl ? 'text-left' : 'text-right'
+
+    // Build Tailwind-based HTML (matching attached form style) with RTL support
     const html = `
       <!DOCTYPE html>
-      <html lang="en">
+      <html lang="${language}" dir="${dir}">
       <head>
         <meta charset="UTF-8"/>
         <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-        <title>Reservation Form</title>
+        <title>${L('Reservation Form', 'نموذج الحجز')}</title>
         <script src="https://cdn.tailwindcss.com"></script>
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+        <link href="${rtl ? 'https://fonts.googleapis.com/css2?family=Noto+Naskh+Arabic:wght@400;600;700&display=swap' : 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap'}" rel="stylesheet">
         <style>
           html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          body { font-family: 'Inter', sans-serif; }
+          body { font-family: ${rtl ? "'Noto Naskh Arabic', serif" : "'Inter', sans-serif"}; }
         </style>
       </head>
       <body class="bg-gray-100 p-4 sm:p-8">
         <div class="container mx-auto max-w-4xl bg-white shadow-lg rounded-2xl overflow-hidden">
-          <div class="p-6 sm:p-8 border-b border-gray-200">
-            <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">Reservation Form</h1>
-            <p class="mt-2 text-gray-600">This document summarizes the reservation details for the selected unit.</p>
+          <div class="p-6 sm:p-8 border-b border-gray-200 ${textAlignLeft}">
+            <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">${L('Reservation Form', 'نموذج الحجز')}</h1>
+            <p class="mt-2 text-gray-600">${L('This document summarizes the reservation details for the selected unit.', 'يُلخص هذا المستند تفاصيل حجز الوحدة المختارة.')}</p>
           </div>
 
           <!-- Reservation Summary -->
           <div class="px-6 sm:px-8 py-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div class="bg-gray-50 rounded-xl p-4 border border-gray-200">
-              <h2 class="text-lg font-semibold text-gray-700 mb-2">Reservation Details</h2>
+            <div class="bg-gray-50 rounded-xl p-4 border border-gray-200 ${textAlignLeft}">
+              <h2 class="text-lg font-semibold text-gray-700 mb-2">${L('Reservation Details', 'تفاصيل الحجز')}</h2>
               <div class="space-y-1 text-gray-800">
-                <div><span class="font-medium">Date:</span> ${reservationDate} <span class="text-gray-500">(${dayOfWeek})</span></div>
-                <div><span class="font-medium">Preliminary Payment:</span> ${Number(preliminaryPayment).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</div>
-                <div><span class="font-medium">Down Payment:</span> ${Number(downPayment).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</div>
-                <div><span class="font-medium">Total Unit Value (incl. maintenance):</span> ${Number(totalIncl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</div>
-                <div><span class="font-medium">Remaining Amount:</span> ${Number(remainingAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</div>
+                <div><span class="font-medium">${L('Date', 'التاريخ')}:</span> ${reservationDate} <span class="text-gray-500">(${dayOfWeek})</span></div>
+                <div><span class="font-medium">${L('Preliminary Payment', 'دفعة الحجز الأولية')}:</span> ${Number(preliminaryPayment).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</div>
+                <div><span class="font-medium">${L('Down Payment', 'دفعة التعاقد')}:</span> ${Number(downPayment).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</div>
+                <div><span class="font-medium">${L('Total Unit Value (incl. maintenance)', 'قيمة الوحدة الإجمالية (شاملة وديعة الصيانة)')}:</span> ${Number(totalIncl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</div>
+                <div><span class="font-medium">${L('Remaining Amount', 'المبلغ المتبقي')}:</span> ${Number(remainingAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</div>
               </div>
             </div>
-            <div class="bg-gray-50 rounded-xl p-4 border border-gray-200">
-              <h2 class="text-lg font-semibold text-gray-700 mb-2">Unit</h2>
+            <div class="bg-gray-50 rounded-xl p-4 border border-gray-200 ${textAlignLeft}">
+              <h2 class="text-lg font-semibold text-gray-700 mb-2">${L('Unit', 'الوحدة')}</h2>
               <div class="space-y-1 text-gray-800">
-                <div><span class="font-medium">Code:</span> ${unit.unit_code || '-'}</div>
-                <div><span class="font-medium">Type:</span> ${unit.unit_type || '-'}</div>
+                <div><span class="font-medium">${L('Code', 'الكود')}:</span> ${unit.unit_code || '-'}</div>
+                <div><span class="font-medium">${L('Type', 'النوع')}:</span> ${unit.unit_type || '-'}</div>
               </div>
             </div>
           </div>
 
           <!-- Buyers -->
-          <div class="px-6 sm:px-8 pb-6">
-            <h2 class="text-lg font-semibold text-gray-700 mb-3">Buyers</h2>
+          <div class="px-6 sm:px-8 pb-6 ${textAlignLeft}">
+            <h2 class="text-lg font-semibold text-gray-700 mb-3">${L('Buyers', 'العملاء')}</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               ${
                 buyers.length
                   ? buyers.map((b, i) => `
                     <div class="rounded-xl border border-gray-200 p-4">
-                      <div class="text-sm text-gray-500 mb-1">Buyer ${i + 1}</div>
-                      <div class="text-gray-800"><span class="font-medium">Name:</span> ${b.buyer_name || '-'}</div>
-                      <div class="text-gray-800"><span class="font-medium">Phone:</span> ${[b.phone_primary, b.phone_secondary].filter(Boolean).join(' / ') || '-'}</div>
-                      <div class="text-gray-800"><span class="font-medium">Email:</span> ${b.email || '-'}</div>
+                      <div class="text-sm text-gray-500 mb-1">${L('Buyer', 'العميل')} ${i + 1}</div>
+                      <div class="text-gray-800"><span class="font-medium">${L('Name', 'الاسم')}:</span> ${b.buyer_name || '-'}</div>
+                      <div class="text-gray-800"><span class="font-medium">${L('Phone', 'الهاتف')}:</span> ${[b.phone_primary, b.phone_secondary].filter(Boolean).join(' / ') || '-'}</div>
+                      <div class="text-gray-800"><span class="font-medium">${L('Email', 'البريد الإلكتروني')}:</span> ${b.email || '-'}</div>
                     </div>
                   `).join('')
-                  : '<div class="text-gray-500">No client data</div>'
+                  : `<div class="text-gray-500">${L('No client data', 'لا توجد بيانات عملاء')}</div>`
               }
             </div>
           </div>
 
           <!-- Pricing Breakdown -->
-          <div class="px-6 sm:px-8 pb-8">
-            <h2 class="text-lg font-semibold text-gray-700 mb-3">Pricing Breakdown</h2>
+          <div class="px-6 sm:px-8 pb-8 ${textAlignLeft}">
+            <h2 class="text-lg font-semibold text-gray-700 mb-3">${L('Pricing Breakdown', 'تفاصيل التسعير')}</h2>
             <div class="rounded-xl border border-gray-200 overflow-hidden">
               <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50">
                   <tr>
-                    <th class="text-left text-xs font-medium text-gray-500 uppercase tracking-wider p-3">Label</th>
-                    <th class="text-right text-xs font-medium text-gray-500 uppercase tracking-wider p-3">Amount</th>
+                    <th class="text-xs font-medium text-gray-500 uppercase tracking-wider p-3 ${textAlignLeft}">${L('Label', 'البند')}</th>
+                    <th class="text-xs font-medium text-gray-500 uppercase tracking-wider p-3 ${textAlignRight}">${L('Amount', 'القيمة')}</th>
                   </tr>
                 </thead>
                 <tbody class="bg-white divide-y divide-gray-100">
-                  <tr><td class="p-3">Base</td><td class="p-3 text-right">${Number(upb?.base||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>
-                  ${Number(upb?.garden||0)>0 ? `<tr><td class="p-3">Garden</td><td class="p-3 text-right">${Number(upb?.garden||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>` : ''}
-                  ${Number(upb?.roof||0)>0 ? `<tr><td class="p-3">Roof</td><td class="p-3 text-right">${Number(upb?.roof||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>` : ''}
-                  ${Number(upb?.storage||0)>0 ? `<tr><td class="p-3">Storage</td><td class="p-3 text-right">${Number(upb?.storage||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>` : ''}
-                  ${Number(upb?.garage||0)>0 ? `<tr><td class="p-3">Garage</td><td class="p-3 text-right">${Number(upb?.garage||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>` : ''}
-                  ${Number(upb?.maintenance||0)>0 ? `<tr><td class="p-3">Maintenance Deposit</td><td class="p-3 text-right">${Number(upb?.maintenance||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>` : ''}
-                  <tr class="bg-gray-50"><td class="p-3 font-semibold">Total (excl. maintenance)</td><td class="p-3 text-right font-semibold">${Number(totalExcl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>
-                  <tr class="bg-gray-50"><td class="p-3 font-semibold">Total (incl. maintenance)</td><td class="p-3 text-right font-semibold">${Number(totalIncl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>
+                  <tr><td class="p-3">${L('Base', 'السعر الأساسي')}</td><td class="p-3 ${textAlignRight}">${Number(upb?.base||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>
+                  ${Number(upb?.garden||0)>0 ? `<tr><td class="p-3">${L('Garden', 'الحديقة')}</td><td class="p-3 ${textAlignRight}">${Number(upb?.garden||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>` : ''}
+                  ${Number(upb?.roof||0)>0 ? `<tr><td class="p-3">${L('Roof', 'السطح')}</td><td class="p-3 ${textAlignRight}">${Number(upb?.roof||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>` : ''}
+                  ${Number(upb?.storage||0)>0 ? `<tr><td class="p-3">${L('Storage', 'غرفة التخزين')}</td><td class="p-3 ${textAlignRight}">${Number(upb?.storage||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>` : ''}
+                  ${Number(upb?.garage||0)>0 ? `<tr><td class="p-3">${L('Garage', 'الجراج')}</td><td class="p-3 ${textAlignRight}">${Number(upb?.garage||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>` : ''}
+                  ${Number(upb?.maintenance||0)>0 ? `<tr><td class="p-3">${L('Maintenance Deposit', 'وديعة الصيانة')}</td><td class="p-3 ${textAlignRight}">${Number(upb?.maintenance||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>` : ''}
+                  <tr class="bg-gray-50"><td class="p-3 font-semibold">${L('Total (excl. maintenance)', 'الإجمالي (بدون وديعة الصيانة)')}</td><td class="p-3 ${textAlignRight} font-semibold">${Number(totalExcl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>
+                  <tr class="bg-gray-50"><td class="p-3 font-semibold">${L('Total (incl. maintenance)', 'الإجمالي (شامل وديعة الصيانة)')}</td><td class="p-3 ${textAlignRight} font-semibold">${Number(totalIncl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>
                 </tbody>
               </table>
             </div>
           </div>
 
-          <div class="px-6 sm:px-8 pb-8 text-gray-500 text-sm border-t border-gray-100">
-            This reservation form is generated automatically based on the consultant's saved plan and pricing. Values are indicative and subject to contract.
+          <div class="px-6 sm:px-8 pb-8 text-gray-500 text-sm border-t border-gray-100 ${textAlignLeft}">
+            ${L('This reservation form is generated automatically based on the consultant\'s saved plan and pricing. Values are indicative and subject to contract.', 'تم إنشاء نموذج الحجز تلقائيًا اعتمادًا على الخطة والأسعار المحفوظة بواسطة المستشار. القيم إرشادية وقابلة للتغيير عند التعاقد.')}
           </div>
         </div>
       </body>
@@ -2070,8 +2080,8 @@ app.post('/api/documents/reservation-form', authLimiter, authMiddleware, require
     const page = await browser.newPage()
     await page.setContent(html, { waitUntil: 'load' })
     const footerTemplate = `
-      <div style="width:100%; font-size:10px; color:#6b7280; padding:6px 10px; direction:ltr; text-align:right;">
-        Page <span class="pageNumber"></span> of <span class="totalPages"></span>
+      <div style="width:100%; font-size:10px; color:#6b7280; padding:6px 10px; ${rtl ? 'direction:rtl; text-align:left;' : 'direction:ltr; text-align:right;'}">
+        ${L('Page', 'صفحة')} <span class="pageNumber"></span> ${L('of', 'من')} <span class="totalPages"></span>
       </div>`
     const headerTemplate = '<div></div>'
     const pdfBuffer = await page.pdf({

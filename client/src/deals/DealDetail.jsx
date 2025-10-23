@@ -24,6 +24,15 @@ export default function DealDetail() {
   const user = JSON.parse(localStorage.getItem('auth_user') || '{}')
   const role = user?.role || 'user'
 
+  // Reservation Form modal state
+  const [reservationModalOpen, setReservationModalOpen] = useState(false)
+  const [reservationForm, setReservationForm] = useState({
+    date: new Date().toISOString().slice(0,10),
+    preliminary: '',
+    currency: '',
+    language: 'en'
+  })
+
   // Edit request modal state
   const [showEditModal, setShowEditModal] = useState(false)
   const [editFields, setEditFields] = useState({
@@ -930,54 +939,118 @@ export default function DealDetail() {
             {(() => {
               const fmApproved = !!deal?.fm_review_at
               return (
-                <LoadingButton
-                  onClick={async () => {
-                    const fmApproved = !!deal?.fm_review_at
-                    if (!fmApproved) return
-                    const reservationDate = window.prompt('Reservation date (YYYY-MM-DD):', new Date().toISOString().slice(0,10))
-                    if (reservationDate === null) return
-                    const prelimStr = window.prompt('Preliminary payment amount:', '0')
-                    if (prelimStr === null) return
-                    const preliminary_payment_amount = Number(prelimStr) || 0
-                    try {
-                      setMessage('Generating Reservation Form…'); setShow(true)
-                      const resp = await fetchWithAuth(`${API_URL}/api/documents/reservation-form`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          deal_id: Number(deal.id),
-                          reservation_form_date: reservationDate || new Date().toISOString().slice(0,10),
-                          preliminary_payment_amount
-                        })
-                      })
-                      if (!resp.ok) {
-                        let errMsg = 'Failed to generate reservation form'
-                        try {
-                          const j = await resp.json()
-                          errMsg = j?.error?.message || errMsg
-                        } catch {}
-                        notifyError(errMsg); setShow(false); return
-                      }
-                      const blob = await resp.blob()
-                      const ts = new Date().toISOString().replace(/[:.]/g, '-')
-                      const filename = `reservation_form_${ts}.pdf`
-                      const url = URL.createObjectURL(blob)
-                      const a = document.createElement('a')
-                      a.href = url; a.download = filename
-                      document.body.appendChild(a); a.click(); document.body.removeChild(a)
-                      URL.revokeObjectURL(url)
-                      notifySuccess('Reservation Form generated successfully.')
-                    } catch (err) {
-                      notifyError(err, 'Failed to generate reservation form')
-                    } finally {
-                      setShow(false)
-                    }
-                  }}
-                  disabled={!fmApproved}
-                  title={fmApproved ? 'Generate Reservation Form (after FM approval)' : 'Available after Financial Manager approval'}
-                >
-                  Generate Reservation Form (PDF)
-                </LoadingButton>
+                <>
+                  <LoadingButton
+                    onClick={() => setReservationModalOpen(true)}
+                    disabled={!fmApproved}
+                    title={fmApproved ? 'Generate Reservation Form (after FM approval)' : 'Available after Financial Manager approval'}
+                  >
+                    Generate Reservation Form (PDF)
+                  </LoadingButton>
+
+                  {reservationModalOpen && (
+                    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+                      <div style={{ background: '#fff', borderRadius: 12, padding: 16, width: 520, maxWidth: '90vw', boxShadow: '0 8px 24px rgba(0,0,0,0.12)' }}>
+                        <h3 style={{ marginTop: 0 }}>Reservation Form Options</h3>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                          <div style={{ gridColumn: '1 / span 2' }}>
+                            <label style={{ display: 'block', fontWeight: 600, fontSize: 13, color: '#374151', marginBottom: 4 }}>Reservation Date</label>
+                            <input
+                              type="date"
+                              value={reservationForm.date}
+                              onChange={e => setReservationForm(s => ({ ...s, date: e.target.value }))}
+                              style={{ padding: 10, borderRadius: 10, border: '1px solid #d1d9e6', width: '100%' }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ display: 'block', fontWeight: 600, fontSize: 13, color: '#374151', marginBottom: 4 }}>Preliminary Payment</label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={reservationForm.preliminary}
+                              onChange={e => setReservationForm(s => ({ ...s, preliminary: e.target.value }))}
+                              style={{ padding: 10, borderRadius: 10, border: '1px solid #d1d9e6', width: '100%' }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ display: 'block', fontWeight: 600, fontSize: 13, color: '#374151', marginBottom: 4 }}>Currency (optional)</label>
+                            <input
+                              type="text"
+                              placeholder="e.g., EGP, USD, SAR"
+                              value={reservationForm.currency}
+                              onChange={e => setReservationForm(s => ({ ...s, currency: e.target.value }))}
+                              style={{ padding: 10, borderRadius: 10, border: '1px solid #d1d9e6', width: '100%' }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ display: 'block', fontWeight: 600, fontSize: 13, color: '#374151', marginBottom: 4 }}>Language</label>
+                            <select
+                              value={reservationForm.language}
+                              onChange={e => setReservationForm(s => ({ ...s, language: e.target.value }))}
+                              style={{ padding: 10, borderRadius: 10, border: '1px solid #d1d9e6', width: '100%' }}
+                            >
+                              <option value="en">English</option>
+                              <option value="ar">Arabic</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
+                          <LoadingButton onClick={() => setReservationModalOpen(false)}>Cancel</LoadingButton>
+                          <LoadingButton
+                            variant="primary"
+                            onClick={async () => {
+                              const date = reservationForm.date || new Date().toISOString().slice(0,10)
+                              const preliminary_payment_amount = Number(reservationForm.preliminary || 0)
+                              if (!Number.isFinite(preliminary_payment_amount) || preliminary_payment_amount < 0) {
+                                notifyError('Preliminary payment must be a non-negative number')
+                                return
+                              }
+                              try {
+                                setMessage('Generating Reservation Form…'); setShow(true)
+                                const resp = await fetchWithAuth(`${API_URL}/api/documents/reservation-form`, {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    deal_id: Number(deal.id),
+                                    reservation_form_date: date,
+                                    preliminary_payment_amount,
+                                    currency_override: reservationForm.currency || '',
+                                    language: reservationForm.language || 'en'
+                                  })
+                                })
+                                if (!resp.ok) {
+                                  let errMsg = 'Failed to generate reservation form'
+                                  try {
+                                    const j = await resp.json()
+                                    errMsg = j?.error?.message || errMsg
+                                  } catch {}
+                                  notifyError(errMsg); setShow(false); return
+                                }
+                                const blob = await resp.blob()
+                                const ts = new Date().toISOString().replace(/[:.]/g, '-')
+                                const filename = `reservation_form_${ts}.pdf`
+                                const url = URL.createObjectURL(blob)
+                                const a = document.createElement('a')
+                                a.href = url; a.download = filename
+                                document.body.appendChild(a); a.click(); document.body.removeChild(a)
+                                URL.revokeObjectURL(url)
+                                setReservationModalOpen(false)
+                                notifySuccess('Reservation Form generated successfully.')
+                              } catch (err) {
+                                notifyError(err, 'Failed to generate reservation form')
+                              } finally {
+                                setShow(false)
+                              }
+                            }}
+                          >
+                            Generate
+                          </LoadingButton>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
               )
             })()}
             <LoadingButton onClick={() => setShowEditModal(true)}>

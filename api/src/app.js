@@ -31,6 +31,7 @@ import pricingRoutes from './pricingRoutes.js' // THIS LINE IS NEW
 import configRoutes from './configRoutes.js'
 import standardPlanRoutes from './standardPlanRoutes.js' // NEW
 import calculateRoutes from './calculateRoutes.js' // NEW
+import documentsRoutes from './documentsRoutes.js'
 
 // NEW IMPORTS - Add these
 import roleManagementRoutes from './roleManagement.js'
@@ -1509,10 +1510,9 @@ app.post('/api/generate-document', validate(generateDocumentSchema), async (req,
     console.error('POST /api/generate-document error:', err)
     return bad(res, 500, 'Internal error during document generation')
   }
-})
-
-// Server-rendered Client Offer PDF
-app.post('/api/documents/client-offer', authLimiter, authMiddleware, requireRole(['property_consultant']), async (req, res) => {
+})>
+// Mount documents routes (Client Offer + Reservation Form)
+app.use('/api/documentsiter, authMiddleware, requireRole(['property_consultant']), async (req, res) => {
   try {
     // Accept either direct payload or derive from deal_id
     let {

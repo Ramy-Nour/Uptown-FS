@@ -1,7 +1,7 @@
 import express from 'express'
 import { pool } from './db.js'
 import { authMiddleware, adminOnly } from './authRoutes.js'
-import { validate, dealCreateSchema, dealUpdateSchema, dealSubmitSchema, dealRejectSchema, overrideRequestSchema, overrideApproveSchema, editRequestSchema } from './validation.js'
+import { validate, dealCreateSchema, dealUpdateSchema, dealSubmitSchema, dealRejectSchema, overrideRequestSchema, overrideApproveSchema, editRequestSchema, editsAddressedSchema } from './validation.js'
 import { emitNotification } from './socket.js'
 
 const router = express.Router()

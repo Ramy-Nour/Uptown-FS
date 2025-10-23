@@ -265,6 +265,17 @@ Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track 
   - Rollback guidance:
     - If needed, delete payloadBuilders.js and validateCalculatorInputs.js and reinsert the original buildPayload and validateForm from git history.
     - Revert systemApi imports and switch back to fetchWithAuth directly for /api/health and /api/message.
+
+- [2025-10-23 13:30] Frontend refactor — App.jsx modularization (step 7: styles + dynamic payments handlers):
+  - Added client/src/styles/calculatorStyles.js and moved the big styles object out of App.jsx. App.jsx now imports styles from this file.
+  - Added client/src/hooks/useDynamicPayments.js encapsulating:
+    - addFirstYearPayment, updateFirstYearPayment, removeFirstYearPayment
+    - addSubsequentYear, updateSubsequentYear, removeSubsequentYear
+    App.jsx imports and uses the hook to reduce inline handler boilerplate.
+  - Result: App.jsx line count reduced further without changing behavior.
+  - Rollback guidance:
+    - If needed, remove the styles import and paste the original styles object back into App.jsx from git history.
+    - Delete useDynamicPayments.js and restore the handler functions inline in App.jsx.
 - [2025-10-21 07:20] Standard Pricing approval — propagate to unit:
   - API: On approving a Standard Pricing record, the server now propagates the approved price (and area when valid) to the related unit (units.base_price and optionally units.area), and logs a 'propagate' entry in standard_pricing_history. This mirrors the unit-model pricing propagation pattern and ensures approved standards immediately reflect on the unit.
 - [2025-10-21 07:05] Top-Management approvals for Standard Pricing:

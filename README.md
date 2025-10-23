@@ -121,6 +121,11 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-10-23 14:30] API route mounts and health endpoints restored:
+  - API: Reintroduced core middleware (helmet, cors, express.json/urlencoded) and mounted primary routers in api/src/app.js:
+    - /api/auth, /api/deals, /api/units, /api/inventory, /api/standard-plan, /api (planningRoutes), /api/notifications, and /api/blocks.
+  - API: Added GET /api/health → { status: "ok" } and GET /api/message → { message: "Hello from API" } for Codespaces reachability checks.
+  - Impact: Client calls like POST /api/blocks/request now resolve to the correct Express router instead of returning 404/500 due to missing mounts. Body parsing is enabled so validation works as expected.
 - [2025-10-23 09:10] Maintenance Deposit default date — honor Handover year when date is empty:
   - Client: Fixed payload construction so an empty Maintenance Deposit Month is not treated as 0. When the Maintenance Deposit Date is empty, we now default the due month to handoverYear × 12; if handoverYear is not set, we fall back to 12 months. Previously, an empty string coerced to 0 and the schedule placed Maintenance at month 0 (same as First Payment Date).
   - API: No change required. The server already defaults to Handover when month is invalid; the client now sends the correct month when the date is omitted.

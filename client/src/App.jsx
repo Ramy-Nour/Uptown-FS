@@ -933,16 +933,6 @@ export default function App(props) {
       setDocError('')
       setDocProgress(0)
       setDocLoading(true)
-      // Begin indeterminate progress (ramps to 85%)
-      if (docProgressTimer.current) {
-        clearInterval(docProgressTimer.current)
-      }
-      docProgressTimer.current = setInterval(() => {
-        setDocProgress(p => {
-          const next = p + Math.random() * 7
-          return next >= 85 ? 85 : next
-        })
-      }, 350)
 
       // Build buyers[] from clientInfo (up to 4)
       const numBuyersRaw = Number(clientInfo.number_of_buyers)
@@ -970,7 +960,6 @@ export default function App(props) {
           unit_type: unitInfo.unit_type || '',
           unit_id: Number(unitInfo.unit_id) || null
         },
-        // Include unit pricing breakdown for PDF header box
         unit_pricing_breakdown: {
           base: Number(unitPricingBreakdown.base || 0),
           garden: Number(unitPricingBreakdown.garden || 0),
@@ -981,26 +970,8 @@ export default function App(props) {
           totalExclMaintenance: Number(unitPricingBreakdown.totalExclMaintenance || 0)
         }
       }
-      const resp = await fetchWithAuth(`${API_URL}/api/documents/client-offer`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      })
-      if (!resp.ok) {
-        let errMsg = 'Failed to generate Client Offer PDF'
-        try {
-          const j = await resp.json()
-          errMsg = j?.error?.message || errMsg
-        } catch {}
-        throw new Error(errMsg)
-      }
-      // Nudge progress near completion while reading blob
-      setDocProgress(p => Math.max(p, 92))
-      const blob = await resp.blob()
-      setDocProgress(100)
 
-      const ts = new Date().toISOString().replace(/[:.]/g, '-')
-      const filename = `client_offer_${ts}.pdf`
+      const { blob, filename } = await generateClientOfferPdf(body, API_URL, (p) => setDocProgress(typeof p === 'function' ? p(docProgress) : p))
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url

@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx'
+import { fetchWithAuth } from './apiClient.js'
 
 export function exportScheduleCSV(genResult, language) {
   if (!genResult?.schedule?.length) return
@@ -24,7 +25,7 @@ export function exportScheduleCSV(genResult, language) {
 
   const csv = rows.map(r => r.map(cell => {
     const s = String(cell ?? '')
-    if (/[\",\n]/.test(s)) return `"${s.replace(/\"/g, '""')}"`
+    if (/[\"",\n]/.test(s)) return `"${s.replace(/\"/g, '""')}"`
     return s
   }).join(',')).join('\n')
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
@@ -119,4 +120,61 @@ export function generateChecksSheetXLSX(genResult, clientInfo, unitInfo, currenc
   a.click()
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
+}
+
+/**
+ * Generate Client Offer PDF via server-rendered HTML (Puppeteer).
+ * body should include: language, currency, buyers[], schedule[], totals, offer_date, first_payment_date, unit{}, unit_pricing_breakdown{}
+ */
+export async function generateClientOfferPdf(body, API_URL, onProgress) {
+  if (typeof onProgress === 'function') {
+    const timer = setInterval(() => {
+      onProgress(p => {
+        const next = (typeof p === 'number' ? p : 0) + Math.random() * 7
+        return next >= 85 ? 85 : next
+      })
+    }, 350)
+    try {
+      const resp = await fetchWithAuth(`${API_URL}/api/documents/client-offer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      })
+      if (!resp.ok) {
+        let errMsg = 'Failed to generate Client Offer PDF'
+        try {
+          const j = await resp.json()
+          errMsg = j?.error?.message || errMsg
+        } catch {}
+        throw new Error(errMsg)
+      }
+      onProgress(92)
+      const blob = await resp.blob()
+      onProgress(100)
+      const ts = new Date().toISOString().replace(/[:.]/g, '-')
+      const filename = `client_offer_${ts}.pdf`
+      return { blob, filename }
+    } finally {
+      clearInterval(timer)
+      onProgress(0)
+    }
+  } else {
+    const resp = await fetchWithAuth(`${API_URL}/api/documents/client-offer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+    if (!resp.ok) {
+      let errMsg = 'Failed to generate Client Offer PDF'
+      try {
+        const j = await resp.json()
+        errMsg = j?.error?.message || errMsg
+      } catch {}
+      throw new Error(errMsg)
+    }
+    const blob = await resp.blob()
+    const ts = new Date().toISOString().replace(/[:.]/g, '-')
+    const filename = `client_offer_${ts}.pdf`
+    return { blob, filename }
+  }
 }

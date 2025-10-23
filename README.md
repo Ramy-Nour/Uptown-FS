@@ -126,6 +126,9 @@ Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track 
     - /api/auth, /api/deals, /api/units, /api/inventory, /api/standard-plan, /api (planningRoutes), /api/notifications, and /api/blocks.
   - API: Added GET /api/health → { status: "ok" } and GET /api/message → { message: "Hello from API" } for Codespaces reachability checks.
   - Impact: Client calls like POST /api/blocks/request now resolve to the correct Express router instead of returning 404/500 due to missing mounts. Body parsing is enabled so validation works as expected.
+- [2025-10-23 15:05] NPV tolerance tightened to 2%:
+  - API: Updated evaluation tolerance in api/src/planningRoutes.js from 70% to 98% baseline, i.e., Proposed PV must be ≥ 98% of Standard PV to PASS (epsilon applied).
+  - Note: The evaluation PV shown in “Acceptance Evaluation” is authoritative; smaller “Std Calculated PV” boxes are client estimates and may differ if inputs don’t match.
 - [2025-10-23 14:40] Maintenance Deposit month default — treat empty string or 0 as “not provided”:
   - API: In plan generation (api/src/planningRoutes.js), if maintenancePaymentDate is not given and maintenancePaymentMonth is '' or 0, we now fallback to HandoverYear × 12; if handoverYear is not set, fallback to 12 months. Previously, an empty string coerced to 0 so Maintenance showed at month 0 (same date as Down Payment).
   - Tests: Added unit tests for the helper in api/src/tests/paymentPlanHelpers.test.js. Run with: cd api && npm run test:helpers

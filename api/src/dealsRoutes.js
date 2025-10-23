@@ -1,7 +1,7 @@
 import express from 'express'
 import { pool } from './db.js'
 import { authMiddleware, adminOnly } from './authRoutes.js'
-import { validate, dealCreateSchema, dealUpdateSchema, dealSubmitSchema, dealRejectSchema, overrideRequestSchema, overrideApproveSchema } from './validation.js'
+import { validate, dealCreateSchema, dealUpdateSchema, dealSubmitSchema, dealRejectSchema, overrideRequestSchema, overrideApproveSchema, editRequestSchema } from './validation.js'
 import { emitNotification } from './socket.js'
 
 const router = express.Router()
@@ -198,10 +198,22 @@ router.get('/pending-sm', authMiddleware, async (req, res) => {
     if (!(role === 'sales_manager' || role === 'admin' || role === 'superadmin')) {
       return res.status(403).json({ error: { message: 'Sales Manager role required' } })
     }
+    // Include reviewer names (from meta->>'name' or fallback to email) and positions (roles) for timeline tooltips.
     const rows = await pool.query(
-      `SELECT d.*, u.email as created_by_email
+      `SELECT 
+         d.*,
+         cu.email AS created_by_email,
+         COALESCE(mu.meta->>'name', mu.email) AS manager_review_by_name,
+         mu.role AS manager_review_by_role,
+         COALESCE(fu.meta->>'name', fu.email) AS fm_review_by_name,
+         fu.role AS fm_review_by_role,
+         COALESCE(tu.meta->>'name', tu.email) AS override_approved_by_name,
+         tu.role AS override_approved_by_role
        FROM deals d
-       LEFT JOIN users u ON u.id = d.created_by
+       LEFT JOIN users cu ON cu.id = d.created_by
+       LEFT JOIN users mu ON mu.id = d.manager_review_by
+       LEFT JOIN users fu ON fu.id = d.fm_review_by
+       LEFT JOIN users tu ON tu.id = d.override_approved_by
        WHERE d.status='pending_approval'
        ORDER BY d.id DESC`
     )
@@ -253,8 +265,20 @@ router.get('/:id', authMiddleware, async (req, res) => {
   try {
     const id = Number(req.params.id)
     const q = await pool.query(
-      `SELECT d.*, u.email as created_by_email
-       FROM deals d LEFT JOIN users u ON u.id = d.created_by
+      `SELECT 
+         d.*,
+         cu.email as created_by_email,
+         COALESCE(mu.meta->>'name', mu.email) AS manager_review_by_name,
+         mu.role AS manager_review_by_role,
+         COALESCE(fu.meta->>'name', fu.email) AS fm_review_by_name,
+         fu.role AS fm_review_by_role,
+         COALESCE(tu.meta->>'name', tu.email) AS override_approved_by_name,
+         tu.role AS override_approved_by_role
+       FROM deals d
+       LEFT JOIN users cu ON cu.id = d.created_by
+       LEFT JOIN users mu ON mu.id = d.manager_review_by
+       LEFT JOIN users fu ON fu.id = d.fm_review_by
+       LEFT JOIN users tu ON tu.id = d.override_approved_by
        WHERE d.id=$1`,
       [id]
     )
@@ -619,6 +643,7 @@ router.post('/:id/override-sm-approve', authMiddleware, async (req, res) => {
     }
     const q = await pool.query('SELECT * FROM deals WHERE id=$1', [id])
     if (q.rows.length === 0) return res.status(404).json({ error: { message: 'Deal not found' } })
+    const dealRow = q.rows[0]
 
     const upd = await pool.query(
       `UPDATE deals
@@ -637,6 +662,13 @@ router.post('/:id/override-sm-approve', authMiddleware, async (req, res) => {
     }
     await logHistory(id, req.user.id, 'override_sm_approved', JSON.stringify(note))
 
+    // Notify consultant that SM approved and FM review is next
+    try {
+      await emitNotification('override_sm_approved', dealRow.created_by, 'deals', id, 'Override approved by Sales Manager')
+    } catch (notifyErr) {
+      console.error('Emit notification error (override_sm_approved):', notifyErr)
+    }
+
     return res.json({ ok: true, deal: upd.rows[0] })
   } catch (e) {
     console.error('POST /api/deals/:id/override-sm-approve error', e)
@@ -654,6 +686,7 @@ router.post('/:id/override-sm-reject', authMiddleware, async (req, res) => {
     }
     const q = await pool.query('SELECT * FROM deals WHERE id=$1', [id])
     if (q.rows.length === 0) return res.status(404).json({ error: { message: 'Deal not found' } })
+    const dealRow = q.rows[0]
 
     const notes = typeof req.body?.notes === 'string' ? req.body.notes : null
 
@@ -675,6 +708,13 @@ router.post('/:id/override-sm-reject', authMiddleware, async (req, res) => {
       at: new Date().toISOString()
     }
     await logHistory(id, req.user.id, 'override_sm_rejected', JSON.stringify(note))
+
+    // Notify consultant of rejection
+    try {
+      await emitNotification('override_sm_rejected', dealRow.created_by, 'deals', id, 'Override rejected by Sales Manager')
+    } catch (notifyErr) {
+      console.error('Emit notification error (override_sm_rejected):', notifyErr)
+    }
 
     return res.json({ ok: true, deal: upd.rows[0] })
   } catch (e) {
@@ -723,6 +763,13 @@ router.post('/:id/override-fm-approve', authMiddleware, async (req, res) => {
     }
     await logHistory(id, req.user.id, 'override_fm_approved', JSON.stringify(note))
 
+    // Notify consultant that FM approved and TM review is next
+    try {
+      await emitNotification('override_fm_approved', deal.created_by, 'deals', id, 'Override approved by Financial Manager')
+    } catch (notifyErr) {
+      console.error('Emit notification error (override_fm_approved):', notifyErr)
+    }
+
     return res.json({ ok: true, deal: upd.rows[0] })
   } catch (e) {
     console.error('POST /api/deals/:id/override-fm-approve error', e)
@@ -740,6 +787,7 @@ router.post('/:id/override-fm-reject', authMiddleware, async (req, res) => {
     }
     const q = await pool.query('SELECT * FROM deals WHERE id=$1', [id])
     if (q.rows.length === 0) return res.status(404).json({ error: { message: 'Deal not found' } })
+    const dealRow = q.rows[0]
 
     const notes = typeof req.body?.notes === 'string' ? req.body.notes : null
 
@@ -761,6 +809,13 @@ router.post('/:id/override-fm-reject', authMiddleware, async (req, res) => {
       at: new Date().toISOString()
     }
     await logHistory(id, req.user.id, 'override_fm_rejected', JSON.stringify(note))
+
+    // Notify consultant of rejection
+    try {
+      await emitNotification('override_fm_rejected', dealRow.created_by, 'deals', id, 'Override rejected by Financial Manager')
+    } catch (notifyErr) {
+      console.error('Emit notification error (override_fm_rejected):', notifyErr)
+    }
 
     return res.json({ ok: true, deal: upd.rows[0] })
   } catch (e) {
@@ -804,6 +859,13 @@ router.post('/:id/override-approve', authMiddleware, validate(overrideApproveSch
     }
     await logHistory(id, req.user.id, 'override_approved', JSON.stringify(note))
 
+    // Notify consultant of final approval
+    try {
+      await emitNotification('override_approved', deal.created_by, 'deals', id, 'Override approved by Top Management')
+    } catch (notifyErr) {
+      console.error('Emit notification error (override_approved):', notifyErr)
+    }
+
     return res.json({ ok: true, deal: upd.rows[0] })
   } catch (e) {
     console.error('POST /api/deals/:id/override-approve error', e)
@@ -845,9 +907,85 @@ router.post('/:id/override-reject', authMiddleware, validate(overrideApproveSche
     }
     await logHistory(id, req.user.id, 'override_rejected', JSON.stringify(note))
 
+    // Notify consultant of rejection (stage may be SM/FM/TM)
+    try {
+      await emitNotification('override_rejected', deal.created_by, 'deals', id, `Override rejected by ${role.replace('_', ' ')}`)
+    } catch (notifyErr) {
+      console.error('Emit notification error (override_rejected):', notifyErr)
+    }
+
     return res.json({ ok: true, deal: upd.rows[0] })
   } catch (e) {
     console.error('POST /api/deals/:id/override-reject error', e)
+    return res.status(500).json({ error: { message: 'Internal error' } })
+  }
+})
+
+/**
+ * Request edits from the consultant (Financial Admin or Financial Manager).
+ * Does not modify the deal; logs the request in deal_history and notifies the deal creator.
+ */
+router.post('/:id/request-edits', authMiddleware, validate(editRequestSchema), async (req, res) => {
+  try {
+    const id = Number(req.params.id)
+    const role = req.user.role
+    if (!['financial_admin', 'financial_manager', 'admin', 'superadmin'].includes(role)) {
+      return res.status(403).json({ error: { message: 'Financial Admin or Financial Manager role required' } })
+    }
+    const q = await pool.query('SELECT id, created_by FROM deals WHERE id=$1', [id])
+    if (q.rows.length === 0) return res.status(404).json({ error: { message: 'Deal not found' } })
+    const dealRow = q.rows[0]
+
+    const fields = Array.isArray(req.body?.fields) ? req.body.fields : []
+    const reason = typeof req.body?.reason === 'string' ? req.body.reason : null
+
+    const note = {
+      event: 'request_edits',
+      by: { id: req.user.id, role },
+      fields,
+      reason,
+      at: new Date().toISOString()
+    }
+    await logHistory(id, req.user.id, 'request_edits', JSON.stringify(note))
+
+    // Notify the consultant (deal creator)
+    try {
+      await emitNotification('request_edits', dealRow.created_by, 'deals', id, reason || 'Edits requested by Financial Admin')
+    } catch (notifyErr) {
+      console.error('Emit notification error (request edits):', notifyErr)
+    }
+
+    return res.json({ ok: true })
+  } catch (e) {
+    console.error('POST /api/deals/:id/request-edits error', e)
+    return res.status(500).json({ error: { message: 'Internal error' } })
+  }
+})
+
+/**
+ * Mark edits addressed (Consultant or Sales Manager).
+ * Logs 'edits_addressed' to history with optional notes.
+ */
+router.post('/:id/edits-addressed', authMiddleware, validate(editsAddressedSchema), async (req, res) => {
+  try {
+    const id = Number(req.params.id)
+    const role = req.user.role
+    if (!['property_consultant', 'sales_manager', 'admin', 'superadmin'].includes(role)) {
+      return res.status(403).json({ error: { message: 'Property Consultant or Sales Manager role required' } })
+    }
+    const q = await pool.query('SELECT id FROM deals WHERE id=$1', [id])
+    if (q.rows.length === 0) return res.status(404).json({ error: { message: 'Deal not found' } })
+    const notes = typeof req.body?.notes === 'string' ? req.body.notes : null
+    const note = {
+      event: 'edits_addressed',
+      by: { id: req.user.id, role },
+      notes,
+      at: new Date().toISOString()
+    }
+    await logHistory(id, req.user.id, 'edits_addressed', JSON.stringify(note))
+    return res.json({ ok: true })
+  } catch (e) {
+    console.error('POST /api/deals/:id/edits-addressed error', e)
     return res.status(500).json({ error: { message: 'Internal error' } })
   }
 })

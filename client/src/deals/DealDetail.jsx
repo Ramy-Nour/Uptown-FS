@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { fetchWithAuth, API_URL } from '../lib/apiClient.js'
 import { notifyError, notifySuccess } from '../lib/notifications.js'
 import LoadingButton from '../components/LoadingButton.jsx'
+import ReservationFormModal from '../components/ReservationFormModal.jsx'
 import { useLoader } from '../lib/loaderContext.jsx'
 import CalculatorApp from '../App.jsx'
 import * as XLSX from 'xlsx'
@@ -23,6 +24,25 @@ export default function DealDetail() {
   const { setShow, setMessage } = useLoader()
   const user = JSON.parse(localStorage.getItem('auth_user') || '{}')
   const role = user?.role || 'user'
+
+  // Reservation Form modal state
+  const [reservationModalOpen, setReservationModalOpen] = useState(fa_code  const [reservationForm, setReservationForm] = useState({
+    date: new Date().toISOString().slice(0,10),
+    preliminary: '',
+    currency: '',
+    language: 'en'
+  })
+
+  // Edit request modal state
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editFields, setEditFields] = useState({
+    address: false,
+    payment_plan: false,
+    maintenance_date: false,
+    offer_dates: false,
+    other: ''
+  })
+  const [editReason, setEditReason] = useState('')
 
   async function load() {
     try {
@@ -560,6 +580,190 @@ export default function DealDetail() {
                   </ul>
                 </div>
               </div>
+
+              {/* Override Workflow — visible when evaluation REJECT */}
+              {evaluation.decision === 'REJECT' && (
+                <div style={{ marginTop: 12, padding: '10px 12px', border: '1px dashed #d1d9e6', borderRadius: 10 }}>
+                  <strong>Override Workflow</strong>
+
+                  {/* Stage timeline: Request → SM → FM → TM */}
+                  {(() => {
+                    const stages = [
+                      { key: 'requested', label: 'Requested', ts: deal?.override_requested_at, title: deal?.override_requested_at ? `Requested at ${new Date(deal.override_requested_at).toLocaleString()}` : 'Requested (pending)' },
+                      { key: 'sm', label: 'Sales Manager', ts: deal?.manager_review_at, title: deal?.manager_review_at ? `SM reviewed at ${new Date(deal.manager_review_at).toLocaleString()} by ${deal?.manager_review_by_name || ''} (${deal?.manager_review_by_role || ''})` : 'Sales Manager (pending)' },
+                      { key: 'fm', label: 'Financial Manager', ts: deal?.fm_review_at, title: deal?.fm_review_at ? `FM reviewed at ${new Date(deal.fm_review_at).toLocaleString()} by ${deal?.fm_review_by_name || ''} (${deal?.fm_review_by_role || ''})` : 'Financial Manager (pending)' },
+                      { key: 'tm', label: 'Top Management', ts: deal?.override_approved_at, title: deal?.override_approved_at ? `TM decision at ${new Date(deal.override_approved_at).toLocaleString()} by ${deal?.override_approved_by_name || ''} (${deal?.override_approved_by_role || ''})` : 'Top Management (pending)' }
+                    ]
+                    const circle = (active) => ({
+                      width: 16, height: 16, borderRadius: 9999,
+                      background: active ? '#A97E34' : '#e5e7eb',
+                      border: `2px solid ${active ? '#A97E34' : '#d1d5db'}`
+                    })
+                    const line = (active) => ({
+                      height: 2, flex: 1, background: active ? '#A97E34' : '#e5e7eb'
+                    })
+                    const activeIdx = stages.findIndex(s => !!s.ts)
+                    return (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+                        {stages.map((s, i) => (
+                          <React.Fragment key={s.key}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <div style={circle(i <= activeIdx)} title={s.title} />
+                              <div style={{ fontSize: 12, color: i <= activeIdx ? '#A97E34' : '#6b7280' }} title={s.title}>
+                                {s.label}{s.ts ? ` (${new Date(s.ts).toLocaleString()})` : ''}
+                              </div>
+                            </div>
+                            {i < stages.length - 1 && <div style={line(i < activeIdx)} />}
+                          </React.Fragment>
+                        ))}
+                      </div>
+                    )
+                  })()}
+
+                  <div style={{ marginTop: 8, color: '#6b7280' }}>
+                    Request → Sales Manager review → Financial Manager review → Top Management decision
+                  </div>
+                  <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {(role === 'property_consultant' || role === 'admin' || role === 'superadmin') && (
+                      <LoadingButton
+                        onClick={async () => {
+                          const reason = window.prompt('Provide a reason for override request (optional):', '')
+                          try {
+                            const resp = await fetchWithAuth(`${API_URL}/api/deals/${id}/request-override`, {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ reason: reason || '' })
+                            })
+                            const data = await resp.json()
+                            if (!resp.ok) notifyError(data?.error?.message || 'Failed to request override')
+                            else { notifySuccess('Override requested. Waiting for Sales Manager review.'); await load() }
+                          } catch (err) {
+                            notifyError(err, 'Failed to request override')
+                          }
+                        }}
+                        variant="primary"
+                      >
+                        Request Override
+                      </LoadingButton>
+                    )}
+                    {(role === 'sales_manager' || role === 'admin' || role === 'superadmin') && (
+                      <>
+                        <LoadingButton
+                          onClick={async () => {
+                            const notes = window.prompt('Notes (optional):', '')
+                            try {
+                              const resp = await fetchWithAuth(`${API_URL}/api/deals/${id}/override-sm-approve`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ notes: notes || '' })
+                              })
+                              const data = await resp.json()
+                              if (!resp.ok) notifyError(data?.error?.message || 'Failed to approve override')
+                              else { notifySuccess('Override approved (SM). Forwarded to FM.'); await load() }
+                            } catch (err) {
+                              notifyError(err, 'Failed to approve override')
+                            }
+                          }}
+                        >
+                          SM Approve
+                        </LoadingButton>
+                        <LoadingButton
+                          onClick={() => setPromptRejectId(id)}
+                          style={{ marginLeft: 8 }}
+                        >
+                          SM Reject
+                        </LoadingButton>
+                      </>
+                    )}
+                    {(role === 'financial_manager' || role === 'admin' || role === 'superadmin') && (
+                      <>
+                        <LoadingButton
+                          onClick={async () => {
+                            const notes = window.prompt('Notes (optional):', '')
+                            try {
+                              const resp = await fetchWithAuth(`${API_URL}/api/deals/${id}/override-fm-approve`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ notes: notes || '' })
+                              })
+                              const data = await resp.json()
+                              if (!resp.ok) notifyError(data?.error?.message || 'Failed to approve override')
+                              else { notifySuccess('Override approved (FM). Forwarded to Top Management.'); await load() }
+                            } catch (err) {
+                              notifyError(err, 'Failed to approve override')
+                            }
+                          }}
+                        >
+                          FM Approve
+                        </LoadingButton>
+                        <LoadingButton
+                          onClick={async () => {
+                            const notes = window.prompt('Rejection reason (optional):', '')
+                            try {
+                              const resp = await fetchWithAuth(`${API_URL}/api/deals/${id}/override-fm-reject`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ notes: notes || '' })
+                              })
+                              const data = await resp.json()
+                              if (!resp.ok) notifyError(data?.error?.message || 'Failed to reject override')
+                              else { notifySuccess('Override rejected (FM).'); await load() }
+                            } catch (err) {
+                              notifyError(err, 'Failed to reject override')
+                            }
+                          }}
+                          style={{ marginLeft: 8 }}
+                        >
+                          FM Reject
+                        </LoadingButton>
+                      </>
+                    )}
+                    {(role === 'ceo' || role === 'chairman' || role === 'vice_chairman' || role === 'top_management' || role === 'admin' || role === 'superadmin') && (
+                      <>
+                        <LoadingButton
+                          onClick={async () => {
+                            const notes = window.prompt('Approval notes (optional):', '')
+                            try {
+                              const resp = await fetchWithAuth(`${API_URL}/api/deals/${id}/override-approve`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ notes: notes || '' })
+                              })
+                              const data = await resp.json()
+                              if (!resp.ok) notifyError(data?.error?.message || 'Failed to approve override')
+                              else { notifySuccess('Override approved (TM).'); await load() }
+                            } catch (err) {
+                              notifyError(err, 'Failed to approve override')
+                            }
+                          }}
+                        >
+                          TM Approve
+                        </LoadingButton>
+                        <LoadingButton
+                          onClick={async () => {
+                            const notes = window.prompt('Rejection reason (optional):', '')
+                            try {
+                              const resp = await fetchWithAuth(`${API_URL}/api/deals/${id}/override-reject`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ notes: notes || '' })
+                              })
+                              const data = await resp.json()
+                              if (!resp.ok) notifyError(data?.error?.message || 'Failed to reject override')
+                              else { notifySuccess('Override rejected (TM).'); await load() }
+                            } catch (err) {
+                              notifyError(err, 'Failed to reject override')
+                            }
+                          }}
+                          style={{ marginLeft: 8 }}
+                        >
+                          TM Reject
+                        </LoadingButton>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -580,6 +784,53 @@ export default function DealDetail() {
           </div>
         </div>
       )}
+
+      {/* Outstanding edit request banner */}
+      {(() => {
+        // Find last request_edits and last edits_addressed in history
+        const lastReqIdx = [...history].reverse().findIndex(h => h.action === 'request_edits')
+        const lastAddrIdx = [...history].reverse().findIndex(h => h.action === 'edits_addressed')
+        const outstanding = lastReqIdx !== -1 && (lastAddrIdx === -1 || lastAddrIdx > lastReqIdx)
+        if (!outstanding) return null
+        const isConsultant = role === 'property_consultant' || role === 'sales_manager'
+        const bannerStyle = {
+          border: '1px solid #f59e0b', background: '#fffbeb', color: '#92400e',
+          padding: '10px 12px', borderRadius: 10, marginBottom: 12
+        }
+        return (
+          <div style={bannerStyle}>
+            <div style={{ fontWeight: 700, marginBottom: 4 }}>Edits Requested</div>
+            <div>Financial team has requested edits to this deal. Please review and update the allowed fields (payment plan, address, etc.). Identity and unit data remain locked.</div>
+            {isConsultant && (
+              <div style={{ marginTop: 8 }}>
+                <LoadingButton
+                  onClick={async () => {
+                    const notes = window.prompt('Optional note to confirm edits addressed:', '')
+                    try {
+                      const resp = await fetchWithAuth(`${API_URL}/api/deals/${id}/edits-addressed`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ notes: notes || '' })
+                      })
+                      const data = await resp.json().catch(() => null)
+                      if (!resp.ok) {
+                        notifyError(data?.error?.message || 'Failed to mark edits addressed')
+                      } else {
+                        notifySuccess('Marked edits addressed.')
+                        await load()
+                      }
+                    } catch (err) {
+                      notifyError(err, 'Failed to mark edits addressed')
+                    }
+                  }}
+                >
+                  Mark Edits Addressed
+                </LoadingButton>
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* Actions — restrict printing offer until approved */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
@@ -643,10 +894,109 @@ export default function DealDetail() {
         )}
         <LoadingButton onClick={printSchedule}>Print Schedule</LoadingButton>
         {(role === 'property_consultant' && deal.status === 'approved') && (
-          <LoadingButton onClick={() => generateDocFromSaved('pricing_form')}>Print Offer (Pricing Form PDF)</LoadingButton>
+          <>
+            <LoadingButton onClick={() => generateDocFromSaved('pricing_form')}>Print Offer (Pricing Form PDF)</LoadingButton>
+            {/* Allow Request Unit Block only when plan accepted or override approved */}
+            {(() => {
+              const snap = deal?.details?.calculator
+              const acceptedBySystem = snap?.generatedPlan?.evaluation?.decision === 'ACCEPT'
+              const overrideApproved = !!deal?.override_approved_at
+              const canBlock = acceptedBySystem || overrideApproved
+              const unitId = Number(snap?.unitInfo?.unit_id) || 0
+              if (!unitId) return null
+              return (
+                <LoadingButton
+                  onClick={async () => {
+                    const durationStr = window.prompt('Block duration in days (default 7):', '7')
+                    if (durationStr === null) return
+                    const durationDays = Number(durationStr) || 7
+                    const reason = window.prompt('Reason for block (optional):', '') || ''
+                    try {
+                      const resp = await fetchWithAuth(`${API_URL}/api/blocks/request`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ unitId: unitId, durationDays, reason })
+                      })
+                      const data = await resp.json()
+                      if (!resp.ok) notifyError(data?.error?.message || 'Failed to request unit block')
+                      else notifySuccess('Block request submitted for approval.')
+                    } catch (err) {
+                      notifyError(err, 'Failed to request unit block')
+                    }
+                  }}
+                  disabled={!canBlock}
+                  style={{ opacity: canBlock ? 1 : 0.6 }}
+                  title={canBlock ? 'Request a block on this unit' : 'Available after plan is ACCEPTED or override is approved'}
+                >
+                  Request Unit Block
+                </LoadingButton>
+              )
+            })()}
+          </>
         )}
-        {(role === 'financial_admin' && deal.status === 'approved') && (
-          <LoadingButton onClick={() => generateDocFromSaved('reservation_form')}>Generate Reservation Form (PDF)</LoadingButton>
+        {(role === 'financial_admin') && (
+          <>
+            {(() => {
+              const fmApproved = !!deal?.fm_review_at
+              return (
+                <>
+                  <LoadingButton
+                    onClick={() => setReservationModalOpen(true)}
+                    disabled={!fmApproved}
+                    title={fmApproved ? 'Generate Reservation Form (after FM approval)' : 'Available after Financial Manager approval'}
+                  >
+                    Generate Reservation Form (PDF)
+                  </LoadingButton>
+
+                  <ReservationFormModal
+                    open={reservationModalOpen}
+                    defaultDate={new Date().toISOString().slice(0,10)}
+                    defaultLanguage="en"
+                    defaultCurrency=""
+                    onCancel={() => setReservationModalOpen(false)}
+                    onGenerate={async (opts) => {
+                      try {
+                        setMessage('Generating Reservation Form…'); setShow(true)
+                        const resp = await fetchWithAuth(`${API_URL}/api/documents/reservation-form`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            deal_id: Number(deal.id),
+                            ...opts
+                          })
+                        })
+                        if (!resp.ok) {
+                          let errMsg = 'Failed to generate reservation form'
+                          try {
+                            const j = await resp.json()
+                            errMsg = j?.error?.message || errMsg
+                          } catch {}
+                          notifyError(errMsg); setShow(false); return
+                        }
+                        const blob = await resp.blob()
+                        const ts = new Date().toISOString().replace(/[:.]/g, '-')
+                        const filename = `reservation_form_${ts}.pdf`
+                        const url = URL.createObjectURL(blob)
+                        const a = document.createElement('a')
+                        a.href = url; a.download = filename
+                        document.body.appendChild(a); a.click(); document.body.removeChild(a)
+                        URL.revokeObjectURL(url)
+                        setReservationModalOpen(false)
+                        notifySuccess('Reservation Form generated successfully.')
+                      } catch (err) {
+                        notifyError(err, 'Failed to generate reservation form')
+                      } finally {
+                        setShow(false)
+                      }
+                    }}
+                  />
+                </>
+              )
+            })()}
+            <LoadingButton onClick={() => setShowEditModal(true)}>
+              Request Edits From Consultant
+            </LoadingButton>
+          </>
         )}
         {(role === 'contract_person' && deal.status === 'approved') && (
           <LoadingButton onClick={() => generateDocFromSaved('contract')}>Generate Contract (PDF)</LoadingButton>
@@ -749,6 +1099,84 @@ export default function DealDetail() {
           </tbody>
         </table>
       </div>
+    {/* Edit Request Modal */}
+      {showEditModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: '#fff', borderRadius: 12, padding: 16, width: 520, maxWidth: '90vw', boxShadow: '0 8px 24px rgba(0,0,0,0.12)' }}>
+            <h3 style={{ marginTop: 0 }}>Request Edits From Consultant</h3>
+            <p style={{ color: '#6b7280', marginTop: 4 }}>Select the fields that need correction and optionally add a comment. Identity and unit data are locked after block approval.</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <input type="checkbox" checked={editFields.address} onChange={e => setEditFields(s => ({ ...s, address: e.target.checked }))} />
+                Address
+              </label>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <input type="checkbox" checked={editFields.payment_plan} onChange={e => setEditFields(s => ({ ...s, payment_plan: e.target.checked }))} />
+                Payment Plan
+              </label>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <input type="checkbox" checked={editFields.maintenance_date} onChange={e => setEditFields(s => ({ ...s, maintenance_date: e.target.checked }))} />
+                Maintenance Deposit Date
+              </label>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <input type="checkbox" checked={editFields.offer_dates} onChange={e => setEditFields(s => ({ ...s, offer_dates: e.target.checked }))} />
+                Offer/First Payment Dates
+              </label>
+            </div>
+            <div style={{ marginTop: 10 }}>
+              <label style={{ display: 'block', fontWeight: 600, fontSize: 13, color: '#374151', marginBottom: 4 }}>Other (specify)</label>
+              <input
+                type="text"
+                value={editFields.other}
+                onChange={e => setEditFields(s => ({ ...s, other: e.target.value }))}
+                style={{ padding: 10, borderRadius: 10, border: '1px solid #d1d9e6', width: '100%' }}
+                placeholder="e.g., POA clause text or custom note"
+              />
+            </div>
+            <div style={{ marginTop: 10 }}>
+              <label style={{ display: 'block', fontWeight: 600, fontSize: 13, color: '#374151', marginBottom: 4 }}>Comment</label>
+              <textarea
+                value={editReason}
+                onChange={e => setEditReason(e.target.value)}
+                style={{ padding: 10, borderRadius: 10, border: '1px solid #d1d9e6', width: '100%', minHeight: 80 }}
+                placeholder="Describe what needs to be changed"
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
+              <LoadingButton onClick={() => { setShowEditModal(false); setEditFields({ address: false, payment_plan: false, maintenance_date: false, offer_dates: false, other: '' }); setEditReason('') }}>Cancel</LoadingButton>
+              <LoadingButton
+                variant="primary"
+                onClick={async () => {
+                  const fields = ['address','payment_plan','maintenance_date','offer_dates'].filter(k => editFields[k])
+                  if (editFields.other && editFields.other.trim()) fields.push(editFields.other.trim())
+                  try {
+                    const resp = await fetchWithAuth(`${API_URL}/api/deals/${id}/request-edits`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ reason: editReason || '', fields, comment: editReason || '' })
+                    })
+                    const data = await resp.json().catch(() => null)
+                    if (!resp.ok) {
+                      notifyError(data?.error?.message || 'Failed to request edits')
+                    } else {
+                      notifySuccess('Edit request sent to consultant.')
+                      setShowEditModal(false)
+                      setEditFields({ address: false, payment_plan: false, maintenance_date: false, offer_dates: false, other: '' })
+                      setEditReason('')
+                      await load()
+                    }
+                  } catch (err) {
+                    notifyError(err, 'Failed to request edits')
+                  }
+                }}
+              >
+                Send Request
+              </LoadingButton>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }

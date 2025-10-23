@@ -121,6 +121,193 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-10-23 09:10] Maintenance Deposit default date — honor Handover year when date is empty:
+  - Client: Fixed payload construction so an empty Maintenance Deposit Month is not treated as 0. When the Maintenance Deposit Date is empty, we now default the due month to handoverYear × 12; if handoverYear is not set, we fall back to 12 months. Previously, an empty string coerced to 0 and the schedule placed Maintenance at month 0 (same as First Payment Date).
+  - API: No change required. The server already defaults to Handover when month is invalid; the client now sends the correct month when the date is omitted.
+- [2025-10-23 09:15] Unit Block internal error (500) — ensure blocks table exists:
+  - DB: Added migration 041_blocks_table.sql to create the blocks table with required columns and indexes. Some environments relied on initDb but had migrations drift; this guarantees the table and trigger exist so /api/blocks/request no longer returns 500 due to missing relation.
+- [2025-10-23 09:35] Blocked-unit edit rules and Reservation Form flow:
+  - Client: When a unit is blocked (approved), property_consultant cannot edit client identity fields (name, email, phone) and cannot edit Unit & Project Information. Consultants can still adjust the payment plan and other client fields (e.g., address).
+  - Client: Financial Admin sees blocked units and can generate the Reservation Form using the data previously entered by the consultant (buyers, unit, and payment plan). FA cannot edit these fields directly; they should request edits from the consultant via workflow (future enhancement to add explicit “Request Edits” action).
+  - Client: App now passes blocked_until/available through unitInfo and computes unitBlocked to drive field-level locks.
+- [2025-10-23 10:25] Full Override Workflow (Consultant → SM → FM → TM) with notifications and audit:
+  - Client: Consultant can request override when Evaluation is REJECT on Deal Detail; the panel shows the workflow stages and provides role-based actions for SM, FM, and TM (Approve/Reject) with optional notes.
+  - Client: Added a visual timeline (sample circles) with dimmed pending stages and orange line/circle for approved stages. Stages show timestamps when completed.
+  - API: Notifications added for each decision stage:
+    - SM Approve → notify consultant “override_sm_approved”; SM Reject → “override_sm_rejected”.
+    - FM Approve → “override_fm_approved”; FM Reject → “override_fm_rejected”.
+    - TM Approve → “override_approved”; TM Reject → “override_rejected” (includes role in message).
+  - API: All actions write structured entries to deal_history with timestamps and user roles. Rejections clear needs_override and return the decision to consultant with audit trail.
+  - Client: Approvals page remains focused on deal approvals; override is handled in Deal Detail with role-specific buttons.
+- [2025-10-23 10:35] Unit Block button activation policy:
+  - Client: Consultant can request a unit block only when the plan is accepted by the automated system (NPV evaluation PASS) or when an override is approved (Top Management approval present). The button is disabled otherwise with a tooltip explaining the condition.
+  - Client: Create Deal page also disables the “Request Unit Block” button until the plan evaluation is ACCEPT.
+- [2025-10-23 11:22] Reservation Form — Arabic/RTL support and in-app modal UX:
+  - API: /api/documents/reservation-form now supports 'language' ('en'|'ar'), RTL rendering, localized labels and day-of-week, plus 'currency_override'.
+  - Client: Deal Detail shows a modal for Financial Admin to choose:
+    - Reservation Date (date picker)
+    - Preliminary Payment (validated numeric)
+    - Currency override (optional)
+    - Language (English/Arabic with RTL)
+    Then calls the API to generate and download the PDF. Button remains disabled until Financial Manager approval (fm_review_at).
+
+- [2025-10-23 11:40] Backend refactor — modular documents and planning endpoints, plus jobs and schema checks:
+  - Created api/src/documentsRoutes.js and mounted at /api/documents:
+    - POST /api/documents/client-offer
+    - POST /api/documents/reservation-form
+  - Created api/src/planningRoutes.js and mounted at /api:
+    - POST /api/calculate
+    - POST /api/generate-plan
+  - Moved background schedulers to api/src/jobs/scheduler.js and started from app.js via startSchedulers().
+  - Moved schema check utilities to api/src/utils/schemaCheck.js; app.js imports runSchemaCheck and retains /api/schema-check and startup check.
+  - Carefully removed legacy inline route blocks from app.js:
+    - Removed the old Client Offer and Reservation Form endpoints now served by documentsRoutes.
+    - Removed the old /api/calculate and /api/generate-plan endpoints now served by planningRoutes.
+  - If rollback is needed:
+    - Reintroduce the removed blocks from git history, or temporarily comment out the new mounts and re-enable the inline routes in app.js.
+    - Alternatively, disable the scheduler import in app.js and re-enable the in-file setInterval blocks.
+
+- [2025-10-23 11:41] Frontend refactor — modal component extraction:
+  - Added client/src/components/ReservationFormModal.jsx and wired it in DealDetail.jsx.
+  - The modal handles: date picker, preliminary payment validation, currency override, language toggle (English/Arabic).
+  - DealDetail now uses the component and calls the server endpoint to generate the PDF.
+
+- [2025-10-23 11:55] Backend refactor — notifications endpoints modularized:
+  - Created api/src/notificationsRoutes.js and mounted at /api/notifications:
+    - GET /api/notifications
+    - GET /api/notifications/unread-count
+    - PATCH /api/notifications/:id/read
+    - PATCH /api/notifications/mark-all-read
+  - Removed the old inline notifications endpoints from app.js and replaced with the module mount.
+  - Rollback guidance:
+    - If needed, re-enable the inline endpoints from git history and comment out app.use('/api/notifications', notificationsRoutes).
+    - Alternatively, keep the mount and copy routes back into app.js temporarily to test; then remove duplicates once stable.
+
+- [2025-10-23 12:05] Frontend refactor — App.jsx modularization (step 1):
+  - Extracted DiscountHint into client/src/components/DiscountHint.jsx and imported in App.jsx.
+  - Extracted TypeAndUnitPicker into client/src/components/TypeAndUnitPicker.jsx for cleaner unit/type selection logic (currently not directly used if UnitInfoSection encapsulates selection).
+  - App.jsx imports the new components to reduce inline function size and improve readability.
+  - Rollback guidance:
+    - If any UI breaks, revert imports in App.jsx and restore the inline DiscountHint/TypeAndUnitPicker implementations from git history.
+    - Components are self-contained; you can delete the new files and the app will work once inline code is restored.
+
+- [2025-10-23 12:20] Frontend refactor — App.jsx modularization (step 2: exports utils):
+  - Created client/src/lib/docExports.js and moved:
+    - exportScheduleCSV(genResult, language)
+    - exportScheduleXLSX(genResult, language)
+    - generateChecksSheetXLSX(genResult, clientInfo, unitInfo, currency, language)
+  - App.jsx now imports these helpers and calls them from the buttons.
+  - Benefits: reduces App.jsx size and isolates export logic for reuse.
+  - Rollback guidance:
+    - If needed, delete client/src/lib/docExports.js and restore the original inline functions in App.jsx from git history.
+    - Temporarily you can copy the functions back into App.jsx while keeping imports commented to test UI, then remove duplicates once stable.
+
+- [2025-10-23 12:32] Frontend refactor — App.jsx modularization (step 3: Client Offer generation helper):
+  - Extended client/src/lib/docExports.js with generateClientOfferPdf(body, API_URL, onProgress?).
+  - App.jsx now calls generateClientOfferPdf and handles the returned blob+filename to download the PDF.
+  - Benefits: progress/notification logic centralized; App.jsx smaller and easier to read.
+  - Rollback guidance:
+    - If needed, remove generateClientOfferPdf from docExports.js and reinsert the original exportClientOfferPdf function into App.jsx from git history.
+    - Comment out the import in App.jsx and call the inline function; once stable, remove duplicates.
+
+- [2025-10-23 12:45] Frontend refactor — App.jsx modularization (step 4: hooks + persistence):
+  - Added client/src/hooks/useCalculatorSummaries.js and replaced the in-file useMemo with useCalculatorSummaries(preview).
+  - Added client/src/hooks/useComparison.js and replaced the in-file useMemo with useComparison({ stdPlan, preview, inputs, firstYearPayments, subsequentYears, genResult, thresholdsCfg }).
+  - Added client/src/hooks/useCalculatorPersistence.js:
+    - loadSavedCalculatorState(LS_KEY) used to hydrate the calculator state on mount.
+    - usePersistCalculatorState(LS_KEY, snapshot) used to persist state changes (snapshot built via useMemo).
+  - App.jsx now imports and uses these hooks, reducing in-file logic and improving readability.
+  - Rollback guidance:
+    - If needed, delete the new hooks and restore the original useMemo blocks and localStorage effects from git history.
+    - Temporarily reintroduce the inline logic while keeping imports commented out to test, then remove duplicates when stable.
+
+- [2025-10-23 12:46] Frontend refactor — services layer (calculator API):
+  - Added client/src/services/calculatorApi.js with:
+    - fetchLatestStandardPlan(API_URL)
+    - calculateForUnit({ mode, unitId, inputs }, API_URL)
+    - generatePlan(payload, API_URL)
+  - Wired TypeAndUnitPicker to use calculateForUnit service instead of direct fetchWithAuth for unit-based calculations.
+  - Rollback guidance:
+    - If any API code breaks, call fetchWithAuth directly as before, and remove the service import.
+
+- [2025-10-23 12:58] Frontend refactor — App.jsx document generation via helper:
+  - Extended client/src/lib/docExports.js with generateDocumentFile(documentType, body, API_URL) which wraps /api/generate-document and returns { blob, filename }.
+  - App.jsx now uses generateDocumentFile in the Reservation Form and Contract buttons:
+    - Builds document body with existing buildDocumentBody(documentType).
+    - Calls generateDocumentFile and triggers the download.
+  - Rollback guidance:
+    - If needed, remove the import and restore the original generateDocument(documentType) function from git history.
+    - Alternatively, call fetchWithAuth inline and parse Content-Disposition as previously done.
+
+- [2025-10-23 13:08] Frontend refactor — App.jsx modularization (step 5: buildDocumentBody util + service wiring):
+  - Added client/src/lib/buildDocumentBody.js and replaced inline builder in App.jsx:
+    - buildDocumentBody(documentType, { language, currency, clientInfo, unitInfo, stdPlan, genResult, inputs }) returns { buyers, data } for the document.
+    - App.jsx now validates via validateForm(), builds payload, and merges docPart into the request body before calling generateDocumentFile.
+  - Wired App.jsx to services:
+    - Standard Plan fetch now uses fetchLatestStandardPlan(API_URL) from client/src/services/calculatorApi.js.
+    - Plan generation now uses generatePlan(payload, API_URL) instead of direct fetchWithAuth.
+  - Rollback guidance:
+    - If needed, delete client/src/lib/buildDocumentBody.js and restore the original buildDocumentBody function in App.jsx from git history.
+    - Revert service imports and switch back to fetchWithAuth calls for /api/standard-plan/latest and /api/generate-plan.
+
+- [2025-10-23 13:20] Frontend refactor — App.jsx modularization (step 6: payload + validation + system services):
+  - Added client/src/lib/payloadBuilders.js:
+    - buildCalculationPayload({ mode, stdPlan, unitInfo, inputs, firstYearPayments, subsequentYears }) centralized payload assembly.
+  - Added client/src/lib/validateCalculatorInputs.js:
+    - validateCalculatorInputs(payload, inputs, firstYearPayments, subsequentYears) returns an errors object, replacing inline validation checks.
+  - App.jsx updates:
+    - Replaced inline buildPayload with buildCalculationPayload import.
+    - Replaced validation logic with validateCalculatorInputs while keeping date defaulting locally (offerDate/firstPaymentDate).
+    - Fixed import for buildDocumentBody (typo corrected).
+    - Snapshot exposure now uses buildCalculationPayload for consistency.
+  - Added client/src/services/systemApi.js and wired App.jsx:
+    - fetchHealth(API_URL), fetchMessage(API_URL) used for initial health/message loading.
+  - Rollback guidance:
+    - If needed, delete payloadBuilders.js and validateCalculatorInputs.js and reinsert the original buildPayload and validateForm from git history.
+    - Revert systemApi imports and switch back to fetchWithAuth directly for /api/health and /api/message.
+
+- [2025-10-23 13:30] Frontend refactor — App.jsx modularization (step 7: styles + dynamic payments handlers):
+  - Added client/src/styles/calculatorStyles.js and moved the big styles object out of App.jsx. App.jsx now imports styles from this file.
+  - Added client/src/hooks/useDynamicPayments.js encapsulating:
+    - addFirstYearPayment, updateFirstYearPayment, removeFirstYearPayment
+    - addSubsequentYear, updateSubsequentYear, removeSubsequentYear
+    App.jsx imports and uses the hook to reduce inline handler boilerplate.
+  - Result: App.jsx line count reduced further without changing behavior.
+  - Rollback guidance:
+    - If needed, remove the styles import and paste the original styles object back into App.jsx from git history.
+    - Delete useDynamicPayments.js and restore the handler functions inline in App.jsx.
+
+- [2025-10-23 13:42] Frontend refactor — App.jsx modularization (step 8: unit search + embedding APIs):
+  - Added client/src/hooks/useUnitSearch.js and replaced the inline debounced typeahead effect with this hook.
+    - Provides: unitsCatalog, unitQuery, unitSearchLoading, unitDropdownOpen, setUnitQuery, setUnitDropdownOpen.
+  - Added client/src/hooks/useCalculatorEmbedding.js and replaced the long window.__uptown_calc_* useEffect with this hook.
+    - Exposes getSnapshot, applyClientInfo, applyUnitInfo, applyUnitPrefill for embedding contexts.
+  - Fixed minor import typos and cleaned duplicated snapshot lines.
+  - Result: App.jsx line count reduced to approximately ~1260 lines.
+  - Rollback guidance:
+    - If needed, remove the hook imports and reinsert the original unit search effect and embedding useEffect from git history.
+    - Ensure any removed state variables are re-added if rolling back (unitsCatalog/unitQuery/etc.).
+
+- [2025-10-23 13:52] Frontend refactor — App.jsx modularization (step 9: acceptance thresholds hook + Custom Notes component):
+  - Added client/src/hooks/useAcceptanceThresholds.js and replaced the inline acceptance thresholds fetch/useEffect.
+    - App.jsx now calls const thresholdsCfg = useAcceptanceThresholds() and uses it in comparison/evaluation.
+  - Added client/src/components/calculator/CustomNotesSection.jsx and replaced the inline custom notes section.
+    - Props: styles, language, role, customNotes, setCustomNotes.
+    - Behavior identical; just modularized.
+  - App.jsx imports these for cleaner structure. Line count reduced further (~1170 lines).
+  - Rollback guidance:
+    - If needed, remove the hook/component imports and paste back the original inline useEffect and custom notes JSX from git history.
+    - Ensure state bindings (customNotes/setCustomNotes and thresholdsCfg) are restored when rolling back.
+
+- [2025-10-23 14:05] Frontend cleanup — App.jsx fixes and styles polish:
+  - Removed inline duplicate TypeAndUnitPicker definition from App.jsx (the component already exists in client/src/components/TypeAndUnitPicker.jsx).
+  - Restored a small buildPayload() wrapper in App.jsx that delegates to buildCalculationPayload(...) to maintain compatibility with InputsForm prop usage.
+  - Fixed acceptance thresholds hook usage after refactor (useAcceptanceThresholds now correctly assigned to thresholdsCfg).
+  - Styles: corrected a syntax error in client/src/styles/calculatorStyles.js (td.borderBottom had mismatched quotes) and added styles.arInline used by CustomNotesSection.
+  - Rollback guidance:
+    - If needed, reinsert the inline TypeAndUnitPicker block from git history and remove the component import.
+    - If InputsForm requires a different payload shape, adjust buildPayload() accordingly or revert to the original inline builder.
+    - If styling regressions occur, revert calculatorStyles.js to its prior version from git history.
 - [2025-10-21 07:20] Standard Pricing approval — propagate to unit:
   - API: On approving a Standard Pricing record, the server now propagates the approved price (and area when valid) to the related unit (units.base_price and optionally units.area), and logs a 'propagate' entry in standard_pricing_history. This mirrors the unit-model pricing propagation pattern and ensures approved standards immediately reflect on the unit.
 - [2025-10-21 07:05] Top-Management approvals for Standard Pricing:
@@ -445,7 +632,124 @@ API integration tests:
 
 ---
 
+## User Guide — Pages, Flows, and Actions
+
+This section describes how each primary page works, who can use it, and the key buttons and actions available. Use this as a quick help reference per role. Links and labels are given as they appear in the app.
+
+General notes
+- Roles: property_consultant, sales_manager, financial_admin, financial_manager, contract_person, admin/superadmin (admin pages).
+- Date pickers accept calendar dates; if a date is optional and left empty, defaults are applied as documented (e.g., Maintenance Deposit defaults to the Handover date).
+- The app supports English and Arabic. Toggle “Language for Written Amounts” in Calculator to affect number-to-words output.
+
+1) Calculator Page
+- Purpose: Build payment plans, evaluate acceptance, prepare client offer exports.
+- Who: All roles can view; some inputs are locked based on role.
+- Key inputs
+  - Offer Date and First Payment Date: required; First Payment defaults to Offer Date.
+  - Mode: choose calculation mode (four options with inline explanations).
+  - Down Payment Type: “percentage” is disabled in PV-target modes to avoid circular dependency.
+  - Installment Frequency and Plan Duration (years): required.
+  - Handover Year and Additional Handover Payment: optional; if amount > 0 and year > 0, “Handover” appears in schedule.
+  - Maintenance Deposit (Amount + optional Date): not part of PV; if date is empty, it defaults to Handover.
+- Buttons
+  - Calculate (Generate Plan): builds the schedule and shows acceptance evaluation.
+  - Export Client Offer (PDF): Property Consultant only; shows a progress bar during generation.
+  - Export CSV / Export XLSX / Generate Checks Sheet: Financial Admin only; disabled for other roles.
+- Results
+  - Payment Schedule table with Month/Label/Amount/Date/Written Amount.
+  - Totals box shows both “Total (excluding Maintenance Deposit)” and “Total (including Maintenance Deposit)”.
+  - Acceptance Evaluation (server-side) shows PV comparison, conditions, and decision.
+
+2) Deals → Create Deal
+- Purpose: Prepare a full deal record using the embedded calculator and selected unit.
+- Who: Consultants/Sales Managers prepare; downstream actions by managers/admins.
+- Flow
+  - Select a unit from Inventory (or arrive with unit_id in URL). Unit summary shows model, code, prices, and totals.
+  - Use the embedded Calculator to generate a Payment Plan.
+  - Required minimal fields: Client Name, Client Primary Phone, Unit Model, Unit Code or Unit Number.
+- Buttons
+  - Change Unit: navigates back to Inventory.
+  - Request Unit Block: Consultants/Sales Managers can request a temporary hold (block) on the unit.
+  - Save as Draft: creates a draft deal.
+  - Save and Submit: creates and submits the deal; requires a generated plan.
+- Errors
+  - “Please generate a payment plan before submitting.” if plan missing.
+  - “Missing required fields: …” for minimal fields not supplied.
+
+3) Deals → Block Requests
+- Purpose: Manage pending unit block requests.
+- Who:
+  - Property Consultant: sees only their own pending requests; can cancel own.
+  - Sales Manager: sees requests from consultants in their team; can cancel any pending.
+  - Financial Manager: sees all pending requests; can approve or reject inline.
+- Buttons per request row
+  - Approve / Reject (FM only): PATCH /api/blocks/:id/approve with action approve|reject.
+  - Cancel: Consultant (own only) or Sales Manager (any pending).
+- Outcomes
+  - Approve: unit becomes unavailable; block listed under “Current Blocks”.
+  - Reject/cancel: request removed from pending list.
+
+4) Inventory (Deals → Inventory)
+- Purpose: Browse and select units for a deal.
+- Who: Consultants/Sales Managers/Financial Managers.
+- Actions
+  - Filter/search: type ahead to find units.
+  - Select unit: navigates to Create Deal with unit prefilled.
+- Notes
+  - If inventory appears in Admin pages but not under Deals → Inventory, ensure pricing drafts are linked to a Unit Model and approved, and units are AVAILABLE.
+
+5) Dashboard (Deals → Dashboard)
+- Purpose: Overview of deals and proposals with key dates.
+- Who: All roles; sections vary by role.
+- Columns
+  - Offer Date, First Payment Date, decision status, totals.
+- Exports
+  - CSV/XLSX exports include Offer Date and First Payment Date.
+
+6) Admin Pages (various)
+- Purpose: Configuration, pricing, approvals, thresholds.
+- Who: financial_admin, financial_manager, contract_person, admin/superadmin.
+- Examples
+  - Standard Pricing: configure per-model nominal components; approve to propagate to units (base price, area).
+  - Standard Plan: configure annual rate, duration, frequency; becomes authoritative baseline.
+  - Acceptance Thresholds: update min/max percentages; evaluated server-side in plans.
+
+7) Documents
+- Client Offer (PDF)
+  - Who: Property Consultant
+  - Button: Export Client Offer (PDF) from Calculator page.
+  - Content: buyers list, schedule table, totals, optional unit summary box with breakdown and dual totals. Arabic/RTL supported; page footers show Page X of Y.
+- Reservation Form
+  - Who: Financial Admin
+  - Button: Generate Reservation Form (from Calculator page when role permitted).
+- Contract
+  - Who: Contract Person
+  - Button: Generate Contract (from Calculator page when role permitted).
+- Notes: Supported templates live under api/templates; placeholders use <<name>>. Numeric fields gain “*_words” automatically.
+
+8) Notifications
+- Financial Managers receive notifications for block requests, hold reminders/expiry events.
+- Consultants receive notifications for decisions on their block requests.
+
+Troubleshooting quick tips
+- If a button is disabled, check role permissions.
+- For CORS/API reachability in Codespaces, see the Troubleshooting section below.
+- If a unit block request returns an error, ensure the unit is AVAILABLE and that the blocks table exists (migrations run automatically on startup).
+
+---
+
 ## Roadmap (next sessions)
+
+Planned enhancements
+- Override Timeline UI refinements
+  - Improve visuals: larger circles, labels under nodes, responsive layout, and hover tooltips with timestamps and approver names.
+  - Show the same override timeline on the Sales Manager Approvals page (implemented initial compact timeline badge).
+- Unit Lifecycle Timeline (future)
+  - Add a similar timeline to track unit state across Blocked → Reserved → Contracted (and back if expired/unblocked).
+  - Integrate with blocks table and reservation/contract events to display timestamps per transition.
+- Contract Cancellation Flow (future)
+  - Design and implement contract cancellation workflow with approvals and audit trail.
+  - Update documents and notifications to reflect cancellation and unit state changes.
 
 - Polish Client Offer PDF (server-rendered):
   - Add branded header/logo, consistent typography, page headers/footers, and proper pagination (repeat table headers on page break).

@@ -130,10 +130,12 @@ router.patch('/:id/approve', authMiddleware, requireRole(['financial_manager']),
          WHERE id = $3`,
         [req.user.id, reason || null, blockId]
       )
-      // Update unit availability
+      // Update unit availability and status to BLOCKED
       await pool.query(
         `UPDATE units 
-         SET available = false
+         SET available = FALSE,
+             unit_status = 'BLOCKED',
+             updated_at = NOW()
          WHERE id = $1`,
         [row.unit_id]
       )
@@ -168,10 +170,12 @@ router.get('/current', authMiddleware, async (req, res) => {
     let query = `
       SELECT 
         b.id,
+        b.unit_id,
         b.blocked_until,
         b.status,
         b.reason,
         u.code as unit_code,
+        u.unit_status,
         u.unit_type,
         usr.email as requested_by_name,
         b.created_at
@@ -259,7 +263,9 @@ async function processBlockExpiry() {
     for (const block of expiredBlocks.rows) {
       await pool.query(
         `UPDATE units 
-         SET available = true, blocked_until = NULL, updated_at=NOW()
+         SET available = TRUE,
+             unit_status = 'AVAILABLE',
+             updated_at = NOW()
          WHERE id = $1`,
         [block.unit_id]
       )

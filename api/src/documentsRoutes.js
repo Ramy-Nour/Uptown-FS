@@ -374,6 +374,16 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
         <div style="text-align:center; font-weight:800; font-size:14px; color:#111827; margin-top:2px;">
           ${title}
         </div>
+        <div style="text-align:center; font-size:11px; color:#374151; margin-top:2px;">
+          ${rtl
+            ? `${tOfferDate}: ${fmtDate(offer_date || '')}  •  ${tFirstPayment}: ${fmtDate(first_payment_date || '')}<br/>
+               ${tUnit}: ${unit?.unit_code || ''} — ${unit?.unit_type || ''}<br/>
+               ${tConsultant}: ${consultant?.email || ''}`
+            : `${tOfferDate}: ${fmtDate(offer_date || '')}  •  ${tFirstPayment}: ${fmtDate(first_payment_date || '')}<br/>
+               ${tUnit}: ${unit?.unit_code || ''} — ${unit?.unit_type || ''}<br/>
+               ${tConsultant}: ${consultant?.email || ''}`
+          }
+        </div>
       </div>`
     const pdfBuffer = await page.pdf({
       format: 'A4',
@@ -382,7 +392,7 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
       displayHeaderFooter: true,
       headerTemplate,
       footerTemplate,
-      margin: { top: '20mm', right: '12mm', bottom: '18mm', left: '12mm' }
+      margin: { top: '26mm', right: '12mm', bottom: '18mm', left: '12mm' }
     })
     await page.close()
 

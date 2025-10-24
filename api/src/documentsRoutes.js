@@ -379,6 +379,20 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
     const language = String(req.body?.language || 'en').toLowerCase().startsWith('ar') ? 'ar' : 'en'
     const rtl = language === 'ar'
 
+    // Date formatter DD-MM-YYYY
+    const fmtDate = (s) => {
+      if (!s) return ''
+      const d = new Date(s)
+      if (!isNaN(d.getTime())) {
+        const dd = String(d.getDate()).padStart(2, '0')
+        const mm = String(d.getMonth() + 1).padStart(2, '0')
+        const yyyy = d.getFullYear()
+        return `${dd}-${mm}-${yyyy}`
+      }
+      const parts = String(s).split('-')
+      return parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : s
+    }
+
     let dayOfWeek = ''
     try {
       const d = new Date(reservationDate)
@@ -465,6 +479,10 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
         <style>
           html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           body { font-family: ${rtl ? "'Noto Naskh Arabic', serif" : "'Inter', sans-serif"}; }
+          /* Corporate identity table styling for RF breakdown */
+          .rf-table { border: 2px solid #1f2937; border-collapse: collapse; }
+          .rf-table th { background: #A97E34; color: #000; border: 2px solid #1f2937; }
+          .rf-table td { border: 2px solid #1f2937; background: #fffdf5; }
         </style>
       </head>
       <body class="bg-gray-100 p-4 sm:p-8">
@@ -515,22 +533,22 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
           <div class="px-6 sm:px-8 pb-8 ${textAlignLeft}">
             <h2 class="text-lg font-semibold text-gray-700 mb-3">${L('Pricing Breakdown', 'تفاصيل التسعير')}</h2>
             <div class="rounded-xl border border-gray-200 overflow-hidden">
-              <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
+              <table class="min-w-full rf-table">
+                <thead>
                   <tr>
-                    <th class="text-xs font-medium text-gray-500 uppercase tracking-wider p-3 ${textAlignLeft}">${L('Label', 'البند')}</th>
-                    <th class="text-xs font-medium text-gray-500 uppercase tracking-wider p-3 ${textAlignRight}">${L('Amount', 'القيمة')}</th>
+                    <th class="text-xs font-medium uppercase tracking-wider p-3 ${textAlignLeft}">${L('Label', 'البند')}</th>
+                    <th class="text-xs font-medium uppercase tracking-wider p-3 ${textAlignRight}">${L('Amount', 'القيمة')}</th>
                   </tr>
                 </thead>
-                <tbody class="bg-white divide-y divide-gray-100">
+                <tbody>
                   <tr><td class="p-3">${L('Base', 'السعر الأساسي')}</td><td class="p-3 ${textAlignRight}">${Number(upb?.base||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>
                   ${Number(upb?.garden||0)>0 ? `<tr><td class="p-3">${L('Garden', 'الحديقة')}</td><td class="p-3 ${textAlignRight}">${Number(upb?.garden||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>` : ''}
                   ${Number(upb?.roof||0)>0 ? `<tr><td class="p-3">${L('Roof', 'السطح')}</td><td class="p-3 ${textAlignRight}">${Number(upb?.roof||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>` : ''}
                   ${Number(upb?.storage||0)>0 ? `<tr><td class="p-3">${L('Storage', 'غرفة التخزين')}</td><td class="p-3 ${textAlignRight}">${Number(upb?.storage||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>` : ''}
                   ${Number(upb?.garage||0)>0 ? `<tr><td class="p-3">${L('Garage', 'الجراج')}</td><td class="p-3 ${textAlignRight}">${Number(upb?.garage||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>` : ''}
                   ${Number(upb?.maintenance||0)>0 ? `<tr><td class="p-3">${L('Maintenance Deposit', 'وديعة الصيانة')}</td><td class="p-3 ${textAlignRight}">${Number(upb?.maintenance||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>` : ''}
-                  <tr class="bg-gray-50"><td class="p-3 font-semibold">${L('Total (excl. maintenance)', 'الإجمالي (بدون وديعة الصيانة)')}</td><td class="p-3 ${textAlignRight} font-semibold">${Number(totalExcl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>
-                  <tr class="bg-gray-50"><td class="p-3 font-semibold">${L('Total (incl. maintenance)', 'الإجمالي (شامل وديعة الصيانة)')}</td><td class="p-3 ${textAlignRight} font-semibold">${Number(totalIncl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>
+                  <tr><td class="p-3 font-semibold">${L('Total (excl. maintenance)', 'الإجمالي (بدون وديعة الصيانة)')}</td><td class="p-3 ${textAlignRight} font-semibold">${Number(totalExcl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>
+                  <tr><td class="p-3 font-semibold">${L('Total (incl. maintenance)', 'الإجمالي (شامل وديعة الصيانة)')}</td><td class="p-3 ${textAlignRight} font-semibold">${Number(totalIncl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>
                 </tbody>
               </table>
             </div>

@@ -292,7 +292,7 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
         </head>
         <body>
           <div class="header">
-            <div class="brand">${rtl ? 'نظام الشؤون المالية' : 'Uptown Financial System'}</div>
+            <div class="brand">${rtl ? 'نظام شركة أبتاون 6 أكتوبر المالي' : 'Uptown 6 October Financial System'}</div>
             <div class="meta">${rtl ? 'تم الإنشاء' : 'Generated'}: ${todayTs}</div>
           </div>
           <h2 style="${rtl ? 'text-align:right;' : ''}">${title}</h2>
@@ -300,13 +300,22 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
             <div class="meta"><strong>${tOfferDate}:</strong> ${fmtDate(offer_date || '')}   <strong>${tFirstPayment}:</strong> ${fmtDate(first_payment_date || '')}</div>
             ${unitLine ? `<div class="meta"><strong>${tUnit}:</strong> ${unitLine}</div>` : ''}
             ${consultantLine}
-            <div style="display:flex; ${rtl ? 'flex-direction:row-reverse;' : ''} gap:12px; align-items:stretch;">
-              <div style="flex:1;">
-                <div class="buyers">
-                  ${buyersHtml || (rtl ? '<div>لا يوجد بيانات عملاء</div>' : '<div>No client data</div>')}
+            <div style="display:flex; gap:12px; align-items:stretch;">
+              ${rtl ? `
+                ${summaryBoxHtml}
+                <div style="flex:1;">
+                  <div class="buyers">
+                    ${buyersHtml || '<div>لا يوجد بيانات عملاء</div>'}
+                  </div>
                 </div>
-              </div>
-              ${summaryBoxHtml}
+              ` : `
+                <div style="flex:1;">
+                  <div class="buyers">
+                    ${buyersHtml || '<div>No client data</div>'}
+                  </div>
+                </div>
+                ${summaryBoxHtml}
+              `}
             </div>
           </div>
           <div class="section">
@@ -486,6 +495,12 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
         </style>
       </head>
       <body class="bg-gray-100 p-4 sm:p-8">
+        <!-- Brand Header -->
+        <div class="max-w-4xl mx-auto text-sm ${textAlignLeft} mb-2">
+          <div class="${rtl ? 'text-right' : 'text-left'} font-semibold" style="color:#A97E34;">
+            ${L('Uptown 6 October Financial System', 'نظام شركة أبتاون 6 أكتوبر المالي')}
+          </div>
+        </div>
         <div class="container mx-auto max-w-4xl bg-white shadow-lg rounded-2xl overflow-hidden">
           <div class="p-6 sm:p-8 border-b border-gray-200 ${textAlignLeft}">
             <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">${L('Reservation Form', 'نموذج الحجز')}</h1>

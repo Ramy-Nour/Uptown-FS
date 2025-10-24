@@ -1,7 +1,7 @@
 import React from 'react'
 import * as ui from '../../lib/ui.js'
 
-export default function EvaluationPanel({ evaluation, role, dealId, API_URL }) {
+export default function EvaluationPanel({ evaluation, role, dealId, API_URL, showInlineOverride = false, onInlineOverride }) {
   if (!evaluation) return null
 
   const ok = evaluation.decision === 'ACCEPT'
@@ -68,6 +68,19 @@ export default function EvaluationPanel({ evaluation, role, dealId, API_URL }) {
             <li>PV Tolerance: {Number(evaluation.pv.tolerancePercent || 0).toLocaleString()}%</li>
             <li>Status: {evaluation.pv.pass ? 'PASS' : 'FAIL'}</li>
           </ul>
+          {/* Inline override action space below PV comparison */}
+          {!ok && showInlineOverride && (
+            <div style={{ marginTop: 10 }}>
+              <button
+                type="button"
+                onClick={onInlineOverride}
+                style={{ ...ui.btnPrimary, minWidth: 200 }}
+                title="Create a draft deal and request an override"
+              >
+                Request Override
+              </button>
+            </div>
+          )}
         </div>
         <div style={{ border: '1px dashed #ead9bd', borderRadius: 10, padding: 12 }}>
           <h3 style={{ marginTop: 0, fontSize: 16, color: '#5b4630' }}>Conditions</h3>

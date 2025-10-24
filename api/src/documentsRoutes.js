@@ -394,7 +394,7 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
       displayHeaderFooter: true,
       headerTemplate,
       footerTemplate,
-      margin: { top: '38mm', right: '12mm', bottom: '18mm', left: '12mm' }
+      margin: { top: '50mm', right: '12mm', bottom: '18mm', left: '12mm' }
     })
     await page.close()
 

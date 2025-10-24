@@ -100,6 +100,7 @@ export default function PaymentPlanEdits() {
             {!loading && rows.map(p => {
               const last = lastEditRequest(p) || {}
               const fields = Array.isArray(last.fields) ? last.fields.join(', ') : ''
+              const unitId = Number(p?.details?.calculator?.unitInfo?.unit_id) || 0
               return (
                 <tr key={p.id}>
                   <td style={td}>{p.id}</td>
@@ -108,7 +109,16 @@ export default function PaymentPlanEdits() {
                   <td style={td}>{last.reason || '-'}</td>
                   <td style={td}>{fields || '-'}</td>
                   <td style={td}>{last.at ? new Date(last.at).toLocaleString() : '-'}</td>
-                  <td style={{ ...td, display: 'flex', gap: 8 }}>
+                  <td style={{ ...td, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {unitId ? (
+                      <a
+                        href={`/deals/create?unit_id=${unitId}&plan_id=${p.id}`}
+                        style={{ ...btn, textDecoration: 'none', display: 'inline-block' }}
+                        title="Open Create Deal with this unit preselected"
+                      >
+                        Open in Create Deal
+                      </a>
+                    ) : null}
                     <button
                       style={btn}
                       onClick={() => createNewVersion(p.id)}

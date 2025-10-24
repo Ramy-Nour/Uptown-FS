@@ -6,15 +6,16 @@ const BRAND = {
 }
 
 export default function BrandHeader({ title, onLogout }) {
-  const appTitle = title || (import.meta.env.VITE_APP_TITLE || 'Uptown Financial System')
-  const envLogo = import.meta.env.VITE_COMPANY_LOGO_URL || ''
-  const [logoUrl, setLogoUrl] = useState('/logo.svg')
-  const [user, setUser] = useState(null)
-  const [queueCount, setQueueCount] = useState(0)
+  const appTitle = title || (import.meta.env.VITE_APP_TITLE || 'Uptown Financial System')
+  const envLogo = import.meta.env.VITE_COMPANY_LOGO_URL || ''
+  const [logoUrl, setLogoUrl] = useState('/logo.svg')
+  const [user, setUser] = useState(null)
+  const [queueCount, setQueueCount] = useState(0)
+  const [planEditsCount, setPlanEditsCount] = useState(0)
 
-  // API health banner state
-  const [apiHealthy, setApiHealthy] = useState(null) // null = unknown, true/false
-  const [apiHealthMsg, setApiHealthMsg] = useState('')
+  // API health banner state
+  const [apiHealthy, setApiHealthy] = useState(null) // null = unknown, true/false
+  const [apiHealthMsg, setApiHealthMsg] = useState('')
 
   useEffect(() => {
     let mounted = true
@@ -47,35 +48,51 @@ export default function BrandHeader({ title, onLogout }) {
     return () => { mounted = false }
   }, [envLogo])
 
-  // Poll queue counts for approver roles
-  useEffect(() => {
-    let t
-    async function poll() {
-      try {
-        const token = localStorage.getItem('auth_token')
-        const role = JSON.parse(localStorage.getItem('auth_user') || '{}')?.role
-        let url = ''
-        if (role === 'sales_manager') url = '/api/workflow/payment-plans/queue/sm'
-        else if (role === 'financial_manager') url = '/api/workflow/payment-plans/queue/fm'
-        else if (['ceo', 'vice_chairman', 'chairman', 'top_management'].includes(role)) url = '/api/workflow/payment-plans/queue/tm'
-        if (!url) { setQueueCount(0); return }
-        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
-        const resp = await fetch(`${API_URL}${url}`, { headers: { Authorization: `Bearer ${token}` }})
-        const data = await resp.json().catch(() => ({}))
-        if (resp.ok) {
-          setQueueCount((data?.payment_plans || []).length)
-        } else {
-          setQueueCount(0)
-        }
-      } catch {
-        setQueueCount(0)
-      } finally {
-        t = setTimeout(poll, 30000) // every 30s
-      }
-    }
-    poll()
-    return () => t && clearTimeout(t)
-  }, [])
+  // Poll queue counts for approver roles and consultant plan edits count
+  useEffect(() => {
+    let t
+    async function poll() {
+      try {
+        const token = localStorage.getItem('auth_token')
+        const parsed = JSON.parse(localStorage.getItem('auth_user') || '{}')
+        const role = parsed?.role
+        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+        // Approver queues
+        let url = ''
+        if (role === 'sales_manager') url = '/api/workflow/payment-plans/queue/sm'
+        else if (role === 'financial_manager') url = '/api/workflow/payment-plans/queue/fm'
+        else if (['ceo', 'vice_chairman', 'chairman', 'top_management'].includes(role)) url = '/api/workflow/payment-plans/queue/tm'
+        if (url) {
+          const resp = await fetch(`${API_URL}${url}`, { headers: { Authorization: `Bearer ${token}` }})
+          const data = await resp.json().catch(() => ({}))
+          setQueueCount(resp.ok ? (data?.payment_plans || []).length : 0)
+        } else {
+          setQueueCount(0)
+        }
+        // Consultant pending edit requests
+        if (role === 'property_consultant') {
+          const resp2 = await fetch(`${API_URL}/api/workflow/payment-plans/my`, { headers: { Authorization: `Bearer ${token}` }})
+          const data2 = await resp2.json().catch(() => ({}))
+          if (resp2.ok) {
+            const list = Array.isArray(data2.payment_plans) ? data2.payment_plans : []
+            const count = list.filter(p => !!(p.details && p.details.meta && p.details.meta.pending_edit_request)).length
+            setPlanEditsCount(count)
+          } else {
+            setPlanEditsCount(0)
+          }
+        } else {
+          setPlanEditsCount(0)
+        }
+      } catch {
+        setQueueCount(0)
+        setPlanEditsCount(0)
+      } finally {
+        t = setTimeout(poll, 30000) // every 30s
+      }
+    }
+    poll()
+    return () => t && clearTimeout(t)
+  }, [])
 
   // API health check banner
   useEffect(() => {
@@ -170,7 +187,7 @@ export default function BrandHeader({ title, onLogout }) {
         return [
           ...baseWithCalc,
           { label: 'Offer Progress', href: '/deals/offer-progress' },
-          { label: 'Plan Edits', href: '/deals/plan-edits' },
+          { label: `Plan Edits${planEditsCount ? ` (${planEditsCount})` : ''}`, href: '/deals/plan-edits' },
           { label: 'My Proposals', href: '/deals/my-proposals' }
         ]
       case 'contract_person':

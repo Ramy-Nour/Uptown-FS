@@ -121,11 +121,57 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-10-24 09:50] Client Offer/Reservation Form PDFs — repeated headers, Cairo time, no overlap:
+  - Header content unified and repeated on every page:
+    - EN: “Uptown 6 October Financial System” (left), “Generated: DD-MM-YYYY HH:mm:ss” (right), big centered title, then a brief summary line (Offer Date, First Payment, Unit, Consultant for Client Offer; Reservation Date and Unit for Reservation Form).
+    - AR: “نظام شركة أبتاون 6 أكتوبر المالي” with proper RTL shaping and bidi overrides; equivalent summary lines localized.
+  - Timestamp now uses Cairo time explicitly via Intl.DateTimeFormat with timeZone 'Africa/Cairo' (overridable by TIMEZONE/TZ env).
+  - Removed conflicting @page margin from inline CSS to let Puppeteer’s page.pdf() margins take full effect and avoid header/content overlap on later pages.
+  - Increased top margins and added first-section spacing to guarantee content always starts below the repeated header on all pages (EN and AR).
+  - Restored disclaimer at the end of Client Offer: “This document is not a contract and is generated for client viewing only...” (localized).
+  - Files: api/src/documentsRoutes.js.
+- [2025-10-24 09:30] Unit Block flow — schema guard and SQL typing fix:
+  - API: POST /api/blocks/request now defensively ensures blocks table/indexes exist (for envs where migrations were skipped).
+  - Fixed interval expression for blocked_until to keep $3 as integer only: NOW() + ($3::int) * INTERVAL '1 day' (resolves Postgres 42P08 “text vs integer”).
+  - Files: api/src/blockManagement.js, api/src/migrations/041_blocks_table.sql.
+- [2025-10-24 09:15] Unit Block button modularized and gated by client info:
+  - UI: Added components/calculator/BlockUnitButton.jsx; App.jsx now renders it under Client Info, keeping modularity.
+  - Enablement rules: role = property_consultant|sales_manager, unit selected, plan decision = ACCEPT, and all client info fields present except Secondary Phone.
+  - On click: prompts for duration (days, default 7) and optional reason; posts to /api/blocks/request.
+  - Files: client/src/components/calculator/BlockUnitButton.jsx, client/src/App.jsx.
+- [2025-10-24 09:05] Inline “Request Override” on Calculator when REJECT:
+  - UI: “Request Override” button added under the PV Comparison card when decision = REJECT and no dealId (calculator-only context).
+  - Flow: validates unit and required client info → creates draft deal via POST /api/deals → immediately POST /api/deals/:id/request-override with optional reason → alerts success.
+  - Files: client/src/components/calculator/EvaluationPanel.jsx, client/src/App.jsx.
+- [2025-10-24 08:45] Client Offer brand strings corrected:
+  - EN: “Uptown 6 October Financial System”
+  - AR: “نظام شركة أبتاون 6 أكتوبر المالي”
+  - Reservation Form header updated to show the same brand line above title; no consultant info in RF header per policy.
+  - Files: api/src/documentsRoutes.js.
+- [2025-10-24 08:20] Arabic layout alignment in Client Offer:
+  - Summary box and buyers info swap sides in Arabic (summary left, buyers right) to mirror LTR layout.
+  - Applied consistent corporate table styling (gold/dark) across sections; widened date column and standardized DD-MM-YYYY format.
+  - Files: api/src/documentsRoutes.js.
+
 - [2025-10-23 14:30] API route mounts and health endpoints restored:
   - API: Reintroduced core middleware (helmet, cors, express.json/urlencoded) and mounted primary routers in api/src/app.js:
     - /api/auth, /api/deals, /api/units, /api/inventory, /api/standard-plan, /api (planningRoutes), /api/notifications, and /api/blocks.
   - API: Added GET /api/health → { status: "ok" } and GET /api/message → { message: "Hello from API" } for Codespaces reachability checks.
   - Impact: Client calls like POST /api/blocks/request now resolve to the correct Express router instead of returning 404/500 due to missing mounts. Body parsing is enabled so validation works as expected.
+- [2025-10-23 15:32] Client Offer PDF — Amount in Words and Unit Totals restored (modular):
+  - API: In api/src/documentsRoutes.js (server-rendered PDFs), restored the “Amount in Words” column using convertToWords for both English and Arabic.
+  - API: Added a “Unit Totals” section that shows Base, Garden, Roof, Storage, Garage, Maintenance Deposit, and dual totals (incl./excl. maintenance). It reads unit_pricing_breakdown sent by the client for consistency with the calculator.
+  - Modularity: No changes to app.js or App.jsx. All logic remains in the modular documents route.
+- [2025-10-23 15:28] Acceptance Evaluation — thresholds now read from DB:
+  - API: api/src/planningRoutes.js now reads payment_thresholds (latest row) for pv_tolerance_percent and min% for Year1/Year2/Year3/Handover.
+  - Removed duplicate “Payment After 1 Year” condition; Year 1 is enforced via the cumulative percent rule only.
+- [2025-10-23 15:18] Standard PV source — prefer FM-stored PV for consistency:
+  - API: In /api/calculate and /api/generate-plan (api/src/planningRoutes.js), when a unit/model or standardPricingId is provided, we now prefer the Financial Manager’s stored calculated_pv from unit_model_pricing/standard_pricing if present. We only compute PV if stored value is missing.
+  - Queries updated to select calculated_pv from both unit_model_pricing and standard_pricing.
+  - Result: The “Standard PV” used by the calculator and evaluation matches the approved value set by the Financial Manager.
+- [2025-10-23 15:05] NPV tolerance tightened to 2%:
+  - API: Updated evaluation tolerance in api/src/planningRoutes.js from 70% to 98% baseline, i.e., Proposed PV must be ≥ 98% of Standard PV to PASS (epsilon applied).
+  - Note: The evaluation PV shown in “Acceptance Evaluation” is authoritative; smaller “Std Calculated PV” boxes are client estimates and may differ if inputs don’t match.
 - [2025-10-23 14:40] Maintenance Deposit month default — treat empty string or 0 as “not provided”:
   - API: In plan generation (api/src/planningRoutes.js), if maintenancePaymentDate is not given and maintenancePaymentMonth is '' or 0, we now fallback to HandoverYear × 12; if handoverYear is not set, fallback to 12 months. Previously, an empty string coerced to 0 so Maintenance showed at month 0 (same date as Down Payment).
   - Tests: Added unit tests for the helper in api/src/tests/paymentPlanHelpers.test.js. Run with: cd api && npm run test:helpers

@@ -25,6 +25,7 @@ import { useDynamicPayments } from './hooks/useDynamicPayments.js'
 import { useUnitSearch } from './hooks/useUnitSearch.js'
 import { useCalculatorEmbedding } from './hooks/useCalculatorEmbedding.js'
 import { useAcceptanceThresholds } from './hooks/useAcceptanceThresholds.js'
+import { fetchWithAuth } from './lib/apiClient.js'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 const LS_KEY = 'uptown_calc_form_state_v2'
@@ -540,6 +541,36 @@ export default function App(props) {
 
   // (removed inline exportScheduleXLSX and generateChecksSheetXLSX; using helpers from lib/docExports.js)
 
+  // Request Unit Block (embedded flow)
+  async function requestUnitBlockFromCalculator() {
+    try {
+      const uid = Number(unitInfo?.unit_id)
+      if (!Number.isFinite(uid) || uid <= 0) {
+        setDocError('Select a unit first from Deals → Inventory.')
+        return
+      }
+      const decision = genResult?.evaluation?.decision || null
+      if (decision !== 'ACCEPT') {
+        setDocError('The plan must be ACCEPT before requesting a unit block.')
+        return
+      }
+      const durationStr = window.prompt('Block duration in days (default 7):', '7')
+      if (durationStr === null) return
+      const durationDays = Number(durationStr) || 7
+      const reason = window.prompt('Reason for block (optional):', '') || ''
+      const resp = await fetchWithAuth(`${API_URL}/api/blocks/request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ unitId: uid, durationDays, reason })
+      })
+      const data = await resp.json()
+      if (!resp.ok) throw new Error(data?.error?.message || 'Failed to request unit block')
+      alert('Block request submitted for approval.')
+    } catch (e) {
+      setDocError(e.message || String(e))
+    }
+  }
+
   // Computed summaries (from preview)
   const summaries = useCalculatorSummaries(preview)
 
@@ -690,6 +721,38 @@ export default function App(props) {
           customNotes={customNotes}
           setCustomNotes={setCustomNotes}
         />
+
+        {/* Inline actions aligned with Client Info flow */}
+        {(role === 'property_consultant' || role === 'sales_manager') && (
+          <div style={{ marginTop: 8, marginBottom: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
+            {(() => {
+              const uid = Number(unitInfo?.unit_id) || 0
+              const canBlock = uid > 0 && (genResult?.evaluation?.decision === 'ACCEPT')
+              return (
+                <button
+                  type="button"
+                  onClick={requestUnitBlockFromCalculator}
+                  disabled={!canBlock}
+                  style={{
+                    ...(styles.btnPrimary || {}),
+                    opacity: canBlock ? 1 : 0.6,
+                    cursor: canBlock ? 'pointer' : 'not-allowed',
+                    minWidth: 180
+                  }}
+                  title={
+                    canBlock
+                      ? (isRTL(language) ? 'طلب حجز مؤقت للوحدة' : 'Request a temporary block on this unit')
+                      : (isRTL(language)
+                          ? 'ستصبح متاحة بعد قبول الخطة — اختر وحدة من الجرد أولاً'
+                          : 'Available after plan is ACCEPT and a unit is selected')
+                  }
+                >
+                  {isRTL(language) ? 'طلب حجز الوحدة' : 'Request Unit Block'}
+                </button>
+              )
+            })()}
+          </div>
+        )}
 
         {/* Results Table */}
         <section style={styles.section} dir={isRTL(language) ? 'rtl' : 'ltr'}>

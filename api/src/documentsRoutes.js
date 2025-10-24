@@ -199,7 +199,7 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
     const f = (s) => Number(s || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     const fmtDate = (s) => {
       if (!s) return ''
-      // Input may be YYYY-MM-DD; output DD-MM-YYYY
+      // Input may be YYYY-MM-DD; output DD-MM-YYYY in local time
       const d = new Date(s)
       if (!isNaN(d.getTime())) {
         const dd = String(d.getDate()).padStart(2,'0')
@@ -212,7 +212,17 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
       const parts = String(s).split('-')
       return parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : s
     }
-    const todayTs = fmtDate(new Date().toISOString().slice(0, 10)) + ' ' + new Date().toISOString().slice(11,19)
+    const localTimestamp = () => {
+      const d = new Date()
+      const dd = String(d.getDate()).padStart(2,'0')
+      const mm = String(d.getMonth()+1).padStart(2,'0')
+      const yyyy = d.getFullYear()
+      const hh = String(d.getHours()).padStart(2,'0')
+      const mi = String(d.getMinutes()).padStart(2,'0')
+      const ss = String(d.getSeconds()).padStart(2,'0')
+      return `${dd}-${mm}-${yyyy} ${hh}:${mi}:${ss}`
+    }
+    const todayTs = localTimestamp()
     const title = rtl ? 'عرض السعر للعميل' : 'Client Offer'
     const tSchedule = rtl ? 'خطة السداد' : 'Payment Plan'
     const tOfferDate = rtl ? 'تاريخ العرض' : 'Offer Date'
@@ -334,6 +344,11 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
                 ${scheduleRows || `<tr><td colspan="5">${rtl ? 'لا توجد بيانات' : 'No data'}</td></tr>`}
               </tbody>
             </table>
+          </div>
+          <div class="foot" style="${rtl ? 'text-align:right;' : 'text-align:left;'}">
+            ${rtl
+              ? 'هذا المستند ليس عقدًا وهو مُعد لعرض الأسعار للعميل فقط. قد تختلف القيم عند التعاقد النهائي.'
+              : 'This document is not a contract and is generated for client viewing only. Values are indicative and subject to final contract.'}
           </div>
         </body>
       </html>

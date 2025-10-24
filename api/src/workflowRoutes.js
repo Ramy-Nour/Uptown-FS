@@ -1115,7 +1115,7 @@ router.get(
 router.post(
   '/payment-plans/:id/new-version',
   authMiddleware,
-  requireRole(['property_consultant', 'financial_manager']),
+  requireRole(['property_consultant']),
   async (req, res) => {
     const client = await pool.connect()
     try {
@@ -1131,6 +1131,11 @@ router.post(
         return bad(res, 404, 'Payment plan not found')
       }
       const prev = cur.rows[0]
+      // Only the original creator (consultant) can create new versions
+      if (prev.created_by !== req.user.id) {
+        await client.query('ROLLBACK'); client.release()
+        return bad(res, 403, 'Only the consultant who created this plan can create a new version')
+      }
       // Next version number for same deal
       const vres = await client.query('SELECT COALESCE(MAX(version),0)+1 AS v FROM payment_plans WHERE deal_id=$1', [prev.deal_id])
       const nextV = vres.rows[0].v || 1
@@ -1146,6 +1151,90 @@ router.post(
       try { await client.query('ROLLBACK') } catch {}
       client.release()
       console.error('POST /api/workflow/payment-plans/:id/new-version error:', e)
+      return bad(res, 500, 'Internal error')
+    }
+  }
+)
+
+// FM/FA request edits on a payment plan (does not modify the plan)
+router.post(
+  '/payment-plans/:id/request-edits',
+  authMiddleware,
+  requireRole(['financial_manager','financial_admin']),
+  async (req, res) => {
+    try {
+      const id = ensureNumber(req.params.id)
+      if (!id) return bad(res, 400, 'Invalid id')
+      const { reason, fields } = req.body || {}
+      const cur = await pool.query('SELECT id, details, created_by FROM payment_plans WHERE id=$1', [id])
+      if (cur.rows.length === 0) return bad(res, 404, 'Payment plan not found')
+      const det = cur.rows[0].details || {}
+      const meta = det.meta || {}
+      const editReq = {
+        by_user_id: req.user.id,
+        by_role: req.user.role,
+        reason: typeof reason === 'string' ? reason : null,
+        fields: Array.isArray(fields) ? fields : [],
+        at: new Date().toISOString()
+      }
+      const nextMeta = {
+        ...meta,
+        pending_edit_request: true,
+        edit_requests: [...(meta.edit_requests || []), editReq]
+      }
+      const nextDetails = { ...det, meta: nextMeta }
+      const upd = await pool.query(
+        `UPDATE payment_plans SET details=$1, updated_at=now() WHERE id=$2 RETURNING *`,
+        [nextDetails, id]
+      )
+      // Notify the consultant (creator)
+      try {
+        await pool.query(
+          `INSERT INTO notifications (user_id, type, ref_table, ref_id, message)
+           VALUES ($1, 'payment_plan_request_edits', 'payment_plans', $2, $3)`,
+          [cur.rows[0].created_by, id, String(reason || 'Edits requested for your payment plan.')]
+        )
+      } catch {}
+      return ok(res, { payment_plan: upd.rows[0] })
+    } catch (e) {
+      console.error('POST /api/workflow/payment-plans/:id/request-edits error:', e)
+      return bad(res, 500, 'Internal error')
+    }
+  }
+)
+
+// Consultant marks edits addressed (does not change approval status)
+router.post(
+  '/payment-plans/:id/edits-addressed',
+  authMiddleware,
+  requireRole(['property_consultant']),
+  async (req, res) => {
+    try {
+      const id = ensureNumber(req.params.id)
+      const { notes } = req.body || {}
+      if (!id) return bad(res, 400, 'Invalid id')
+      const cur = await pool.query('SELECT id, details FROM payment_plans WHERE id=$1', [id])
+      if (cur.rows.length === 0) return bad(res, 404, 'Payment plan not found')
+      const det = cur.rows[0].details || {}
+      const meta = det.meta || {}
+      const resp = {
+        by_user_id: req.user.id,
+        notes: typeof notes === 'string' ? notes : null,
+        at: new Date().toISOString()
+      }
+      const nextMeta = {
+        ...meta,
+        pending_edit_request: false,
+        edit_responses: [...(meta.edit_responses || []), resp]
+      }
+      const nextDetails = { ...det, meta: nextMeta }
+      const upd = await pool.query(
+        `UPDATE payment_plans SET details=$1, updated_at=now() WHERE id=$2 RETURNING *`,
+        [nextDetails, id]
+      )
+      return ok(res, { payment_plan: upd.rows[0] })
+    } catch (e) {
+      console.error('POST /api/workflow/payment-plans/:id/edits-addressed error:', e)
       return bad(res, 500, 'Internal error')
     }
   }

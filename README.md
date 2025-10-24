@@ -121,7 +121,7 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
-- [2025-10-24 10:35] FA: Select approved plans instead of typing ID; Sales: Offer Progress timeline
+- [2025-10-24 10:35] FA: Select approved plans instead of typing ID; Sales: Offer Progress timeline; FM/FA edit-requests on payment plans
   - API: Added GET /api/workflow/payment-plans/approved-for-unit?unit_id=… to list approved plans where details.calculator.unitInfo.unit_id matches the unit.
   - Client: On Deals → Current Blocks, FA now selects an Approved Payment Plan from a dropdown per blocked unit. The selector auto-loads plans; manual ID entry removed. We also include unit_id in reservation form details.
   - API: Added GET /api/inventory/progress for sales roles to aggregate status across Block (blocks), Reservation (reservation_forms), and Contract (contracts) for relevant units:
@@ -132,6 +132,11 @@ Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track 
     - Financial Admin: Current Blocks
     - Financial Manager: Current Blocks, Reservations
     - Sales Manager/Consultant: Offer Progress
+  - Policy: Only consultants can edit payment plans. FM/FA can request edits but cannot directly edit.
+    - API: Restricted POST /api/workflow/payment-plans/:id/new-version to property_consultant, and only by the plan creator.
+    - API: Added POST /api/workflow/payment-plans/:id/request-edits (roles: financial_manager, financial_admin) — stores request in payment_plans.details.meta and notifies the consultant.
+    - API: Added POST /api/workflow/payment-plans/:id/edits-addressed (role: property_consultant) — clears pending flag and logs response in details.meta.
+    - Client: On FM Reservations Queue, added “Request Edits” button next to Payment Plan ID to send an edit request to the consultant.
 - [2025-10-24 10:10] Unit Block approval updates inventory status and FA can find blocked units:
   - API: When Financial Manager approves a block request (PATCH /api/blocks/:id/approve), the unit now sets available=FALSE and unit_status='BLOCKED'. Previously we flipped available only, leaving unit_status as 'AVAILABLE', so lists showed AVAILABLE despite a block.
   - API: Block expiry job now restores units to available=TRUE and unit_status='AVAILABLE' (removed reference to a non-existent units.blocked_until field).

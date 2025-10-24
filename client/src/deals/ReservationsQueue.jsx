@@ -44,6 +44,24 @@ export default function ReservationsQueue() {
     }
   }
 
+  async function requestEdits(paymentPlanId) {
+    try {
+      const reason = window.prompt('Describe requested edits for the consultant:', '') || ''
+      const fieldsStr = window.prompt('Which fields? (comma-separated, optional):', '') || ''
+      const fields = fieldsStr.split(',').map(s => s.trim()).filter(Boolean)
+      const resp = await fetchWithAuth(`${API_URL}/api/workflow/payment-plans/${paymentPlanId}/request-edits`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason, fields })
+      })
+      const data = await resp.json().catch(() => ({}))
+      if (!resp.ok) throw new Error(data?.error?.message || 'Failed to request edits')
+      alert('Edit request sent to the consultant.')
+    } catch (e) {
+      alert(e.message || String(e))
+    }
+  }
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
@@ -73,7 +91,12 @@ export default function ReservationsQueue() {
               return (
                 <tr key={r.id}>
                   <td style={td}>{r.id}</td>
-                  <td style={td}>{r.payment_plan_id}</td>
+                  <td style={td}>
+                    {r.payment_plan_id}{' '}
+                    <button style={{ ...btn, marginLeft: 6 }} onClick={() => requestEdits(r.payment_plan_id)}>
+                      Request Edits
+                    </button>
+                  </td>
                   <td style={td}>{r.status}</td>
                   <td style={td}>{d.reservation_date || '-'}</td>
                   <td style={td}>{Number(d.preliminary_payment || 0).toLocaleString()}</td>

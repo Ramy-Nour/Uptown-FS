@@ -163,7 +163,8 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
 
     const css = `
       <style>
-        @page { size: A4; margin: 16mm 14mm; }
+        /* Let Puppeteer page.pdf() control margins; avoid conflicting @page margins */
+        @page { size: A4; }
         html { direction: ${dir}; }
         body { font-family: "Noto Naskh Arabic", "Amiri", "DejaVu Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
         h1,h2,h3 { margin: 0 0 8px; }

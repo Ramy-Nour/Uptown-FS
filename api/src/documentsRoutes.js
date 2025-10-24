@@ -199,7 +199,7 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
     const f = (s) => Number(s || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     const fmtDate = (s) => {
       if (!s) return ''
-      // Input may be YYYY-MM-DD; output DD-MM-YYYY
+      // Input may be YYYY-MM-DD; output DD-MM-YYYY in local time
       const d = new Date(s)
       if (!isNaN(d.getTime())) {
         const dd = String(d.getDate()).padStart(2,'0')
@@ -212,7 +212,17 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
       const parts = String(s).split('-')
       return parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : s
     }
-    const todayTs = fmtDate(new Date().toISOString().slice(0, 10)) + ' ' + new Date().toISOString().slice(11,19)
+    const localTimestamp = () => {
+      const d = new Date()
+      const dd = String(d.getDate()).padStart(2,'0')
+      const mm = String(d.getMonth()+1).padStart(2,'0')
+      const yyyy = d.getFullYear()
+      const hh = String(d.getHours()).padStart(2,'0')
+      const mi = String(d.getMinutes()).padStart(2,'0')
+      const ss = String(d.getSeconds()).padStart(2,'0')
+      return `${dd}-${mm}-${yyyy} ${hh}:${mi}:${ss}`
+    }
+    const todayTs = localTimestamp()
     const title = rtl ? 'عرض السعر للعميل' : 'Client Offer'
     const tSchedule = rtl ? 'خطة السداد' : 'Payment Plan'
     const tOfferDate = rtl ? 'تاريخ العرض' : 'Offer Date'
@@ -335,6 +345,11 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
               </tbody>
             </table>
           </div>
+          <div class="foot" style="${rtl ? 'text-align:right;' : 'text-align:left;'}">
+            ${rtl
+              ? 'هذا المستند ليس عقدًا وهو مُعد لعرض الأسعار للعميل فقط. قد تختلف القيم عند التعاقد النهائي.'
+              : 'This document is not a contract and is generated for client viewing only. Values are indicative and subject to final contract.'}
+          </div>
         </body>
       </html>
     `
@@ -346,7 +361,30 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
       <div style="width:100%; font-size:10px; color:#6b7280; padding:6px 10px; font-family:'Noto Naskh Arabic','Amiri','DejaVu Sans',Arial, sans-serif; ${rtl ? 'direction:rtl; unicode-bidi:bidi-override; text-align:left;' : 'direction:ltr; text-align:right;'}">
         ${rtl ? 'صفحة' : 'Page'} <span class="pageNumber"></span> ${rtl ? 'من' : 'of'} <span class="totalPages"></span>
       </div>`
-    const headerTemplate = '<div></div>'
+    const headerTemplate = `
+      <div style="width:100%; padding:6px 10px; font-family:'Noto Naskh Arabic','Amiri','DejaVu Sans',Arial,sans-serif; ${rtl ? 'direction:rtl; unicode-bidi:bidi-override;' : 'direction:ltr;'}">
+        <div style="display:flex; justify-content:space-between; align-items:flex-end;">
+          <div style="${rtl ? 'text-align:right;' : 'text-align:left;'}; font-size:10px; color:#6b7280;">
+            ${rtl ? 'تم الإنشاء' : 'Generated'}: ${todayTs}
+          </div>
+          <div style="${rtl ? 'text-align:left;' : 'text-align:right;'}; color:#A97E34; font-weight:700; font-size:12px;">
+            ${rtl ? 'نظام شركة أبتاون 6 أكتوبر المالي' : 'Uptown 6 October Financial System'}
+          </div>
+        </div>
+        <div style="text-align:center; font-weight:800; font-size:14px; color:#111827; margin-top:2px;">
+          ${title}
+        </div>
+        <div style="text-align:center; font-size:11px; color:#374151; margin-top:2px;">
+          ${rtl
+            ? `${tOfferDate}: ${fmtDate(offer_date || '')}  •  ${tFirstPayment}: ${fmtDate(first_payment_date || '')}<br/>
+               ${tUnit}: ${unit?.unit_code || ''} — ${unit?.unit_type || ''}<br/>
+               ${tConsultant}: ${consultant?.email || ''}`
+            : `${tOfferDate}: ${fmtDate(offer_date || '')}  •  ${tFirstPayment}: ${fmtDate(first_payment_date || '')}<br/>
+               ${tUnit}: ${unit?.unit_code || ''} — ${unit?.unit_type || ''}<br/>
+               ${tConsultant}: ${consultant?.email || ''}`
+          }
+        </div>
+      </div>`
     const pdfBuffer = await page.pdf({
       format: 'A4',
       landscape: false,
@@ -354,7 +392,7 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
       displayHeaderFooter: true,
       headerTemplate,
       footerTemplate,
-      margin: { top: '14mm', right: '12mm', bottom: '18mm', left: '12mm' }
+      margin: { top: '26mm', right: '12mm', bottom: '18mm', left: '12mm' }
     })
     await page.close()
 

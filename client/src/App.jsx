@@ -637,7 +637,55 @@ export default function App(props) {
         {genResult?.evaluation && (
           <section style={styles.section} dir={isRTL(language) ? 'rtl' : 'ltr'}>
             <h2 style={{ ...styles.sectionTitle, textAlign: isRTL(language) ? 'right' : 'left' }}>{t('acceptance_evaluation', language)}</h2>
-            <EvaluationPanel evaluation={genResult.evaluation} role={role} dealId={props?.dealId} API_URL={API_URL} />
+            <EvaluationPanel
+              evaluation={genResult.evaluation}
+              role={role}
+              dealId={props?.dealId}
+              API_URL={API_URL}
+              showInlineOverride={!props?.dealId && (role === 'property_consultant' || role === 'sales_manager')}
+              onInlineOverride={async () => {
+                try {
+                  // Require unit and REJECT state
+                  const uid = Number(unitInfo?.unit_id) || 0
+                  if (!(uid > 0)) { alert('Select a unit from Inventory first.'); return }
+                  if (genResult?.evaluation?.decision !== 'REJECT') { alert('Override is only applicable when the plan is REJECT.'); return }
+                  // Require minimal client info (same rules as block button)
+                  const ci = clientInfo || {}
+                  const required = ['buyer_name','nationality','id_or_passport','id_issue_date','birth_date','address','phone_primary','email']
+                  const missing = required.filter(k => !(ci[k] && String(ci[k]).trim() !== ''))
+                  if (missing.length) { alert('Please fill all client information fields before requesting override.'); return }
+                  // Build deal payload from snapshot
+                  const titleParts = []
+                  if (ci.buyer_name) titleParts.push(ci.buyer_name)
+                  if (unitInfo.unit_code || unitInfo.unit_number) titleParts.push(unitInfo.unit_code || unitInfo.unit_number)
+                  const title = titleParts.join(' - ') || 'New Deal'
+                  const amount = Number(genResult?.totals?.totalNominalIncludingMaintenance ?? genResult?.totals?.totalNominal ?? stdPlan?.totalPrice ?? 0)
+                  const unitType = unitInfo?.unit_type || null
+                  const details = { calculator: { mode, language, currency, stdPlan, inputs, firstYearPayments, subsequentYears, clientInfo, unitInfo, contractInfo, customNotes, feeSchedule, genResult } }
+                  // Create deal
+                  const createResp = await fetchWithAuth(`${API_URL}/api/deals`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title, amount, unitType, details })
+                  })
+                  const createData = await createResp.json()
+                  if (!createResp.ok) { alert(createData?.error?.message || 'Failed to create deal'); return }
+                  const dealId = createData?.deal?.id
+                  // Request override with optional reason
+                  const reason = window.prompt('Provide a reason for override request (optional):', '') || null
+                  const orResp = await fetchWithAuth(`${API_URL}/api/deals/${dealId}/request-override`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ reason })
+                  })
+                  const orData = await orResp.json()
+                  if (!orResp.ok) { alert(orData?.error?.message || 'Failed to request override'); return }
+                  alert('Override requested. You can track it on the Deal Detail page.')
+                } catch (e) {
+                  alert(e?.message || 'Failed to request override')
+                }
+              }}
+            />
             <small style={styles.metaText}>
               {/* Keep this note in English for now as it is managerial guidance */}
               Thresholds are set by the Financial Manager and approved by Top Management. The evaluation above is computed server-side.

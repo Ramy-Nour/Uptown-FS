@@ -361,7 +361,20 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
       <div style="width:100%; font-size:10px; color:#6b7280; padding:6px 10px; font-family:'Noto Naskh Arabic','Amiri','DejaVu Sans',Arial, sans-serif; ${rtl ? 'direction:rtl; unicode-bidi:bidi-override; text-align:left;' : 'direction:ltr; text-align:right;'}">
         ${rtl ? 'صفحة' : 'Page'} <span class="pageNumber"></span> ${rtl ? 'من' : 'of'} <span class="totalPages"></span>
       </div>`
-    const headerTemplate = '<div></div>'
+    const headerTemplate = `
+      <div style="width:100%; padding:6px 10px; font-family:'Noto Naskh Arabic','Amiri','DejaVu Sans',Arial,sans-serif; ${rtl ? 'direction:rtl; unicode-bidi:bidi-override;' : 'direction:ltr;'}">
+        <div style="display:flex; justify-content:space-between; align-items:flex-end;">
+          <div style="${rtl ? 'text-align:right;' : 'text-align:left;'}; font-size:10px; color:#6b7280;">
+            ${rtl ? 'تم الإنشاء' : 'Generated'}: ${todayTs}
+          </div>
+          <div style="${rtl ? 'text-align:left;' : 'text-align:right;'}; color:#A97E34; font-weight:700; font-size:12px;">
+            ${rtl ? 'نظام شركة أبتاون 6 أكتوبر المالي' : 'Uptown 6 October Financial System'}
+          </div>
+        </div>
+        <div style="text-align:center; font-weight:800; font-size:14px; color:#111827; margin-top:2px;">
+          ${title}
+        </div>
+      </div>`
     const pdfBuffer = await page.pdf({
       format: 'A4',
       landscape: false,
@@ -369,7 +382,7 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
       displayHeaderFooter: true,
       headerTemplate,
       footerTemplate,
-      margin: { top: '14mm', right: '12mm', bottom: '18mm', left: '12mm' }
+      margin: { top: '20mm', right: '12mm', bottom: '18mm', left: '12mm' }
     })
     await page.close()
 

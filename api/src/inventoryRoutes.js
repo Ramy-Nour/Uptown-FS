@@ -1417,4 +1417,63 @@ router.patch('/units/changes/:id/reject', authMiddleware, requireRole(['financia
   }
 })
 
+// Progress endpoint: show unit status across Blocked → Reserved → Contracted for sales roles
+router.get('/progress', authMiddleware, requireRole(['property_consultant','sales_manager']), async (req, res) => {
+  try {
+    const role = req.user.role
+    const params = []
+    let where = "b.status IN ('approved','expired','pending')"
+    let joinTeam = ''
+    if (role === 'property_consultant') {
+      where += ` AND b.requested_by = ${params.length + 1}`
+      params.push(req.user.id)
+    } else if (role === 'sales_manager') {
+      joinTeam = ' JOIN sales_team_members stm ON stm.consultant_user_id = b.requested_by AND stm.active=TRUE '
+      where += ` AND stm.manager_user_id = ${params.length + 1}`
+      params.push(req.user.id)
+    }
+
+    // Latest reservation form per unit via payment_plans.details.calculator.unitInfo.unit_id
+    const sql = `
+      SELECT
+        u.id AS unit_id,
+        u.code AS unit_code,
+        u.unit_status,
+        b.id AS block_id,
+        b.status AS block_status,
+        b.blocked_until,
+        -- latest reservation form linked by matching unit_id in plan details
+        rf.id AS reservation_form_id,
+        rf.status AS reservation_status,
+        c.id AS contract_id,
+        c.status AS contract_status
+      FROM blocks b
+      JOIN units u ON u.id = b.unit_id
+      ${joinTeam}
+      LEFT JOIN LATERAL (
+        SELECT rf1.*
+        FROM reservation_forms rf1
+        JOIN payment_plans pp1 ON pp1.id = rf1.payment_plan_id
+        WHERE (pp1.details->'calculator'->'unitInfo'->>'unit_id')::int = u.id
+        ORDER BY rf1.id DESC
+        LIMIT 1
+      ) rf ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT c1.*
+        FROM contracts c1
+        WHERE c1.reservation_form_id = rf.id
+        ORDER BY c1.id DESC
+        LIMIT 1
+      ) c ON TRUE
+      WHERE ${where}
+      ORDER BY b.blocked_until DESC NULLS LAST, u.id DESC
+    `
+    const r = await pool.query(sql, params)
+    return ok(res, { items: r.rows })
+  } catch (e) {
+    console.error('GET /api/inventory/progress error:', e)
+    return bad(res, 500, 'Internal error')
+  }
+})
+
 export default router

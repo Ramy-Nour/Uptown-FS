@@ -170,6 +170,7 @@ export default function BrandHeader({ title, onLogout }) {
         return [
           ...baseWithCalc,
           { label: 'Offer Progress', href: '/deals/offer-progress' },
+          { label: 'Plan Edits', href: '/deals/plan-edits' },
           { label: 'My Proposals', href: '/deals/my-proposals' }
         ]
       case 'contract_person':

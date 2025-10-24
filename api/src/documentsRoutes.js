@@ -292,7 +292,7 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
         </head>
         <body>
           <div class="header">
-            <div class="brand">${rtl ? 'نظام الشؤون المالية' : 'Uptown Financial System'}</div>
+            <div class="brand">${rtl ? 'نظام شركة أبتاون 6 أكتوبر المالي' : 'Uptown 6 October Financial System'}</div>
             <div class="meta">${rtl ? 'تم الإنشاء' : 'Generated'}: ${todayTs}</div>
           </div>
           <h2 style="${rtl ? 'text-align:right;' : ''}">${title}</h2>
@@ -300,13 +300,22 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
             <div class="meta"><strong>${tOfferDate}:</strong> ${fmtDate(offer_date || '')}   <strong>${tFirstPayment}:</strong> ${fmtDate(first_payment_date || '')}</div>
             ${unitLine ? `<div class="meta"><strong>${tUnit}:</strong> ${unitLine}</div>` : ''}
             ${consultantLine}
-            <div style="display:flex; ${rtl ? 'flex-direction:row-reverse;' : ''} gap:12px; align-items:stretch;">
-              <div style="flex:1;">
-                <div class="buyers">
-                  ${buyersHtml || (rtl ? '<div>لا يوجد بيانات عملاء</div>' : '<div>No client data</div>')}
+            <div style="display:flex; gap:12px; align-items:stretch;">
+              ${rtl ? `
+                ${summaryBoxHtml}
+                <div style="flex:1;">
+                  <div class="buyers">
+                    ${buyersHtml || '<div>لا يوجد بيانات عملاء</div>'}
+                  </div>
                 </div>
-              </div>
-              ${summaryBoxHtml}
+              ` : `
+                <div style="flex:1;">
+                  <div class="buyers">
+                    ${buyersHtml || '<div>No client data</div>'}
+                  </div>
+                </div>
+                ${summaryBoxHtml}
+              `}
             </div>
           </div>
           <div class="section">

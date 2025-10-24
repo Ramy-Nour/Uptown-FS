@@ -315,7 +315,7 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
         </head>
         <body>
           <!-- Body header removed; repeating headerTemplate will render on each page -->
-          <div class="section" style="margin-top: 4px;">
+          <div class="section" style="margin-top: 20mm;">
             <div style="display:flex; gap:12px; align-items:stretch;">
               ${rtl ? `
                 ${summaryBoxHtml}
@@ -394,7 +394,7 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
       displayHeaderFooter: true,
       headerTemplate,
       footerTemplate,
-      margin: { top: '50mm', right: '12mm', bottom: '18mm', left: '12mm' }
+      margin: { top: '65mm', right: '12mm', bottom: '18mm', left: '12mm' }
     })
     await page.close()
 
@@ -641,7 +641,24 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
       <div style="width:100%; font-size:10px; color:#6b7280; padding:6px 10px; font-family:'Noto Naskh Arabic','Amiri','DejaVu Sans',Arial, sans-serif; ${rtl ? 'direction:rtl; unicode-bidi:bidi-override; text-align:left;' : 'direction:ltr; text-align:right;'}">
         ${L('Page', 'صفحة')} <span class="pageNumber"></span> ${L('of', 'من')} <span class="totalPages"></span>
       </div>`
-    const headerTemplate = '<div></div>'
+    const headerTemplate = `
+      <div style="width:100%; padding:12px 14px 8px; font-family:'Noto Naskh Arabic','Amiri','DejaVu Sans',Arial,sans-serif; ${rtl ? 'direction:rtl; unicode-bidi:bidi-override;' : 'direction:ltr;'}">
+        <div style="display:flex; justify-content:space-between; align-items:flex-end;">
+          <div style="${rtl ? 'text-align:left;' : 'text-align:left'}; color:#A97E34; font-weight:700; font-size:13px;">
+            ${L('Uptown 6 October Financial System', 'نظام شركة أبتاون 6 أكتوبر المالي')}
+          </div>
+          <div style="${rtl ? 'text-align:right;' : 'text-align:right'}; font-size:10px; color:#6b7280;">
+            ${L('Generated', 'تم الإنشاء')}: ${todayTs}
+          </div>
+        </div>
+        <div style="text-align:center; font-weight:800; font-size:20px; color:#111827; margin-top:6px;">
+          ${L('Reservation Form', 'نموذج الحجز')}
+        </div>
+        <div style="font-size:11px; color:#374151; margin-top:4px; ${rtl ? 'text-align:right;' : 'text-align:left;'}">
+          <span style="font-weight:700;">${L('Reservation Date', 'تاريخ الحجز')}:</span> ${fmtDate(reservationDate)}
+          &nbsp;&nbsp;<span style="font-weight:700;">${L('Unit', 'الوحدة')}:</span> ${unit?.unit_code || ''} — ${unit?.unit_type || ''}
+        </div>
+      </div>`
     const pdfBuffer = await page.pdf({
       format: 'A4',
       landscape: false,
@@ -649,7 +666,7 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
       displayHeaderFooter: true,
       headerTemplate,
       footerTemplate,
-      margin: { top: '14mm', right: '12mm', bottom: '18mm', left: '12mm' }
+      margin: { top: '65mm', right: '12mm', bottom: '18mm', left: '12mm' }
     })
     await page.close()
 

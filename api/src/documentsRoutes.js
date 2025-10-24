@@ -213,13 +213,26 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
       return parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : s
     }
     const localTimestamp = () => {
+      // Always render timestamp in Cairo time
+      const timeZone = process.env.TIMEZONE || process.env.TZ || 'Africa/Cairo'
       const d = new Date()
-      const dd = String(d.getDate()).padStart(2,'0')
-      const mm = String(d.getMonth()+1).padStart(2,'0')
-      const yyyy = d.getFullYear()
-      const hh = String(d.getHours()).padStart(2,'0')
-      const mi = String(d.getMinutes()).padStart(2,'0')
-      const ss = String(d.getSeconds()).padStart(2,'0')
+      const fmt = new Intl.DateTimeFormat('en-GB', {
+        timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      })
+      const parts = Object.fromEntries(fmt.formatToParts(d).map(p => [p.type, p.value]))
+      const dd = parts.day || '01'
+      const mm = parts.month || '01'
+      const yyyy = parts.year || '1970'
+      const hh = parts.hour || '00'
+      const mi = parts.minute || '00'
+      const ss = parts.second || '00'
       return `${dd}-${mm}-${yyyy} ${hh}:${mi}:${ss}`
     }
     const todayTs = localTimestamp()
@@ -301,15 +314,8 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
           ${css}
         </head>
         <body>
-          <div class="header">
-            <div class="brand">${rtl ? 'نظام شركة أبتاون 6 أكتوبر المالي' : 'Uptown 6 October Financial System'}</div>
-            <div class="meta">${rtl ? 'تم الإنشاء' : 'Generated'}: ${todayTs}</div>
-          </div>
-          <h2 style="${rtl ? 'text-align:right;' : ''}">${title}</h2>
-          <div class="section">
-            <div class="meta"><strong>${tOfferDate}:</strong> ${fmtDate(offer_date || '')}   <strong>${tFirstPayment}:</strong> ${fmtDate(first_payment_date || '')}</div>
-            ${unitLine ? `<div class="meta"><strong>${tUnit}:</strong> ${unitLine}</div>` : ''}
-            ${consultantLine}
+          <!-- Body header removed; repeating headerTemplate will render on each page -->
+          <div class="section" style="margin-top: 4px;">
             <div style="display:flex; gap:12px; align-items:stretch;">
               ${rtl ? `
                 ${summaryBoxHtml}
@@ -362,27 +368,23 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
         ${rtl ? 'صفحة' : 'Page'} <span class="pageNumber"></span> ${rtl ? 'من' : 'of'} <span class="totalPages"></span>
       </div>`
     const headerTemplate = `
-      <div style="width:100%; padding:6px 10px; font-family:'Noto Naskh Arabic','Amiri','DejaVu Sans',Arial,sans-serif; ${rtl ? 'direction:rtl; unicode-bidi:bidi-override;' : 'direction:ltr;'}">
+      <div style="width:100%; padding:8px 12px; font-family:'Noto Naskh Arabic','Amiri','DejaVu Sans',Arial,sans-serif; ${rtl ? 'direction:rtl; unicode-bidi:bidi-override;' : 'direction:ltr;'}">
         <div style="display:flex; justify-content:space-between; align-items:flex-end;">
-          <div style="${rtl ? 'text-align:right;' : 'text-align:left;'}; font-size:10px; color:#6b7280;">
-            ${rtl ? 'تم الإنشاء' : 'Generated'}: ${todayTs}
-          </div>
-          <div style="${rtl ? 'text-align:left;' : 'text-align:right;'}; color:#A97E34; font-weight:700; font-size:12px;">
+          <div style="${rtl ? 'text-align:left;' : 'text-align:left'}; color:#A97E34; font-weight:700; font-size:12px;">
             ${rtl ? 'نظام شركة أبتاون 6 أكتوبر المالي' : 'Uptown 6 October Financial System'}
           </div>
+          <div style="${rtl ? 'text-align:right;' : 'text-align:right'}; font-size:10px; color:#6b7280;">
+            ${rtl ? 'تم الإنشاء' : 'Generated'}: ${todayTs}
+          </div>
         </div>
-        <div style="text-align:center; font-weight:800; font-size:14px; color:#111827; margin-top:2px;">
+        <div style="text-align:center; font-weight:800; font-size:16px; color:#111827; margin-top:4px;">
           ${title}
         </div>
-        <div style="text-align:center; font-size:11px; color:#374151; margin-top:2px;">
-          ${rtl
-            ? `${tOfferDate}: ${fmtDate(offer_date || '')}  •  ${tFirstPayment}: ${fmtDate(first_payment_date || '')}<br/>
-               ${tUnit}: ${unit?.unit_code || ''} — ${unit?.unit_type || ''}<br/>
-               ${tConsultant}: ${consultant?.email || ''}`
-            : `${tOfferDate}: ${fmtDate(offer_date || '')}  •  ${tFirstPayment}: ${fmtDate(first_payment_date || '')}<br/>
-               ${tUnit}: ${unit?.unit_code || ''} — ${unit?.unit_type || ''}<br/>
-               ${tConsultant}: ${consultant?.email || ''}`
-          }
+        <div style="font-size:11px; color:#374151; margin-top:2px; ${rtl ? 'text-align:right;' : 'text-align:left;'}">
+          <span style="font-weight:700;">${tOfferDate}:</span> ${fmtDate(offer_date || '')}
+          &nbsp;&nbsp;<span style="font-weight:700;">${tFirstPayment}:</span> ${fmtDate(first_payment_date || '')}<br/>
+          <span style="font-weight:700;">${tUnit}:</span> ${unit?.unit_code || ''} — ${unit?.unit_type || ''}<br/>
+          <span style="font-weight:700;">${tConsultant}:</span> ${consultant?.email || ''}
         </div>
       </div>`
     const pdfBuffer = await page.pdf({
@@ -392,7 +394,7 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
       displayHeaderFooter: true,
       headerTemplate,
       footerTemplate,
-      margin: { top: '26mm', right: '12mm', bottom: '18mm', left: '12mm' }
+      margin: { top: '32mm', right: '12mm', bottom: '18mm', left: '12mm' }
     })
     await page.close()
 

@@ -125,8 +125,14 @@ Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track 
   - API: When Financial Manager approves a block request (PATCH /api/blocks/:id/approve), the unit now sets available=FALSE and unit_status='BLOCKED'. Previously we flipped available only, leaving unit_status as 'AVAILABLE', so lists showed AVAILABLE despite a block.
   - API: Block expiry job now restores units to available=TRUE and unit_status='AVAILABLE' (removed reference to a non-existent units.blocked_until field).
   - API: GET /api/blocks/current now returns unit_id and unit_status along with unit_code to power deep-links.
-  - Client: Added Deals → Current Blocks page for Financial Manager and Financial Admin to see currently blocked units and jump to Create Deal for a blocked unit. Route: /deals/current-blocks.
-  - Impact: Inventory pages for sales roles will no longer show blocked units (server already filters on unit_status='AVAILABLE'). Financial Admins have a clear place to see blocks and start the reservation process.
+  - Client: Added Deals → Current Blocks page for Financial Manager and Financial Admin to see currently blocked units. For FA, the page now includes a minimal “Create Reservation Form” panel per blocked unit (inputs: Approved Payment Plan ID, Reservation Date, Preliminary Payment, Currency, Language). This creates a reservation form and sends it for FM approval. Route: /deals/current-blocks.
+  - API: Added Reservation Forms workflow endpoints:
+    - POST /api/workflow/reservation-forms (FA) — create pending_approval reservation form for an approved payment plan.
+    - GET /api/workflow/reservation-forms?status=... (FA/FM) — list forms.
+    - PATCH /api/workflow/reservation-forms/:id/approve (FM) — approve.
+    - PATCH /api/workflow/reservation-forms/:id/reject (FM) — reject.
+  - Client: Added Deals → Reservations Queue (FM) to approve/reject pending reservation forms. Route: /deals/reservations-queue.
+  - Impact: FM adds inventory as draft, approves to AVAILABLE, consultants request blocks, FA initiates reservation for already blocked units without creating deals, and FM approves reservations which become available for Contracts to draft.
 - [2025-10-24 09:50] Client Offer/Reservation Form PDFs — repeated headers, Cairo time, no overlap:
   - Header content unified and repeated on every page:
     - EN: “Uptown 6 October Financial System” (left), “Generated: DD-MM-YYYY HH:mm:ss” (right), big centered title, then a brief summary line (Offer Date, First Payment, Unit, Consultant for Client Offer; Reservation Date and Unit for Reservation Form).

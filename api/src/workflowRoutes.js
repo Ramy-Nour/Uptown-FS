@@ -1242,4 +1242,93 @@ router.post(
   }
 )
 
+// List reservation forms (FA/FM)
+router.get(
+  '/reservation-forms',
+  authMiddleware,
+  requireRole(['financial_admin','financial_manager']),
+  async (req, res) => {
+    try {
+      const { status = 'pending_approval' } = req.query || {}
+      const r = await pool.query(
+        `SELECT rf.*, pp.deal_id, pp.status AS payment_plan_status
+         FROM reservation_forms rf
+         LEFT JOIN payment_plans pp ON pp.id = rf.payment_plan_id
+         WHERE ($1 = 'all' OR rf.status = $1)
+         ORDER BY rf.id DESC`,
+        [String(status)]
+      )
+      return ok(res, { reservation_forms: r.rows })
+    } catch (e) {
+      console.error('GET /api/workflow/reservation-forms error:', e)
+      return bad(res, 500, 'Internal error')
+    }
+  }
+)
+
+// FM approve reservation form
+router.patch(
+  '/reservation-forms/:id/approve',
+  authMiddleware,
+  requireRole(['financial_manager']),
+  async (req, res) => {
+    try {
+      const id = ensureNumber(req.params.id)
+      if (!id) return bad(res, 400, 'Invalid id')
+      const r0 = await pool.query('SELECT * FROM reservation_forms WHERE id=$1', [id])
+      if (r0.rows.length === 0) return bad(res, 404, 'Reservation form not found')
+      if (r0.rows[0].status !== 'pending_approval') return bad(res, 400, 'Reservation form is not pending approval')
+      const upd = await pool.query(
+        `UPDATE reservation_forms
+         SET status='approved', approved_by=$1, updated_at=now()
+         WHERE id=$2
+         RETURNING *`,
+        [req.user.id, id]
+      )
+      await pool.query(
+        `INSERT INTO reservation_forms_history (reservation_form_id, change_type, changed_by, old_values, new_values)
+         VALUES ($1, 'approve', $2, $3::jsonb, $4::jsonb)`,
+        [id, req.user.id, JSON.stringify(r0.rows[0]), JSON.stringify(upd.rows[0])]
+      )
+      return ok(res, { reservation_form: upd.rows[0] })
+    } catch (e) {
+      console.error('PATCH /api/workflow/reservation-forms/:id/approve error:', e)
+      return bad(res, 500, 'Internal error')
+    }
+  }
+)
+
+// FM reject reservation form
+router.patch(
+  '/reservation-forms/:id/reject',
+  authMiddleware,
+  requireRole(['financial_manager']),
+  async (req, res) => {
+    try {
+      const id = ensureNumber(req.params.id)
+      const { reason } = req.body || {}
+      if (!id) return bad(res, 400, 'Invalid id')
+      const r0 = await pool.query('SELECT * FROM reservation_forms WHERE id=$1', [id])
+      if (r0.rows.length === 0) return bad(res, 404, 'Reservation form not found')
+      if (r0.rows[0].status !== 'pending_approval') return bad(res, 400, 'Reservation form is not pending approval')
+      const upd = await pool.query(
+        `UPDATE reservation_forms
+         SET status='rejected', approved_by=$1, updated_at=now()
+         WHERE id=$2
+         RETURNING *`,
+        [req.user.id, id]
+      )
+      await pool.query(
+        `INSERT INTO reservation_forms_history (reservation_form_id, change_type, changed_by, old_values, new_values)
+         VALUES ($1, 'reject', $2, $3::jsonb, $4::jsonb)`,
+        [id, req.user.id, JSON.stringify({ ...r0.rows[0], reason: reason || null }), JSON.stringify(upd.rows[0])]
+      )
+      return ok(res, { reservation_form: upd.rows[0] })
+    } catch (e) {
+      console.error('PATCH /api/workflow/reservation-forms/:id/reject error:', e)
+      return bad(res, 500, 'Internal error')
+    }
+  }
+)
+
 export default router

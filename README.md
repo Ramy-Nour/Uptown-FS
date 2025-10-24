@@ -126,6 +126,13 @@ Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track 
     - /api/auth, /api/deals, /api/units, /api/inventory, /api/standard-plan, /api (planningRoutes), /api/notifications, and /api/blocks.
   - API: Added GET /api/health → { status: "ok" } and GET /api/message → { message: "Hello from API" } for Codespaces reachability checks.
   - Impact: Client calls like POST /api/blocks/request now resolve to the correct Express router instead of returning 404/500 due to missing mounts. Body parsing is enabled so validation works as expected.
+- [2025-10-23 15:32] Client Offer PDF — Amount in Words and Unit Totals restored (modular):
+  - API: In api/src/documentsRoutes.js (server-rendered PDFs), restored the “Amount in Words” column using convertToWords for both English and Arabic.
+  - API: Added a “Unit Totals” section that shows Base, Garden, Roof, Storage, Garage, Maintenance Deposit, and dual totals (incl./excl. maintenance). It reads unit_pricing_breakdown sent by the client for consistency with the calculator.
+  - Modularity: No changes to app.js or App.jsx. All logic remains in the modular documents route.
+- [2025-10-23 15:28] Acceptance Evaluation — thresholds now read from DB:
+  - API: api/src/planningRoutes.js now reads payment_thresholds (latest row) for pv_tolerance_percent and min% for Year1/Year2/Year3/Handover.
+  - Removed duplicate “Payment After 1 Year” condition; Year 1 is enforced via the cumulative percent rule only.
 - [2025-10-23 15:18] Standard PV source — prefer FM-stored PV for consistency:
   - API: In /api/calculate and /api/generate-plan (api/src/planningRoutes.js), when a unit/model or standardPricingId is provided, we now prefer the Financial Manager’s stored calculated_pv from unit_model_pricing/standard_pricing if present. We only compute PV if stored value is missing.
   - Queries updated to select calculated_pv from both unit_model_pricing and standard_pricing.

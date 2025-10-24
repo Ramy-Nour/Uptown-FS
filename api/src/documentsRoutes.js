@@ -495,6 +495,12 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
         </style>
       </head>
       <body class="bg-gray-100 p-4 sm:p-8">
+        <!-- Brand Header -->
+        <div class="max-w-4xl mx-auto text-sm ${textAlignLeft} mb-2">
+          <div class="${rtl ? 'text-right' : 'text-left'} font-semibold" style="color:#A97E34;">
+            ${L('Uptown 6 October Financial System', 'نظام شركة أبتاون 6 أكتوبر المالي')}
+          </div>
+        </div>
         <div class="container mx-auto max-w-4xl bg-white shadow-lg rounded-2xl overflow-hidden">
           <div class="p-6 sm:p-8 border-b border-gray-200 ${textAlignLeft}">
             <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">${L('Reservation Form', 'نموذج الحجز')}</h1>

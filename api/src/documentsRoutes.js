@@ -173,8 +173,15 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
         .section { margin: 14px 0; }
         table { width: 100%; border-collapse: collapse; }
         thead { display: table-header-group; }
-        th { text-align: ${rtl ? 'right' : 'left'}; background: #f6efe3; color: #5b4630; font-size: 12px; border-bottom: 1px solid #ead9bd; padding: 8px; }
-        td { font-size: 12px; border-bottom: 1px solid #f2e8d6; padding: 8px; page-break-inside: avoid; }
+        /* Corporate identity for plan table */
+        .plan-table { table-layout: fixed; border: 2px solid #1f2937; }
+        .plan-table th { text-align: ${rtl ? 'right' : 'left'}; background: #A97E34; color: #000; font-size: 12px; padding: 8px; border: 2px solid #1f2937; }
+        .plan-table td { font-size: 12px; padding: 8px; border: 2px solid #1f2937; page-break-inside: avoid; background: #fffdf5; }
+        .col-month { width: 8%; }
+        .col-label { width: 30%; }
+        .col-amount { width: 20%; }
+        .col-date { width: 20%; white-space: nowrap; }
+        .col-words { width: 22%; }
         .buyers { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
         .buyer { border: 1px solid #ead9bd; border-radius: 8px; padding: 8px; background: #fff; }
         .foot { margin-top: 12px; color:#6b7280; font-size: 11px; }
@@ -190,7 +197,22 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
       </style>
     `
     const f = (s) => Number(s || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    const todayTs = new Date().toISOString().slice(0, 19).replace('T', ' ')
+    const fmtDate = (s) => {
+      if (!s) return ''
+      // Input may be YYYY-MM-DD; output DD-MM-YYYY
+      const d = new Date(s)
+      if (!isNaN(d.getTime())) {
+        const dd = String(d.getDate()).padStart(2,'0')
+        const mm = String(d.getMonth()+1).padStart(2,'0')
+        const yyyy = d.getFullYear()
+        const out = `${dd}-${mm}-${yyyy}`
+        return out
+      }
+      // Fallback: simple split
+      const parts = String(s).split('-')
+      return parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : s
+    }
+    const todayTs = fmtDate(new Date().toISOString().slice(0, 10)) + ' ' + new Date().toISOString().slice(11,19)
     const title = rtl ? 'عرض السعر للعميل' : 'Client Offer'
     const tSchedule = rtl ? 'خطة السداد' : 'Payment Plan'
     const tOfferDate = rtl ? 'تاريخ العرض' : 'Offer Date'
@@ -245,13 +267,14 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
       const labelText = rtl ? arLabel(r.label || '') : (r.label || '')
       const amount = Number(r.amount) || 0
       const words = convertToWords(amount, langForWords, { currency })
+      const dateStr = fmtDate(r.date || '')
       return `
         <tr>
-          <td>${Number(r.month) || 0}</td>
-          <td>${labelText}</td>
-          <td style="text-align:${rtl ? 'left' : 'right'}">${f(amount)} ${currency || ''}</td>
-          <td>${r.date || ''}</td>
-          <td>${words || ''}</td>
+          <td class="col-month">${Number(r.month) || 0}</td>
+          <td class="col-label">${labelText}</td>
+          <td class="col-amount" style="text-align:${rtl ? 'left' : 'right'}">${f(amount)} ${currency || ''}</td>
+          <td class="col-date">${dateStr}</td>
+          <td class="col-words">${words || ''}</td>
         </tr>
       `
     }).join('')
@@ -274,7 +297,7 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
           </div>
           <h2 style="${rtl ? 'text-align:right;' : ''}">${title}</h2>
           <div class="section">
-            <div class="meta"><strong>${tOfferDate}:</strong> ${offer_date || ''}   <strong>${tFirstPayment}:</strong> ${first_payment_date || ''}</div>
+            <div class="meta"><strong>${tOfferDate}:</strong> ${fmtDate(offer_date || '')}   <strong>${tFirstPayment}:</strong> ${fmtDate(first_payment_date || '')}</div>
             ${unitLine ? `<div class="meta"><strong>${tUnit}:</strong> ${unitLine}</div>` : ''}
             ${consultantLine}
             <div style="display:flex; ${rtl ? 'flex-direction:row-reverse;' : ''} gap:12px; align-items:stretch;">
@@ -288,14 +311,14 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
           </div>
           <div class="section">
             <h3 style="${rtl ? 'text-align:right;' : ''}">${tSchedule}</h3>
-            <table>
+            <table class="plan-table">
               <thead>
                 <tr>
-                  <th>${tMonth}</th>
-                  <th>${tLabel}</th>
-                  <th style="text-align:${rtl ? 'left' : 'right'}">${tAmount}</th>
-                  <th>${tDate}</th>
-                  <th>${tAmountWords}</th>
+                  <th class="col-month">${tMonth}</th>
+                  <th class="col-label">${tLabel}</th>
+                  <th class="col-amount" style="text-align:${rtl ? 'left' : 'right'}">${tAmount}</th>
+                  <th class="col-date">${tDate}</th>
+                  <th class="col-words">${tAmountWords}</th>
                 </tr>
               </thead>
               <tbody>
@@ -311,7 +334,7 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
     const page = await browser.newPage()
     await page.setContent(html, { waitUntil: 'load' })
     const footerTemplate = `
-      <div style="width:100%; font-size:10px; color:#6b7280; padding:6px 10px; ${rtl ? 'direction:rtl; text-align:left;' : 'direction:ltr; text-align:right;'}">
+      <div style="width:100%; font-size:10px; color:#6b7280; padding:6px 10px; font-family:'Noto Naskh Arabic','Amiri','DejaVu Sans',Arial, sans-serif; ${rtl ? 'direction:rtl; unicode-bidi:bidi-override; text-align:left;' : 'direction:ltr; text-align:right;'}">
         ${rtl ? 'صفحة' : 'Page'} <span class="pageNumber"></span> ${rtl ? 'من' : 'of'} <span class="totalPages"></span>
       </div>`
     const headerTemplate = '<div></div>'
@@ -525,7 +548,7 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
     const page = await browser.newPage()
     await page.setContent(html, { waitUntil: 'load' })
     const footerTemplate = `
-      <div style="width:100%; font-size:10px; color:#6b7280; padding:6px 10px; ${rtl ? 'direction:rtl; text-align:left;' : 'direction:ltr; text-align:right;'}">
+      <div style="width:100%; font-size:10px; color:#6b7280; padding:6px 10px; font-family:'Noto Naskh Arabic','Amiri','DejaVu Sans',Arial, sans-serif; ${rtl ? 'direction:rtl; unicode-bidi:bidi-override; text-align:left;' : 'direction:ltr; text-align:right;'}">
         ${L('Page', 'صفحة')} <span class="pageNumber"></span> ${L('of', 'من')} <span class="totalPages"></span>
       </div>`
     const headerTemplate = '<div></div>'

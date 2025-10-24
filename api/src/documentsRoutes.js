@@ -368,19 +368,19 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
         ${rtl ? 'صفحة' : 'Page'} <span class="pageNumber"></span> ${rtl ? 'من' : 'of'} <span class="totalPages"></span>
       </div>`
     const headerTemplate = `
-      <div style="width:100%; padding:8px 12px; font-family:'Noto Naskh Arabic','Amiri','DejaVu Sans',Arial,sans-serif; ${rtl ? 'direction:rtl; unicode-bidi:bidi-override;' : 'direction:ltr;'}">
+      <div style="width:100%; padding:12px 14px 8px; font-family:'Noto Naskh Arabic','Amiri','DejaVu Sans',Arial,sans-serif; ${rtl ? 'direction:rtl; unicode-bidi:bidi-override;' : 'direction:ltr;'}">
         <div style="display:flex; justify-content:space-between; align-items:flex-end;">
-          <div style="${rtl ? 'text-align:left;' : 'text-align:left'}; color:#A97E34; font-weight:700; font-size:12px;">
+          <div style="${rtl ? 'text-align:left;' : 'text-align:left'}; color:#A97E34; font-weight:700; font-size:13px;">
             ${rtl ? 'نظام شركة أبتاون 6 أكتوبر المالي' : 'Uptown 6 October Financial System'}
           </div>
           <div style="${rtl ? 'text-align:right;' : 'text-align:right'}; font-size:10px; color:#6b7280;">
             ${rtl ? 'تم الإنشاء' : 'Generated'}: ${todayTs}
           </div>
         </div>
-        <div style="text-align:center; font-weight:800; font-size:16px; color:#111827; margin-top:4px;">
+        <div style="text-align:center; font-weight:800; font-size:20px; color:#111827; margin-top:6px;">
           ${title}
         </div>
-        <div style="font-size:11px; color:#374151; margin-top:2px; ${rtl ? 'text-align:right;' : 'text-align:left;'}">
+        <div style="font-size:11px; color:#374151; margin-top:4px; ${rtl ? 'text-align:right;' : 'text-align:left;'}">
           <span style="font-weight:700;">${tOfferDate}:</span> ${fmtDate(offer_date || '')}
           &nbsp;&nbsp;<span style="font-weight:700;">${tFirstPayment}:</span> ${fmtDate(first_payment_date || '')}<br/>
           <span style="font-weight:700;">${tUnit}:</span> ${unit?.unit_code || ''} — ${unit?.unit_type || ''}<br/>
@@ -394,7 +394,7 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
       displayHeaderFooter: true,
       headerTemplate,
       footerTemplate,
-      margin: { top: '32mm', right: '12mm', bottom: '18mm', left: '12mm' }
+      margin: { top: '50mm', right: '12mm', bottom: '18mm', left: '12mm' }
     })
     await page.close()
 

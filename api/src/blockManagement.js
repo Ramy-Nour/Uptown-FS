@@ -87,7 +87,7 @@ router.post('/request', authMiddleware, requireRole(['property_consultant','sale
     const d = Number(durationDays)
     const result = await pool.query(
       `INSERT INTO blocks (unit_id, requested_by, duration_days, reason, status, blocked_until, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, 'pending', NOW() + ($3::text || ' days')::interval, NOW(), NOW())
+       VALUES ($1, $2, $3, $4, 'pending', NOW() + ($3::int) * INTERVAL '1 day', NOW(), NOW())
        RETURNING *`,
       [unitId, req.user.id, d, reason || null]
     )

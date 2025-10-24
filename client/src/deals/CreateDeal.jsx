@@ -368,13 +368,26 @@ export default function CreateDeal() {
                   const u = JSON.parse(localStorage.getItem('auth_user') || '{}')
                   // Only allow Consultants and Sales Managers to request a block
                   if (u?.role === 'property_consultant' || u?.role === 'sales_manager') {
-                    const canBlock = !!(genResult?.evaluation?.decision === 'ACCEPT')
+                    // Determine acceptance from the embedded calculator snapshot
+                    let canBlock = false
+                    try {
+                      const snapFn = window.__uptown_calc_getSnapshot
+                      if (typeof snapFn === 'function') {
+                        const snap = snapFn()
+                        const decision =
+                          snap?.generatedPlan?.evaluation?.decision ||
+                          snap?.evaluation?.decision ||
+                          null
+                        const overrideApproved = !!(snap?.deal?.override?.approved || snap?.overrideApproved)
+                        canBlock = (decision === 'ACCEPT') || overrideApproved
+                      }
+                    } catch {}
                     return (
                       <button
                         onClick={requestUnitBlock}
                         style={{ ...btnPrimary, opacity: canBlock ? 1 : 0.6, cursor: canBlock ? 'pointer' : 'not-allowed' }}
                         disabled={!canBlock}
-                        title={canBlock ? 'Request a temporary block on this unit' : 'Available after plan is ACCEPTED by the automated evaluation'}
+                        title={canBlock ? 'Request a temporary block on this unit' : 'Available after plan is ACCEPTED (or override approved)'}
                       >
                         Request Unit Block
                       </button>

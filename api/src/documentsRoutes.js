@@ -173,16 +173,46 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
         .section { margin: 14px 0; }
         table { width: 100%; border-collapse: collapse; }
         thead { display: table-header-group; }
-        th { text-align: ${rtl ? 'right' : 'left'}; background: #f6efe3; color: #5b4630; font-size: 12px; border-bottom: 1px solid #ead9bd; padding: 8px; }
-        td { font-size: 12px; border-bottom: 1px solid #f2e8d6; padding: 8px; page-break-inside: avoid; }
-        .totals { margin-top: 8px; padding: 8px; border: 1px solid #ead9bd; border-radius: 8px; background: #fbfaf7; }
+        /* Corporate identity for plan table */
+        .plan-table { table-layout: fixed; border: 2px solid #1f2937; }
+        .plan-table th { text-align: ${rtl ? 'right' : 'left'}; background: #A97E34; color: #000; font-size: 12px; padding: 8px; border: 2px solid #1f2937; }
+        .plan-table td { font-size: 12px; padding: 8px; border: 2px solid #1f2937; page-break-inside: avoid; background: #fffdf5; }
+        .col-month { width: 8%; }
+        .col-label { width: 30%; }
+        .col-amount { width: 20%; }
+        .col-date { width: 20%; white-space: nowrap; }
+        .col-words { width: 22%; }
         .buyers { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
         .buyer { border: 1px solid #ead9bd; border-radius: 8px; padding: 8px; background: #fff; }
         .foot { margin-top: 12px; color:#6b7280; font-size: 11px; }
+
+        /* Compact unit summary box (corporate colors) */
+        .unit-summary { width: 280px; border: 2px solid #1f2937; }
+        .unit-summary table { width: 100%; border-collapse: collapse; }
+        .unit-summary th { background: #A97E34; color: #000; text-align: center; font-weight: 700; padding: 6px; border: 2px solid #1f2937; }
+        .unit-summary td { background: #d9b45b; color: #000; padding: 6px; border: 2px solid #1f2937; font-size: 12px; }
+        .unit-summary .label { width: 60%; }
+        .unit-summary .value { width: 40%; text-align: ${rtl ? 'left' : 'right'}; }
+        .unit-summary .total td { background: #f0d18a; font-weight: 700; }
       </style>
     `
     const f = (s) => Number(s || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    const todayTs = new Date().toISOString().slice(0, 19).replace('T', ' ')
+    const fmtDate = (s) => {
+      if (!s) return ''
+      // Input may be YYYY-MM-DD; output DD-MM-YYYY
+      const d = new Date(s)
+      if (!isNaN(d.getTime())) {
+        const dd = String(d.getDate()).padStart(2,'0')
+        const mm = String(d.getMonth()+1).padStart(2,'0')
+        const yyyy = d.getFullYear()
+        const out = `${dd}-${mm}-${yyyy}`
+        return out
+      }
+      // Fallback: simple split
+      const parts = String(s).split('-')
+      return parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : s
+    }
+    const todayTs = fmtDate(new Date().toISOString().slice(0, 10)) + ' ' + new Date().toISOString().slice(11,19)
     const title = rtl ? 'عرض السعر للعميل' : 'Client Offer'
     const tSchedule = rtl ? 'خطة السداد' : 'Payment Plan'
     const tOfferDate = rtl ? 'تاريخ العرض' : 'Offer Date'
@@ -213,25 +243,20 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
       </div>
     `).join('')
 
-    const totalsHtml = upb ? `
-      <div class="section">
-        <h3 style="${rtl ? 'text-align:right;' : ''}">${tTotals}</h3>
+    const summaryBoxHtml = upb ? `
+      <div class="unit-summary">
         <table>
           <thead>
-            <tr>
-              <th>${tLabel}</th>
-              <th style="text-align:${rtl ? 'left' : 'right'}">${tAmount}</th>
-            </tr>
+            <tr><th colspan="2">${unit?.unit_type ? unit.unit_type : (rtl ? 'الوحدة' : 'Unit')}</th></tr>
           </thead>
           <tbody>
-            <tr><td>${tBase}</td><td style="text-align:${rtl ? 'left' : 'right'}">${f(upb.base)} ${currency || ''}</td></tr>
-            ${Number(upb.garden||0)>0 ? `<tr><td>${tGarden}</td><td style="text-align:${rtl ? 'left' : 'right'}">${f(upb.garden)} ${currency || ''}</td></tr>` : ''}
-            ${Number(upb.roof||0)>0 ? `<tr><td>${tRoof}</td><td style="text-align:${rtl ? 'left' : 'right'}">${f(upb.roof)} ${currency || ''}</td></tr>` : ''}
-            ${Number(upb.storage||0)>0 ? `<tr><td>${tStorage}</td><td style="text-align:${rtl ? 'left' : 'right'}">${f(upb.storage)} ${currency || ''}</td></tr>` : ''}
-            ${Number(upb.garage||0)>0 ? `<tr><td>${tGarage}</td><td style="text-align:${rtl ? 'left' : 'right'}">${f(upb.garage)} ${currency || ''}</td></tr>` : ''}
-            ${Number(upb.maintenance||0)>0 ? `<tr><td>${tMaintenance}</td><td style="text-align:${rtl ? 'left' : 'right'}">${f(upb.maintenance)} ${currency || ''}</td></tr>` : ''}
-            ${totalExcl != null ? `<tr><td><strong>${tTotalExcl}</strong></td><td style="text-align:${rtl ? 'left' : 'right'}"><strong>${f(totalExcl)} ${currency || ''}</strong></td></tr>` : ''}
-            ${totalIncl != null ? `<tr><td><strong>${tTotalIncl}</strong></td><td style="text-align:${rtl ? 'left' : 'right'}"><strong>${f(totalIncl)} ${currency || ''}</strong></td></tr>` : ''}
+            <tr><td class="label">${tBase}</td><td class="value">${f(upb.base)} ${currency || ''}</td></tr>
+            ${Number(upb.garden||0)>0 ? `<tr><td class="label">${tGarden}</td><td class="value">${f(upb.garden)} ${currency || ''}</td></tr>` : ''}
+            ${Number(upb.roof||0)>0 ? `<tr><td class="label">${tRoof}</td><td class="value">${f(upb.roof)} ${currency || ''}</td></tr>` : ''}
+            ${Number(upb.storage||0)>0 ? `<tr><td class="label">${tStorage}</td><td class="value">${f(upb.storage)} ${currency || ''}</td></tr>` : ''}
+            ${Number(upb.garage||0)>0 ? `<tr><td class="label">${tGarage}</td><td class="value">${f(upb.garage)} ${currency || ''}</td></tr>` : ''}
+            ${Number(upb.maintenance||0)>0 ? `<tr><td class="label">${tMaintenance}</td><td class="value">${f(upb.maintenance)} ${currency || ''}</td></tr>` : ''}
+            ${totalIncl != null ? `<tr class="total"><td class="label">${tTotalIncl}</td><td class="value">${f(totalIncl)} ${currency || ''}</td></tr>` : ''}
           </tbody>
         </table>
       </div>
@@ -242,13 +267,14 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
       const labelText = rtl ? arLabel(r.label || '') : (r.label || '')
       const amount = Number(r.amount) || 0
       const words = convertToWords(amount, langForWords, { currency })
+      const dateStr = fmtDate(r.date || '')
       return `
         <tr>
-          <td>${Number(r.month) || 0}</td>
-          <td>${labelText}</td>
-          <td style="text-align:${rtl ? 'left' : 'right'}">${f(amount)} ${currency || ''}</td>
-          <td>${r.date || ''}</td>
-          <td>${words || ''}</td>
+          <td class="col-month">${Number(r.month) || 0}</td>
+          <td class="col-label">${labelText}</td>
+          <td class="col-amount" style="text-align:${rtl ? 'left' : 'right'}">${f(amount)} ${currency || ''}</td>
+          <td class="col-date">${dateStr}</td>
+          <td class="col-words">${words || ''}</td>
         </tr>
       `
     }).join('')
@@ -271,7 +297,7 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
           </div>
           <h2 style="${rtl ? 'text-align:right;' : ''}">${title}</h2>
           <div class="section">
-            <div class="meta"><strong>${tOfferDate}:</strong> ${offer_date || ''}   <strong>${tFirstPayment}:</strong> ${first_payment_date || ''}</div>
+            <div class="meta"><strong>${tOfferDate}:</strong> ${fmtDate(offer_date || '')}   <strong>${tFirstPayment}:</strong> ${fmtDate(first_payment_date || '')}</div>
             ${unitLine ? `<div class="meta"><strong>${tUnit}:</strong> ${unitLine}</div>` : ''}
             ${consultantLine}
             <div style="display:flex; ${rtl ? 'flex-direction:row-reverse;' : ''} gap:12px; align-items:stretch;">
@@ -280,19 +306,19 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
                   ${buyersHtml || (rtl ? '<div>لا يوجد بيانات عملاء</div>' : '<div>No client data</div>')}
                 </div>
               </div>
+              ${summaryBoxHtml}
             </div>
           </div>
-          ${totalsHtml}
           <div class="section">
             <h3 style="${rtl ? 'text-align:right;' : ''}">${tSchedule}</h3>
-            <table>
+            <table class="plan-table">
               <thead>
                 <tr>
-                  <th>${tMonth}</th>
-                  <th>${tLabel}</th>
-                  <th style="text-align:${rtl ? 'left' : 'right'}">${tAmount}</th>
-                  <th>${tDate}</th>
-                  <th>${tAmountWords}</th>
+                  <th class="col-month">${tMonth}</th>
+                  <th class="col-label">${tLabel}</th>
+                  <th class="col-amount" style="text-align:${rtl ? 'left' : 'right'}">${tAmount}</th>
+                  <th class="col-date">${tDate}</th>
+                  <th class="col-words">${tAmountWords}</th>
                 </tr>
               </thead>
               <tbody>
@@ -308,7 +334,7 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
     const page = await browser.newPage()
     await page.setContent(html, { waitUntil: 'load' })
     const footerTemplate = `
-      <div style="width:100%; font-size:10px; color:#6b7280; padding:6px 10px; ${rtl ? 'direction:rtl; text-align:left;' : 'direction:ltr; text-align:right;'}">
+      <div style="width:100%; font-size:10px; color:#6b7280; padding:6px 10px; font-family:'Noto Naskh Arabic','Amiri','DejaVu Sans',Arial, sans-serif; ${rtl ? 'direction:rtl; unicode-bidi:bidi-override; text-align:left;' : 'direction:ltr; text-align:right;'}">
         ${rtl ? 'صفحة' : 'Page'} <span class="pageNumber"></span> ${rtl ? 'من' : 'of'} <span class="totalPages"></span>
       </div>`
     const headerTemplate = '<div></div>'
@@ -352,6 +378,20 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
     const UIcurrency = (req.body?.currency_override || '').trim()
     const language = String(req.body?.language || 'en').toLowerCase().startsWith('ar') ? 'ar' : 'en'
     const rtl = language === 'ar'
+
+    // Date formatter DD-MM-YYYY
+    const fmtDate = (s) => {
+      if (!s) return ''
+      const d = new Date(s)
+      if (!isNaN(d.getTime())) {
+        const dd = String(d.getDate()).padStart(2, '0')
+        const mm = String(d.getMonth() + 1).padStart(2, '0')
+        const yyyy = d.getFullYear()
+        return `${dd}-${mm}-${yyyy}`
+      }
+      const parts = String(s).split('-')
+      return parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : s
+    }
 
     let dayOfWeek = ''
     try {
@@ -439,6 +479,10 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
         <style>
           html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           body { font-family: ${rtl ? "'Noto Naskh Arabic', serif" : "'Inter', sans-serif"}; }
+          /* Corporate identity table styling for RF breakdown */
+          .rf-table { border: 2px solid #1f2937; border-collapse: collapse; }
+          .rf-table th { background: #A97E34; color: #000; border: 2px solid #1f2937; }
+          .rf-table td { border: 2px solid #1f2937; background: #fffdf5; }
         </style>
       </head>
       <body class="bg-gray-100 p-4 sm:p-8">
@@ -489,22 +533,22 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
           <div class="px-6 sm:px-8 pb-8 ${textAlignLeft}">
             <h2 class="text-lg font-semibold text-gray-700 mb-3">${L('Pricing Breakdown', 'تفاصيل التسعير')}</h2>
             <div class="rounded-xl border border-gray-200 overflow-hidden">
-              <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
+              <table class="min-w-full rf-table">
+                <thead>
                   <tr>
-                    <th class="text-xs font-medium text-gray-500 uppercase tracking-wider p-3 ${textAlignLeft}">${L('Label', 'البند')}</th>
-                    <th class="text-xs font-medium text-gray-500 uppercase tracking-wider p-3 ${textAlignRight}">${L('Amount', 'القيمة')}</th>
+                    <th class="text-xs font-medium uppercase tracking-wider p-3 ${textAlignLeft}">${L('Label', 'البند')}</th>
+                    <th class="text-xs font-medium uppercase tracking-wider p-3 ${textAlignRight}">${L('Amount', 'القيمة')}</th>
                   </tr>
                 </thead>
-                <tbody class="bg-white divide-y divide-gray-100">
+                <tbody>
                   <tr><td class="p-3">${L('Base', 'السعر الأساسي')}</td><td class="p-3 ${textAlignRight}">${Number(upb?.base||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>
                   ${Number(upb?.garden||0)>0 ? `<tr><td class="p-3">${L('Garden', 'الحديقة')}</td><td class="p-3 ${textAlignRight}">${Number(upb?.garden||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>` : ''}
                   ${Number(upb?.roof||0)>0 ? `<tr><td class="p-3">${L('Roof', 'السطح')}</td><td class="p-3 ${textAlignRight}">${Number(upb?.roof||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>` : ''}
                   ${Number(upb?.storage||0)>0 ? `<tr><td class="p-3">${L('Storage', 'غرفة التخزين')}</td><td class="p-3 ${textAlignRight}">${Number(upb?.storage||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>` : ''}
                   ${Number(upb?.garage||0)>0 ? `<tr><td class="p-3">${L('Garage', 'الجراج')}</td><td class="p-3 ${textAlignRight}">${Number(upb?.garage||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>` : ''}
                   ${Number(upb?.maintenance||0)>0 ? `<tr><td class="p-3">${L('Maintenance Deposit', 'وديعة الصيانة')}</td><td class="p-3 ${textAlignRight}">${Number(upb?.maintenance||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>` : ''}
-                  <tr class="bg-gray-50"><td class="p-3 font-semibold">${L('Total (excl. maintenance)', 'الإجمالي (بدون وديعة الصيانة)')}</td><td class="p-3 ${textAlignRight} font-semibold">${Number(totalExcl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>
-                  <tr class="bg-gray-50"><td class="p-3 font-semibold">${L('Total (incl. maintenance)', 'الإجمالي (شامل وديعة الصيانة)')}</td><td class="p-3 ${textAlignRight} font-semibold">${Number(totalIncl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>
+                  <tr><td class="p-3 font-semibold">${L('Total (excl. maintenance)', 'الإجمالي (بدون وديعة الصيانة)')}</td><td class="p-3 ${textAlignRight} font-semibold">${Number(totalExcl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>
+                  <tr><td class="p-3 font-semibold">${L('Total (incl. maintenance)', 'الإجمالي (شامل وديعة الصيانة)')}</td><td class="p-3 ${textAlignRight} font-semibold">${Number(totalIncl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>
                 </tbody>
               </table>
             </div>
@@ -522,7 +566,7 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
     const page = await browser.newPage()
     await page.setContent(html, { waitUntil: 'load' })
     const footerTemplate = `
-      <div style="width:100%; font-size:10px; color:#6b7280; padding:6px 10px; ${rtl ? 'direction:rtl; text-align:left;' : 'direction:ltr; text-align:right;'}">
+      <div style="width:100%; font-size:10px; color:#6b7280; padding:6px 10px; font-family:'Noto Naskh Arabic','Amiri','DejaVu Sans',Arial, sans-serif; ${rtl ? 'direction:rtl; unicode-bidi:bidi-override; text-align:left;' : 'direction:ltr; text-align:right;'}">
         ${L('Page', 'صفحة')} <span class="pageNumber"></span> ${L('of', 'من')} <span class="totalPages"></span>
       </div>`
     const headerTemplate = '<div></div>'

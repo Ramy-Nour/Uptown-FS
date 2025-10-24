@@ -25,6 +25,7 @@ import { useDynamicPayments } from './hooks/useDynamicPayments.js'
 import { useUnitSearch } from './hooks/useUnitSearch.js'
 import { useCalculatorEmbedding } from './hooks/useCalculatorEmbedding.js'
 import { useAcceptanceThresholds } from './hooks/useAcceptanceThresholds.js'
+import BlockUnitButton from './components/calculator/BlockUnitButton.jsx'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 const LS_KEY = 'uptown_calc_form_state_v2'
@@ -689,6 +690,16 @@ export default function App(props) {
           role={role}
           customNotes={customNotes}
           setCustomNotes={setCustomNotes}
+        />
+
+        {/* Inline actions aligned with Client Info flow */}
+        <BlockUnitButton
+          role={role}
+          unitInfo={unitInfo}
+          genResult={genResult}
+          language={language}
+          styles={styles}
+          API_URL={API_URL}
         />
 
         {/* Results Table */}

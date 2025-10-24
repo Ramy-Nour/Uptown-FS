@@ -2,6 +2,7 @@ import express from 'express'
 import puppeteer from 'puppeteer'
 import { pool } from './db.js'
 import { authMiddleware, requireRole } from './authRoutes.js'
+import convertToWords from '../utils/converter.js'
 
 const router = express.Router()
 
@@ -35,7 +36,8 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
       totals,
       offer_date,
       first_payment_date,
-      unit
+      unit,
+      unit_pricing_breakdown
     } = req.body || {}
 
     // Consultant identity
@@ -120,6 +122,22 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
     const rtl = language === 'ar'
     const dir = rtl ? 'rtl' : 'ltr'
 
+    // Unit totals (optional) — prefer explicit breakdown from request for consistency with calculator
+    const upb = (unit_pricing_breakdown && typeof unit_pricing_breakdown === 'object')
+      ? {
+          base: Number(unit_pricing_breakdown.base || 0),
+          garden: Number(unit_pricing_breakdown.garden || 0),
+          roof: Number(unit_pricing_breakdown.roof || 0),
+          storage: Number(unit_pricing_breakdown.storage || 0),
+          garage: Number(unit_pricing_breakdown.garage || 0),
+          maintenance: Number(unit_pricing_breakdown.maintenance || 0),
+        }
+      : null
+    const totalExcl = upb
+      ? (Number(upb.base||0)+Number(upb.garden||0)+Number(upb.roof||0)+Number(upb.storage||0)+Number(upb.garage||0))
+      : null
+    const totalIncl = upb ? (Number(totalExcl||0) + Number(upb.maintenance||0)) : null
+
     function arLabel(label) {
       if (!label) return ''
       const L = String(label).toLowerCase()
@@ -177,6 +195,15 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
     const tAmountWords = rtl ? 'المبلغ بالحروف' : 'Amount in Words'
     const tConsultant = rtl ? 'المستشار العقاري' : 'Property Consultant'
     const tEmail = rtl ? 'البريد الإلكتروني' : 'Email'
+    const tTotals = rtl ? 'ملخص قيمة الوحدة' : 'Unit Totals'
+    const tBase = rtl ? 'السعر الأساسي' : 'Base'
+    const tGarden = rtl ? 'الحديقة' : 'Garden'
+    const tRoof = rtl ? 'السطح' : 'Roof'
+    const tStorage = rtl ? 'غرفة التخزين' : 'Storage'
+    const tGarage = rtl ? 'الجراج' : 'Garage'
+    const tMaintenance = rtl ? 'وديعة الصيانة' : 'Maintenance Deposit'
+    const tTotalExcl = rtl ? 'الإجمالي (بدون وديعة الصيانة)' : 'Total (excl. maintenance)'
+    const tTotalIncl = rtl ? 'الإجمالي (شامل وديعة الصيانة)' : 'Total (incl. maintenance)'
 
     const buyersHtml = buyers.map((b, idx) => `
       <div class="buyer">
@@ -186,11 +213,35 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
       </div>
     `).join('')
 
+    const totalsHtml = upb ? `
+      <div class="section">
+        <h3 style="${rtl ? 'text-align:right;' : ''}">${tTotals}</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>${tLabel}</th>
+              <th style="text-align:${rtl ? 'left' : 'right'}">${tAmount}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>${tBase}</td><td style="text-align:${rtl ? 'left' : 'right'}">${f(upb.base)} ${currency || ''}</td></tr>
+            ${Number(upb.garden||0)>0 ? `<tr><td>${tGarden}</td><td style="text-align:${rtl ? 'left' : 'right'}">${f(upb.garden)} ${currency || ''}</td></tr>` : ''}
+            ${Number(upb.roof||0)>0 ? `<tr><td>${tRoof}</td><td style="text-align:${rtl ? 'left' : 'right'}">${f(upb.roof)} ${currency || ''}</td></tr>` : ''}
+            ${Number(upb.storage||0)>0 ? `<tr><td>${tStorage}</td><td style="text-align:${rtl ? 'left' : 'right'}">${f(upb.storage)} ${currency || ''}</td></tr>` : ''}
+            ${Number(upb.garage||0)>0 ? `<tr><td>${tGarage}</td><td style="text-align:${rtl ? 'left' : 'right'}">${f(upb.garage)} ${currency || ''}</td></tr>` : ''}
+            ${Number(upb.maintenance||0)>0 ? `<tr><td>${tMaintenance}</td><td style="text-align:${rtl ? 'left' : 'right'}">${f(upb.maintenance)} ${currency || ''}</td></tr>` : ''}
+            ${totalExcl != null ? `<tr><td><strong>${tTotalExcl}</strong></td><td style="text-align:${rtl ? 'left' : 'right'}"><strong>${f(totalExcl)} ${currency || ''}</strong></td></tr>` : ''}
+            ${totalIncl != null ? `<tr><td><strong>${tTotalIncl}</strong></td><td style="text-align:${rtl ? 'left' : 'right'}"><strong>${f(totalIncl)} ${currency || ''}</strong></td></tr>` : ''}
+          </tbody>
+        </table>
+      </div>
+    ` : ''
+
     const langForWords = language
     const scheduleRows = schedule.map((r) => {
       const labelText = rtl ? arLabel(r.label || '') : (r.label || '')
       const amount = Number(r.amount) || 0
-      const words = '' // omit words here for brevity; can add converter
+      const words = convertToWords(amount, langForWords, { currency })
       return `
         <tr>
           <td>${Number(r.month) || 0}</td>
@@ -231,6 +282,7 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
               </div>
             </div>
           </div>
+          ${totalsHtml}
           <div class="section">
             <h3 style="${rtl ? 'text-align:right;' : ''}">${tSchedule}</h3>
             <table>

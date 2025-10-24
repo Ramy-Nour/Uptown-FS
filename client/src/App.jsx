@@ -696,6 +696,7 @@ export default function App(props) {
         <BlockUnitButton
           role={role}
           unitInfo={unitInfo}
+          clientInfo={clientInfo}
           genResult={genResult}
           language={language}
           styles={styles}

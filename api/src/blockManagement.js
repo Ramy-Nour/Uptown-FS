@@ -5,6 +5,42 @@ import { validate, blockRequestSchema, blockApproveSchema, blockExtendSchema } f
 
 const router = express.Router()
 
+// Defensive: ensure blocks table exists (some envs may have skipped migrations)
+async function ensureBlocksSchema() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS blocks (
+        id SERIAL PRIMARY KEY,
+        unit_id INTEGER NOT NULL REFERENCES units(id) ON DELETE CASCADE,
+        requested_by INTEGER NOT NULL REFERENCES users(id) ON DELETE SET NULL,
+        duration_days INTEGER NOT NULL,
+        reason TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        blocked_until TIMESTAMPTZ NOT NULL,
+        approved_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        approved_at TIMESTAMPTZ,
+        approval_reason TEXT,
+        rejected_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        rejected_at TIMESTAMPTZ,
+        rejection_reason TEXT,
+        extension_count INTEGER DEFAULT 0,
+        expiry_notified BOOLEAN DEFAULT FALSE,
+        last_extension_reason TEXT,
+        last_extended_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        last_extended_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_blocks_unit ON blocks(unit_id);
+      CREATE INDEX IF NOT EXISTS idx_blocks_status ON blocks(status);
+      CREATE INDEX IF NOT EXISTS idx_blocks_blocked_until ON blocks(blocked_until);
+    `)
+  } catch (e) {
+    // If this fails, let the request path report 500 with a clear message
+    throw e
+  }
+}
+
 async function createNotification(type, userId, refTable, refId, message) {
   try {
     await pool.query(
@@ -22,6 +58,9 @@ async function createNotification(type, userId, refTable, refId, message) {
 router.post('/request', authMiddleware, requireRole(['property_consultant','sales_manager']), validate(blockRequestSchema), async (req, res) => {
   const { unitId, durationDays, reason } = req.body || {}
   try {
+    // Ensure schema exists (in case migrations were skipped)
+    await ensureBlocksSchema()
+
     // Validate unit availability
     const unit = await pool.query(
       'SELECT id, code, available FROM units WHERE id = $1',

@@ -1,16 +1,32 @@
 import React from 'react'
 import { fetchWithAuth } from '../../lib/apiClient.js'
 
-export default function BlockUnitButton({ role, unitInfo, genResult, language, styles, API_URL }) {
+export default function BlockUnitButton({ role, unitInfo, clientInfo, genResult, language, styles, API_URL }) {
   // Only consultants and sales managers see the control
   if (!(role === 'property_consultant' || role === 'sales_manager')) return null
 
   const uid = Number(unitInfo?.unit_id) || 0
-  const canBlock = uid > 0 && (genResult?.evaluation?.decision === 'ACCEPT')
+
+  // Require all client info except secondary phone to be present before enabling block
+  const ci = clientInfo || {}
+  const requiredFields = ['buyer_name','nationality','id_or_passport','id_issue_date','birth_date','address','phone_primary','email']
+  const hasAllClientInfo = requiredFields.every(k => {
+    const v = ci[k]
+    return v != null && String(v).trim() !== ''
+  })
+
+  const planAccepted = (genResult?.evaluation?.decision === 'ACCEPT')
+  const canBlock = uid > 0 && planAccepted && hasAllClientInfo
 
   async function requestUnitBlock() {
     try {
       if (!uid) return
+      if (!hasAllClientInfo) {
+        alert(language?.startsWith('ar')
+          ? 'يجب إدخال جميع بيانات العميل أولاً (باستثناء رقم الهاتف الثانوي).'
+          : 'Please fill all client information first (except Secondary Phone).')
+        return
+      }
       const durationStr = window.prompt('Block duration in days (default 7):', '7')
       if (durationStr === null) return
       const durationDays = Number(durationStr) || 7

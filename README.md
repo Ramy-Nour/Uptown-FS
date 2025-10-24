@@ -814,6 +814,9 @@ Planned enhancements
 - Unit Lifecycle Timeline (future)
   - Add a similar timeline to track unit state across Blocked → Reserved → Contracted (and back if expired/unblocked).
   - Integrate with blocks table and reservation/contract events to display timestamps per transition.
+- Reservation Cancellation Flow (future)
+  - Design and implement reservation cancellation with approval and audit trail.
+  - On cancellation, unit unblocks or reverts to AVAILABLE according to policy; notifications sent to stakeholders.
 - Contract Cancellation Flow (future)
   - Design and implement contract cancellation workflow with approvals and audit trail.
   - Update documents and notifications to reflect cancellation and unit state changes.

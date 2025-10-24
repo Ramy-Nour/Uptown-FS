@@ -136,6 +136,8 @@ export default function BrandHeader({ title, onLogout }) {
         return [
           ...baseWithCalc,
           queuesLink,
+          { label: 'Current Blocks', href: '/deals/current-blocks' },
+          { label: 'Reservations', href: '/deals/reservations-queue' },
           { label: 'Inventory Drafts', href: '/admin/inventory-drafts' },
           { label: 'Inventory Changes', href: '/admin/inventory-changes' },
           { label: 'Rejected Requests', href: '/admin/rejected-pricings' },
@@ -148,6 +150,7 @@ export default function BrandHeader({ title, onLogout }) {
       case 'financial_admin':
         return [
           ...baseWithCalc,
+          { label: 'Current Blocks', href: '/deals/current-blocks' },
           { label: 'Inventory', href: '/admin/inventory' },
           { label: 'My Inventory Requests', href: '/admin/inventory-change-history' },
           { label: 'Standard Pricing', href: '/admin/standard-pricing' },

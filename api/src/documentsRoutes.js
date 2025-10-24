@@ -395,7 +395,7 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
       displayHeaderFooter: true,
       headerTemplate,
       footerTemplate,
-      margin: { top: '65mm', right: '12mm', bottom: '18mm', left: '12mm' }
+      margin: { top: '35mm', right: '12mm', bottom: '18mm', left: '12mm' }
     })
     await page.close()
 
@@ -667,7 +667,7 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
       displayHeaderFooter: true,
       headerTemplate,
       footerTemplate,
-      margin: { top: '65mm', right: '12mm', bottom: '18mm', left: '12mm' }
+      margin: { top: '35mm', right: '12mm', bottom: '18mm', left: '12mm' }
     })
     await page.close()
 

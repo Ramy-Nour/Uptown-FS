@@ -160,6 +160,7 @@ export default function BrandHeader({ title, onLogout }) {
         return [
           ...baseWithCalc,
           queuesLink,
+          { label: 'Offer Progress', href: '/deals/offer-progress' },
           { label: 'Sales Team', href: '/admin/sales-team' },
           { label: 'Team Proposals', href: '/deals/team-proposals' },
           { label: 'Holds', href: '/admin/holds' },
@@ -168,6 +169,7 @@ export default function BrandHeader({ title, onLogout }) {
       case 'property_consultant':
         return [
           ...baseWithCalc,
+          { label: 'Offer Progress', href: '/deals/offer-progress' },
           { label: 'My Proposals', href: '/deals/my-proposals' }
         ]
       case 'contract_person':

@@ -12,6 +12,7 @@ import TeamProposals from './TeamProposals.jsx'
 import BlockRequests from './BlockRequests.jsx'
 import CurrentBlocks from './CurrentBlocks.jsx'
 import ReservationsQueue from './ReservationsQueue.jsx'
+import OfferProgress from './OfferProgress.jsx'
 import RequireRole from '../components/RequireRole.jsx'
 
 export default function DealsApp() {
@@ -67,6 +68,14 @@ export default function DealsApp() {
             element={
               <RequireRole allowed={['financial_manager']}>
                 <ReservationsQueue />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="offer-progress"
+            element={
+              <RequireRole allowed={['sales_manager','property_consultant']}>
+                <OfferProgress />
               </RequireRole>
             }
           />

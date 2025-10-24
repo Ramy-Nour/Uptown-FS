@@ -121,6 +121,17 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-10-24 10:35] FA: Select approved plans instead of typing ID; Sales: Offer Progress timeline
+  - API: Added GET /api/workflow/payment-plans/approved-for-unit?unit_id=… to list approved plans where details.calculator.unitInfo.unit_id matches the unit.
+  - Client: On Deals → Current Blocks, FA now selects an Approved Payment Plan from a dropdown per blocked unit. The selector auto-loads plans; manual ID entry removed. We also include unit_id in reservation form details.
+  - API: Added GET /api/inventory/progress for sales roles to aggregate status across Block (blocks), Reservation (reservation_forms), and Contract (contracts) for relevant units:
+    - Consultants: their own block requests
+    - Sales Managers: consultants in their team
+  - Client: New Deals → Offer Progress page for property_consultant and sales_manager shows a training-like timeline (Blocked → Reserved → Contracted) in corporate colors for each unit. Route: /deals/offer-progress.
+  - Nav: Header shortcuts updated:
+    - Financial Admin: Current Blocks
+    - Financial Manager: Current Blocks, Reservations
+    - Sales Manager/Consultant: Offer Progress
 - [2025-10-24 10:10] Unit Block approval updates inventory status and FA can find blocked units:
   - API: When Financial Manager approves a block request (PATCH /api/blocks/:id/approve), the unit now sets available=FALSE and unit_status='BLOCKED'. Previously we flipped available only, leaving unit_status as 'AVAILABLE', so lists showed AVAILABLE despite a block.
   - API: Block expiry job now restores units to available=TRUE and unit_status='AVAILABLE' (removed reference to a non-existent units.blocked_until field).

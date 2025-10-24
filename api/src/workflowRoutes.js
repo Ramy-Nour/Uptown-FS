@@ -1331,4 +1331,29 @@ router.patch(
   }
 )
 
+// List approved payment plans for a unit (by unit_id inside plan details.calculator.unitInfo.unit_id)
+router.get(
+  '/payment-plans/approved-for-unit',
+  authMiddleware,
+  requireRole(['financial_admin','financial_manager','sales_manager','property_consultant']),
+  async (req, res) => {
+    try {
+      const unitId = ensureNumber(req.query.unit_id)
+      if (!unitId) return bad(res, 400, 'unit_id is required')
+      const r = await pool.query(
+        `SELECT id, deal_id, COALESCE(version, 1) AS version, status, created_at
+         FROM payment_plans
+         WHERE status='approved'
+           AND (details->'calculator'->'unitInfo'->>'unit_id')::int = $1
+         ORDER BY id DESC`,
+        [unitId]
+      )
+      return ok(res, { payment_plans: r.rows })
+    } catch (e) {
+      console.error('GET /api/workflow/payment-plans/approved-for-unit error:', e)
+      return bad(res, 500, 'Internal error')
+    }
+  }
+)
+
 export default router

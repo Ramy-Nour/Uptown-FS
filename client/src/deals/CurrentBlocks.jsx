@@ -11,7 +11,8 @@ export default function CurrentBlocks() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [creating, setCreating] = useState(new Set())
-  const [form, setForm] = useState({}) // keyed by block id: { paymentPlanId, reservationDate, preliminaryPayment, currency, language }
+  // keyed by block id: { selectedPlanId, reservationDate, preliminaryPayment, currency, language, plans: [] }
+  const [form, setForm] = useState({})
 
   async function load() {
     try {
@@ -20,7 +21,12 @@ export default function CurrentBlocks() {
       const resp = await fetchWithAuth(`${API_URL}/api/blocks/current`)
       const data = await resp.json()
       if (!resp.ok) throw new Error(data?.error?.message || 'Failed to load current blocks')
-      setRows(data.blocks || [])
+      const blocks = data.blocks || []
+      setRows(blocks)
+      // prefetch plans per unit
+      for (const b of blocks) {
+        await loadPlansForBlock(b)
+      }
     } catch (e) {
       setError(e.message || String(e))
     } finally {
@@ -30,24 +36,43 @@ export default function CurrentBlocks() {
 
   useEffect(() => { load() }, [])
 
-  function onFieldChange(id, key, value) {
-    setForm(f => ({ ...f, [id]: { ...(f[id] || {}), [key]: value } }))
+  function setBlockForm(id, patch) {
+    setForm(f => ({ ...f, [id]: { ...(f[id] || {}), ...patch } }))
+  }
+
+  async function loadPlansForBlock(blockRow) {
+    const unitId = blockRow.unit_id
+    if (!unitId) return
+    try {
+      const resp = await fetchWithAuth(`${API_URL}/api/workflow/payment-plans/approved-for-unit?unit_id=${unitId}`)
+      const data = await resp.json()
+      if (!resp.ok) throw new Error(data?.error?.message || 'Failed to load approved plans')
+      const plans = (data.payment_plans || []).map(p => ({
+        id: p.id, label: `#${p.id} v${p.version || 1} (approved)`
+      }))
+      setBlockForm(blockRow.id, { plans, selectedPlanId: plans[0]?.id || '' })
+    } catch (e) {
+      // keep silent; form will show empty selector
+      setBlockForm(blockRow.id, { plans: [], selectedPlanId: '' })
+    }
   }
 
   async function createReservation(id) {
     try {
       const f = form[id] || {}
-      const paymentPlanId = Number(f.paymentPlanId) || 0
+      const paymentPlanId = Number(f.selectedPlanId) || 0
       if (!paymentPlanId) {
-        alert('Enter an approved Payment Plan ID to create a reservation form.')
+        alert('Select an approved Payment Plan to create a reservation form.')
         return
       }
       setCreating(s => new Set([...s, id]))
+      const row = rows.find(r => r.id === id)
       const details = {
         reservation_date: f.reservationDate || null,
         preliminary_payment: Number(f.preliminaryPayment || 0) || 0,
         currency_override: f.currency || 'EGP',
-        language: f.language || 'en'
+        language: f.language || 'en',
+        unit_id: row?.unit_id || null
       }
       const resp = await fetchWithAuth(`${API_URL}/api/workflow/reservation-forms`, {
         method: 'POST',
@@ -57,8 +82,7 @@ export default function CurrentBlocks() {
       const data = await resp.json().catch(() => ({}))
       if (!resp.ok) throw new Error(data?.error?.message || 'Failed to create reservation form')
       alert(`Reservation Form #${data?.reservation_form?.id} created and sent for Financial Manager approval.`)
-      // optionally clear row form
-      setForm(fm => ({ ...fm, [id]: {} }))
+      setForm(fm => ({ ...fm, [id]: { ...fm[id], reservationDate: '', preliminaryPayment: '', currency: 'EGP', language: 'en' } }))
     } catch (e) {
       alert(e.message || String(e))
     } finally {
@@ -92,6 +116,7 @@ export default function CurrentBlocks() {
             {loading && <tr><td style={td} colSpan={7}>Loading…</td></tr>}
             {!loading && rows.map(r => {
               const f = form[r.id] || {}
+              const plans = f.plans || []
               return (
                 <tr key={r.id}>
                   <td style={td}>{r.id}</td>
@@ -100,31 +125,34 @@ export default function CurrentBlocks() {
                   <td style={td}>{r.requested_by_name || '-'}</td>
                   <td style={td}>{r.reason || '-'}</td>
                   <td style={td}>{r.blocked_until ? new Date(r.blocked_until).toLocaleString() : '-'}</td>
-                  <td style={{ ...td, minWidth: 480 }}>
+                  <td style={{ ...td, minWidth: 540 }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                      <input
+                      <select
                         style={ctrl}
-                        placeholder="Approved Payment Plan ID"
-                        value={f.paymentPlanId || ''}
-                        onChange={e => onFieldChange(r.id, 'paymentPlanId', e.target.value)}
-                      />
+                        value={f.selectedPlanId || ''}
+                        onChange={e => setBlockForm(r.id, { selectedPlanId: e.target.value })}
+                        onFocus={() => { if (!plans.length) loadPlansForBlock(r) }}
+                      >
+                        {plans.length === 0 ? <option value="">No approved plans for this unit</option> : null}
+                        {plans.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+                      </select>
                       <input
                         style={ctrl}
                         type="date"
                         placeholder="Reservation Date"
                         value={f.reservationDate || ''}
-                        onChange={e => onFieldChange(r.id, 'reservationDate', e.target.value)}
+                        onChange={e => setBlockForm(r.id, { reservationDate: e.target.value })}
                       />
                       <input
                         style={ctrl}
                         placeholder="Preliminary Payment"
                         value={f.preliminaryPayment || ''}
-                        onChange={e => onFieldChange(r.id, 'preliminaryPayment', e.target.value)}
+                        onChange={e => setBlockForm(r.id, { preliminaryPayment: e.target.value })}
                       />
                       <select
                         style={ctrl}
                         value={f.currency || 'EGP'}
-                        onChange={e => onFieldChange(r.id, 'currency', e.target.value)}
+                        onChange={e => setBlockForm(r.id, { currency: e.target.value })}
                       >
                         <option value="EGP">EGP</option>
                         <option value="USD">USD</option>
@@ -132,7 +160,7 @@ export default function CurrentBlocks() {
                       <select
                         style={ctrl}
                         value={f.language || 'en'}
-                        onChange={e => onFieldChange(r.id, 'language', e.target.value)}
+                        onChange={e => setBlockForm(r.id, { language: e.target.value })}
                       >
                         <option value="en">English</option>
                         <option value="ar">العربية</option>

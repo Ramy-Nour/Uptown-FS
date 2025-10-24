@@ -428,6 +428,31 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
     const language = String(req.body?.language || 'en').toLowerCase().startsWith('ar') ? 'ar' : 'en'
     const rtl = language === 'ar'
 
+    // Cairo-local timestamp helper
+    const localTimestamp = () => {
+      const timeZone = process.env.TIMEZONE || process.env.TZ || 'Africa/Cairo'
+      const d = new Date()
+      const fmt = new Intl.DateTimeFormat('en-GB', {
+        timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      })
+      const parts = Object.fromEntries(fmt.formatToParts(d).map(p => [p.type, p.value]))
+      const dd = parts.day || '01'
+      const mm = parts.month || '01'
+      const yyyy = parts.year || '1970'
+      const hh = parts.hour || '00'
+      const mi = parts.minute || '00'
+      const ss = parts.second || '00'
+      return `${dd}-${mm}-${yyyy} ${hh}:${mi}:${ss}`
+    }
+    const todayTs = localTimestamp()
+
     // Date formatter DD-MM-YYYY
     const fmtDate = (s) => {
       if (!s) return ''
@@ -535,16 +560,8 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
         </style>
       </head>
       <body class="bg-gray-100 p-4 sm:p-8">
-        <!-- Brand Header -->
-        <div class="max-w-4xl mx-auto text-sm ${textAlignLeft} mb-2">
-          <div class="${rtl ? 'text-right' : 'text-left'} font-semibold" style="color:#A97E34;">
-            ${L('Uptown 6 October Financial System', 'نظام شركة أبتاون 6 أكتوبر المالي')}
-          </div>
-        </div>
         <div class="container mx-auto max-w-4xl bg-white shadow-lg rounded-2xl overflow-hidden">
-          <div class="p-6 sm:p-8 border-b border-gray-200 ${textAlignLeft}">
-            <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">${L('Reservation Form', 'نموذج الحجز')}</h1>
-            <p class="mt-2 text-gray-600">${L('This document summarizes the reservation details for the selected unit.', 'يُلخص هذا المستند تفاصيل حجز الوحدة المختارة.')}</p>
+          <div class="p-2 border-b border-gray-200 ${textAlignLeft}">
           </div>
 
           <div class="px-6 sm:px-8 py-6 grid grid-cols-1 md:grid-cols-2 gap-6">

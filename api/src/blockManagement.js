@@ -83,6 +83,20 @@ router.post('/request', authMiddleware, requireRole(['property_consultant','sale
       return res.status(400).json({ error: { message: 'Unit is already blocked' } })
     }
 
+    // Enforce business rule: an approved payment plan must exist for this unit before blocking
+    const approvedPlan = await pool.query(
+      `SELECT id
+       FROM payment_plans
+       WHERE status='approved'
+         AND (details->'calculator'->'unitInfo'->>'unit_id')::int = $1
+       ORDER BY id DESC
+       LIMIT 1`,
+      [unitId]
+    )
+    if (approvedPlan.rows.length === 0) {
+      return res.status(400).json({ error: { message: 'An approved payment plan is required to request a block for this unit.' } })
+    }
+
     // Create block request
     const d = Number(durationDays)
     const result = await pool.query(

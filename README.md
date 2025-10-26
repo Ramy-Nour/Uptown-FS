@@ -121,7 +121,24 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
-- [2025-10-24 10:50] Create Deal prefill from plan_id + Notification Center (bell)
+- [2025-10-26 12:00] Notifications: fix unread state mismatch in header bell
+  - Client: NotificationBell.jsx now uses the API’s is_read property consistently (was using a local read flag). Marking single notifications or “Mark all read” correctly updates is_read and the unread counter.
+  - Impact: Notifications no longer reappear as unread after clicking “read” or after logging in again. Styling and badge counts reflect server state.
+  - Files: client/src/components/notifications/NotificationBell.jsx.
+- [2025-10-26 12:05] Notifications: disable auto pop-up toasts and reduce poll frequency
+  - Client: Removed the auto “You have X new notifications” toast on every count increase to avoid repeated pop-ups when navigating or remounting. Increased poll interval from 30s to 60s to reduce noise.
+  - Impact: The header bell still shows accurate unread counts and list updates, but no periodic pop-ups will interrupt the user. Counts refresh once per minute.
+  - Files: client/src/components/notifications/NotificationBell.jsx.
+- [2025-10-26 12:20] Blocks: server enforces approved payment plan before blocking a unit
+  - API: POST /api/blocks/request now checks for at least one approved payment plan tied to the unit via details.calculator.unitInfo.unit_id. If none exists, returns 400 with a clear message.
+  - Impact: Prevents blocked units without an approved plan appearing on “Current Blocks.” Existing blocks created previously without plans will still display; future requests must have an approved plan.
+  - Files: api/src/blockManagement.js.
+- [2025-10-26 12:30] Approved plans lookup: match by unit_id or unit_code
+  - API: GET /api/workflow/payment-plans/approved-for-unit now returns approved plans when either unit_id matches or unit_code in the plan snapshot matches the unit’s current code. This covers cases where older plan snapshots stored unit_code but not unit_id, or unit_id was a string.
+  - Impact: Current Blocks page will now list approved plans for blocked units that already have plans, even if the snapshot used unit_code rather than unit_id.
+  - Files: api/src/workflowRoutes.js. 12:00] Notifications: fix unread state mismatch in header bell
+  - Client: NotificationBell.jsx now uses the API’s is_read property consistently (was using a local read flag). Marking single notifications or “Mark all read” correctly updates is_read and the unread counter.
+  - Impact: Notifications no longer reappear as unread after clicking “read” or after- [2025-10-24 10:50] Create Deal prefill from plan_id + Notification Center (bell)
   - API: Added GET /api/workflow/payment-plans/:id to fetch a plan by id (roles: consultant/FM/FA/SM/admin).
   - Client: Create Deal now accepts plan_id in URL. If present, it hydrates the embedded calculator from that plan’s snapshot after loading the unit.
   - Client: Added a Notification Bell in the header (right side). Polls unread count and shows a dropdown with notifications:

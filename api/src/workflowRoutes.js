@@ -637,17 +637,36 @@ router.get(
       const params = []
       if (deal_id) {
         params.push(ensureNumber(deal_id))
-        clauses.push(`deal_id = $${params.length}`)
+        clauses.push(`deal_id = ${params.length}`)
       }
       if (status) {
         params.push(String(status))
-        clauses.push(`status = $${params.length}`)
+        clauses.push(`status = ${params.length}`)
       }
       const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''
       const result = await pool.query(`SELECT * FROM payment_plans ${where} ORDER BY id DESC`, params)
       return ok(res, { payment_plans: result.rows })
     } catch (e) {
       console.error('GET /api/workflow/payment-plans error:', e)
+      return bad(res, 500, 'Internal error')
+    }
+  }
+)
+
+// Get a payment plan by id
+router.get(
+  '/payment-plans/:id',
+  authMiddleware,
+  requireRole(['property_consultant', 'financial_manager', 'financial_admin', 'sales_manager', 'admin', 'superadmin']),
+  async (req, res) => {
+    try {
+      const id = ensureNumber(req.params.id)
+      if (!id) return bad(res, 400, 'Invalid id')
+      const r = await pool.query('SELECT * FROM payment_plans WHERE id=$1', [id])
+      if (r.rows.length === 0) return bad(res, 404, 'Payment plan not found')
+      return ok(res, { payment_plan: r.rows[0] })
+    } catch (e) {
+      console.error('GET /api/workflow/payment-plans/:id error:', e)
       return bad(res, 500, 'Internal error')
     }
   }
@@ -1115,7 +1134,7 @@ router.get(
 router.post(
   '/payment-plans/:id/new-version',
   authMiddleware,
-  requireRole(['property_consultant', 'financial_manager']),
+  requireRole(['property_consultant']),
   async (req, res) => {
     const client = await pool.connect()
     try {
@@ -1131,6 +1150,11 @@ router.post(
         return bad(res, 404, 'Payment plan not found')
       }
       const prev = cur.rows[0]
+      // Only the original creator (consultant) can create new versions
+      if (prev.created_by !== req.user.id) {
+        await client.query('ROLLBACK'); client.release()
+        return bad(res, 403, 'Only the consultant who created this plan can create a new version')
+      }
       // Next version number for same deal
       const vres = await client.query('SELECT COALESCE(MAX(version),0)+1 AS v FROM payment_plans WHERE deal_id=$1', [prev.deal_id])
       const nextV = vres.rows[0].v || 1
@@ -1146,6 +1170,90 @@ router.post(
       try { await client.query('ROLLBACK') } catch {}
       client.release()
       console.error('POST /api/workflow/payment-plans/:id/new-version error:', e)
+      return bad(res, 500, 'Internal error')
+    }
+  }
+)
+
+// FM/FA request edits on a payment plan (does not modify the plan)
+router.post(
+  '/payment-plans/:id/request-edits',
+  authMiddleware,
+  requireRole(['financial_manager','financial_admin']),
+  async (req, res) => {
+    try {
+      const id = ensureNumber(req.params.id)
+      if (!id) return bad(res, 400, 'Invalid id')
+      const { reason, fields } = req.body || {}
+      const cur = await pool.query('SELECT id, details, created_by FROM payment_plans WHERE id=$1', [id])
+      if (cur.rows.length === 0) return bad(res, 404, 'Payment plan not found')
+      const det = cur.rows[0].details || {}
+      const meta = det.meta || {}
+      const editReq = {
+        by_user_id: req.user.id,
+        by_role: req.user.role,
+        reason: typeof reason === 'string' ? reason : null,
+        fields: Array.isArray(fields) ? fields : [],
+        at: new Date().toISOString()
+      }
+      const nextMeta = {
+        ...meta,
+        pending_edit_request: true,
+        edit_requests: [...(meta.edit_requests || []), editReq]
+      }
+      const nextDetails = { ...det, meta: nextMeta }
+      const upd = await pool.query(
+        `UPDATE payment_plans SET details=$1, updated_at=now() WHERE id=$2 RETURNING *`,
+        [nextDetails, id]
+      )
+      // Notify the consultant (creator)
+      try {
+        await pool.query(
+          `INSERT INTO notifications (user_id, type, ref_table, ref_id, message)
+           VALUES ($1, 'payment_plan_request_edits', 'payment_plans', $2, $3)`,
+          [cur.rows[0].created_by, id, String(reason || 'Edits requested for your payment plan.')]
+        )
+      } catch {}
+      return ok(res, { payment_plan: upd.rows[0] })
+    } catch (e) {
+      console.error('POST /api/workflow/payment-plans/:id/request-edits error:', e)
+      return bad(res, 500, 'Internal error')
+    }
+  }
+)
+
+// Consultant marks edits addressed (does not change approval status)
+router.post(
+  '/payment-plans/:id/edits-addressed',
+  authMiddleware,
+  requireRole(['property_consultant']),
+  async (req, res) => {
+    try {
+      const id = ensureNumber(req.params.id)
+      const { notes } = req.body || {}
+      if (!id) return bad(res, 400, 'Invalid id')
+      const cur = await pool.query('SELECT id, details FROM payment_plans WHERE id=$1', [id])
+      if (cur.rows.length === 0) return bad(res, 404, 'Payment plan not found')
+      const det = cur.rows[0].details || {}
+      const meta = det.meta || {}
+      const resp = {
+        by_user_id: req.user.id,
+        notes: typeof notes === 'string' ? notes : null,
+        at: new Date().toISOString()
+      }
+      const nextMeta = {
+        ...meta,
+        pending_edit_request: false,
+        edit_responses: [...(meta.edit_responses || []), resp]
+      }
+      const nextDetails = { ...det, meta: nextMeta }
+      const upd = await pool.query(
+        `UPDATE payment_plans SET details=$1, updated_at=now() WHERE id=$2 RETURNING *`,
+        [nextDetails, id]
+      )
+      return ok(res, { payment_plan: upd.rows[0] })
+    } catch (e) {
+      console.error('POST /api/workflow/payment-plans/:id/edits-addressed error:', e)
       return bad(res, 500, 'Internal error')
     }
   }
@@ -1237,6 +1345,127 @@ router.post(
       try { await client.query('ROLLBACK') } catch {}
       client.release()
       console.error('POST /api/workflow/reservation-forms error:', e)
+      return bad(res, 500, 'Internal error')
+    }
+  }
+)
+
+// List reservation forms (FA/FM)
+router.get(
+  '/reservation-forms',
+  authMiddleware,
+  requireRole(['financial_admin','financial_manager']),
+  async (req, res) => {
+    try {
+      const { status = 'pending_approval' } = req.query || {}
+      const r = await pool.query(
+        `SELECT rf.*,
+                pp.deal_id,
+                pp.status AS payment_plan_status,
+                u.code AS unit_code
+         FROM reservation_forms rf
+         LEFT JOIN payment_plans pp ON pp.id = rf.payment_plan_id
+         LEFT JOIN units u ON u.id = COALESCE(
+           NULLIF((rf.details->>'unit_id')::int, 0),
+           NULLIF((pp.details->'calculator'->'unitInfo'->>'unit_id')::int, 0)
+         )
+         WHERE ($1 = 'all' OR rf.status = $1)
+         ORDER BY rf.id DESC`,
+        [String(status)]
+      )
+      return ok(res, { reservation_forms: r.rows })
+    } catch (e) {
+      console.error('GET /api/workflow/reservation-forms error:', e)
+      return bad(res, 500, 'Internal error')
+    }
+  }
+)
+
+// FM approve reservation form
+router.patch(
+  '/reservation-forms/:id/approve',
+  authMiddleware,
+  requireRole(['financial_manager']),
+  async (req, res) => {
+    try {
+      const id = ensureNumber(req.params.id)
+      if (!id) return bad(res, 400, 'Invalid id')
+      const r0 = await pool.query('SELECT * FROM reservation_forms WHERE id=$1', [id])
+      if (r0.rows.length === 0) return bad(res, 404, 'Reservation form not found')
+      if (r0.rows[0].status !== 'pending_approval') return bad(res, 400, 'Reservation form is not pending approval')
+      const upd = await pool.query(
+        `UPDATE reservation_forms
+         SET status='approved', approved_by=$1, updated_at=now()
+         WHERE id=$2
+         RETURNING *`,
+        [req.user.id, id]
+      )
+      await pool.query(
+        `INSERT INTO reservation_forms_history (reservation_form_id, change_type, changed_by, old_values, new_values)
+         VALUES ($1, 'approve', $2, $3::jsonb, $4::jsonb)`,
+        [id, req.user.id, JSON.stringify(r0.rows[0]), JSON.stringify(upd.rows[0])]
+      )
+      return ok(res, { reservation_form: upd.rows[0] })
+    } catch (e) {
+      console.error('PATCH /api/workflow/reservation-forms/:id/approve error:', e)
+      return bad(res, 500, 'Internal error')
+    }
+  }
+)
+
+// FM reject reservation form
+router.patch(
+  '/reservation-forms/:id/reject',
+  authMiddleware,
+  requireRole(['financial_manager']),
+  async (req, res) => {
+    try {
+      const id = ensureNumber(req.params.id)
+      const { reason } = req.body || {}
+      if (!id) return bad(res, 400, 'Invalid id')
+      const r0 = await pool.query('SELECT * FROM reservation_forms WHERE id=$1', [id])
+      if (r0.rows.length === 0) return bad(res, 404, 'Reservation form not found')
+      if (r0.rows[0].status !== 'pending_approval') return bad(res, 400, 'Reservation form is not pending approval')
+      const upd = await pool.query(
+        `UPDATE reservation_forms
+         SET status='rejected', approved_by=$1, updated_at=now()
+         WHERE id=$2
+         RETURNING *`,
+        [req.user.id, id]
+      )
+      await pool.query(
+        `INSERT INTO reservation_forms_history (reservation_form_id, change_type, changed_by, old_values, new_values)
+         VALUES ($1, 'reject', $2, $3::jsonb, $4::jsonb)`,
+        [id, req.user.id, JSON.stringify({ ...r0.rows[0], reason: reason || null }), JSON.stringify(upd.rows[0])]
+      )
+      return ok(res, { reservation_form: upd.rows[0] })
+    } catch (e) {
+      console.error('PATCH /api/workflow/reservation-forms/:id/reject error:', e)
+      return bad(res, 500, 'Internal error')
+    }
+  }
+)
+
+// List approved payment plans for a unit (by unit_id inside plan details.calculator.unitInfo.unit_id)
+router.get(
+  '/payment-plans/approved-for-unit',
+  authMiddleware,
+  requireRole(['financial_admin','financial_manager','sales_manager','property_consultant']),
+  async (req, res) => {
+    try {
+      const unitId = ensureNumber(req.query.unit_id)
+      if (!unitId) return bad(res, 400, 'unit_id is required')
+      const r = await pool.query(
+        `SELECT id, deal_id, COALESCE(version, 1) AS version, status, created_at
+         FROM payment_plans
+         WHERE status='approved'
+           AND (details->'calculator'->'unitInfo'->>'unit_id')::int = $1
+         ORDER BY id DESC`,
+        [unitId]
+      )
+      return ok(res, { payment_plans: r.rows })
+    } catch (e) {
+      console.error('GET /api/workflow/payment-plans/approved-for-unit error:', e)
       return bad(res, 500, 'Internal error')
     }
   }

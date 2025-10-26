@@ -10,6 +10,10 @@ import InventoryList from './InventoryList.jsx'
 import MyProposals from './MyProposals.jsx'
 import TeamProposals from './TeamProposals.jsx'
 import BlockRequests from './BlockRequests.jsx'
+import CurrentBlocks from './CurrentBlocks.jsx'
+import ReservationsQueue from './ReservationsQueue.jsx'
+import OfferProgress from './OfferProgress.jsx'
+import PaymentPlanEdits from './PaymentPlanEdits.jsx'
 import RequireRole from '../components/RequireRole.jsx'
 
 export default function DealsApp() {
@@ -49,6 +53,38 @@ export default function DealsApp() {
             element={
               <RequireRole allowed={['sales_manager','property_consultant','financial_manager']}>
                 <BlockRequests />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="current-blocks"
+            element={
+              <RequireRole allowed={['financial_manager','financial_admin']}>
+                <CurrentBlocks />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="reservations-queue"
+            element={
+              <RequireRole allowed={['financial_manager']}>
+                <ReservationsQueue />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="offer-progress"
+            element={
+              <RequireRole allowed={['sales_manager','property_consultant']}>
+                <OfferProgress />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="plan-edits"
+            element={
+              <RequireRole allowed={['property_consultant']}>
+                <PaymentPlanEdits />
               </RequireRole>
             }
           />

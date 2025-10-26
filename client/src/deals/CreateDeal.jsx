@@ -37,10 +37,11 @@ export default function CreateDeal() {
   }, [])
 
   // On mount: ensure unit_id provided; if not, redirect to Inventory.
-  // If unit_id is present, fetch unit and prefill calculator.
+  // If unit_id is present, fetch unit and prefill calculator. If plan_id is present, hydrate from that plan snapshot.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const unitId = Number(params.get('unit_id'))
+    const planId = Number(params.get('plan_id'))
     if (!Number.isFinite(unitId) || unitId <= 0) {
       // No unit selected -> go to Inventory to pick one
       navigate('/deals/inventory', { replace: true })
@@ -49,6 +50,7 @@ export default function CreateDeal() {
     ;(async () => {
       try {
         setLoading(true)
+        // 1) Load selected unit
         const resp = await fetchWithAuth(`${API_URL}/api/inventory/units/${unitId}`)
         const data = await resp.json()
         if (!resp.ok) {
@@ -58,7 +60,7 @@ export default function CreateDeal() {
         const u = data.unit || {}
         setSelectedUnit(u)
 
-        // Compute breakdown with all pricing components (current unit pricing)
+        // 2) Prefill with unit and standard plan baseline
         const base = Number(u.base_price || 0)
         const garden = Number(u.garden_price || 0)
         const roof = Number(u.roof_price || 0)
@@ -66,7 +68,6 @@ export default function CreateDeal() {
         const garage = Number(u.garage_price || 0)
         const maintenance = Number(u.maintenance_price || 0)
 
-        // Approved standard pricing from model (authoritative nominal components)
         const sp = u.approved_standard_pricing || {}
         const stdBase = Number(sp.price || base)
         const stdGarden = Number(sp.garden_price || garden)
@@ -76,14 +77,12 @@ export default function CreateDeal() {
         const stdMaintenance = Number(sp.maintenance_price || maintenance)
         const stdTotal = stdBase + stdGarden + stdRoof + stdStorage + stdGarage
 
-        // Approved Standard (Benchmark) attached by API (includes rate and standard PV when computable)
         const approvedStd = u.standardPlan || {
           totalPrice: stdTotal,
           financialDiscountRate: Number(standardPlan?.std_financial_rate_percent) || 0,
           calculatedPV: stdTotal
         }
 
-        // Prefill embedded calculator via exposed bridge and sync local UI
         try {
           applyPrefill({
             unitInfo: {
@@ -126,6 +125,23 @@ export default function CreateDeal() {
           })
         } catch (err) {
           console.error('Error applying unit prefill:', err)
+        }
+
+        // 3) If planId present, hydrate from that plan snapshot (consultant edits)
+        if (Number.isFinite(planId) && planId > 0) {
+          try {
+            const pResp = await fetchWithAuth(`${API_URL}/api/workflow/payment-plans/${planId}`)
+            const pData = await pResp.json()
+            if (pResp.ok && pData.payment_plan) {
+              const snap = pData.payment_plan?.details?.calculator
+              if (snap && typeof apply === 'function') {
+                // Ensure unit id matches; if not, we still apply but keep selected unit baseline
+                try { apply(snap) } catch (e) { console.warn('apply snapshot failed', e) }
+              }
+            }
+          } catch (e) {
+            console.warn('Failed to hydrate from plan_id:', e?.message || e)
+          }
         }
       } catch (err) {
         setError(err.message || 'Failed to load unit')

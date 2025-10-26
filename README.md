@@ -121,6 +121,43 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-10-24 10:50] Create Deal prefill from plan_id + Notification Center (bell)
+  - API: Added GET /api/workflow/payment-plans/:id to fetch a plan by id (roles: consultant/FM/FA/SM/admin).
+  - Client: Create Deal now accepts plan_id in URL. If present, it hydrates the embedded calculator from that plan’s snapshot after loading the unit.
+  - Client: Added a Notification Bell in the header (right side). Polls unread count and shows a dropdown with notifications:
+    - Endpoints used: GET /api/notifications, GET /api/notifications/unread-count, PATCH /api/notifications/:id/read, PATCH /api/notifications/mark-all-read.
+    - “Mark all read” and per-item “Mark read” implemented.
+- [2025-10-24 10:35] FA: Select approved plans instead of typing ID; Sales: Offer Progress timeline; FM/FA edit-requests on payment plans; Consultant edits dashboard
+  - API: Added GET /api/workflow/payment-plans/approved-for-unit?unit_id=… to list approved plans where details.calculator.unitInfo.unit_id matches the unit.
+  - Client: On Deals → Current Blocks, FA now selects an Approved Payment Plan from a dropdown per blocked unit. The selector auto-loads plans; manual ID entry removed. We also include unit_id in reservation form details.
+  - API: Added GET /api/inventory/progress for sales roles to aggregate status across Block (blocks), Reservation (reservation_forms), and Contract (contracts) for relevant units:
+    - Consultants: their own block requests
+    - Sales Managers: consultants in their team
+  - Client: New Deals → Offer Progress page for property_consultant and sales_manager shows a training-like timeline (Blocked → Reserved → Contracted) in corporate colors for each unit. Route: /deals/offer-progress.
+  - Nav: Header shortcuts updated:
+    - Financial Admin: Current Blocks
+    - Financial Manager: Current Blocks, Reservations
+    - Sales Manager/Consultant: Offer Progress
+  - Policy: Only consultants can edit payment plans. FM/FA can request edits but cannot directly edit.
+    - API: Restricted POST /api/workflow/payment-plans/:id/new-version to property_consultant, and only by the plan creator.
+    - API: Added POST /api/workflow/payment-plans/:id/request-edits (roles: financial_manager, financial_admin) — stores request in payment_plans.details.meta and notifies the consultant.
+    - API: Added POST /api/workflow/payment-plans/:id/edits-addressed (role: property_consultant) — clears pending flag and logs response in details.meta.
+    - Client: On FM Reservations Queue, added “Request Edits” button next to Payment Plan ID to send an edit request to the consultant.
+  - Consultant dashboard for requested edits:
+    - Client: Added Deals → Plan Edits (/deals/plan-edits) for property_consultant. Lists only the consultant’s plans with pending_edit_request.
+    - Actions per plan: “New Version” (creates a consultant-only new version) and “Mark Edits Addressed” (POST /edits-addressed).
+- [2025-10-24 10:10] Unit Block approval updates inventory status and FA can find blocked units:
+  - API: When Financial Manager approves a block request (PATCH /api/blocks/:id/approve), the unit now sets available=FALSE and unit_status='BLOCKED'. Previously we flipped available only, leaving unit_status as 'AVAILABLE', so lists showed AVAILABLE despite a block.
+  - API: Block expiry job now restores units to available=TRUE and unit_status='AVAILABLE' (removed reference to a non-existent units.blocked_until field).
+  - API: GET /api/blocks/current now returns unit_id and unit_status along with unit_code to power deep-links.
+  - Client: Added Deals → Current Blocks page for Financial Manager and Financial Admin to see currently blocked units. For FA, the page now includes a minimal “Create Reservation Form” panel per blocked unit (inputs: Approved Payment Plan ID, Reservation Date, Preliminary Payment, Currency, Language). This creates a reservation form and sends it for FM approval. Route: /deals/current-blocks.
+  - API: Added Reservation Forms workflow endpoints:
+    - POST /api/workflow/reservation-forms (FA) — create pending_approval reservation form for an approved payment plan.
+    - GET /api/workflow/reservation-forms?status=... (FA/FM) — list forms.
+    - PATCH /api/workflow/reservation-forms/:id/approve (FM) — approve.
+    - PATCH /api/workflow/reservation-forms/:id/reject (FM) — reject.
+  - Client: Added Deals → Reservations Queue (FM) to approve/reject pending reservation forms. Route: /deals/reservations-queue.
+  - Impact: FM adds inventory as draft, approves to AVAILABLE, consultants request blocks, FA initiates reservation for already blocked units without creating deals, and FM approves reservations which become available for Contracts to draft.
 - [2025-10-24 09:50] Client Offer/Reservation Form PDFs — repeated headers, Cairo time, no overlap:
   - Header content unified and repeated on every page:
     - EN: “Uptown 6 October Financial System” (left), “Generated: DD-MM-YYYY HH:mm:ss” (right), big centered title, then a brief summary line (Offer Date, First Payment, Unit, Consultant for Client Offer; Reservation Date and Unit for Reservation Form).
@@ -802,6 +839,9 @@ Planned enhancements
 - Unit Lifecycle Timeline (future)
   - Add a similar timeline to track unit state across Blocked → Reserved → Contracted (and back if expired/unblocked).
   - Integrate with blocks table and reservation/contract events to display timestamps per transition.
+- Reservation Cancellation Flow (future)
+  - Design and implement reservation cancellation with approval and audit trail.
+  - On cancellation, unit unblocks or reverts to AVAILABLE according to policy; notifications sent to stakeholders.
 - Contract Cancellation Flow (future)
   - Design and implement contract cancellation workflow with approvals and audit trail.
   - Update documents and notifications to reflect cancellation and unit state changes.

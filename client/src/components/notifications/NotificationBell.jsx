@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react'
 import { fetchWithAuth } from '../../lib/apiClient.js'
-import { notifyInfo } from '../../lib/notifications.js'
 
 export default function NotificationBell() {
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
@@ -8,7 +7,6 @@ export default function NotificationBell() {
   const [count, setCount] = useState(0)
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
-  const [prevCount, setPrevCount] = useState(0)
   const ref = useRef(null)
 
   async function loadCount() {
@@ -17,11 +15,6 @@ export default function NotificationBell() {
       const data = await resp.json().catch(() => ({}))
       if (resp.ok) {
         const next = Number(data?.count || 0)
-        if (next > prevCount) {
-          const diff = next - prevCount
-          notifyInfo(diff === 1 ? 'You have 1 new notification' : `You have ${diff} new notifications`)
-        }
-        setPrevCount(next)
         setCount(next)
       }
     } catch {}
@@ -42,7 +35,7 @@ export default function NotificationBell() {
 
   useEffect(() => {
     loadCount()
-    const t = setInterval(loadCount, 30000)
+    const t = setInterval(loadCount, 60000) // poll every 60s to reduce noise
     return () => clearInterval(t)
   }, [])
 
@@ -65,7 +58,7 @@ export default function NotificationBell() {
   async function markAllRead() {
     try {
       await fetchWithAuth(`${API_URL}/api/notifications/mark-all-read`, { method: 'PATCH' })
-      setItems(it => it.map(n => ({ ...n, read: true })))
+      setItems(it => it.map(n => ({ ...n, is_read: true })))
       setCount(0)
     } catch {}
   }
@@ -73,7 +66,7 @@ export default function NotificationBell() {
   async function markRead(id) {
     try {
       await fetchWithAuth(`${API_URL}/api/notifications/${id}/read`, { method: 'PATCH' })
-      setItems(it => it.map(n => n.id === id ? { ...n, read: true } : n))
+      setItems(it => it.map(n => n.id === id ? { ...n, is_read: true } : n))
       setCount(c => Math.max(0, c - 1))
     } catch {}
   }
@@ -94,10 +87,10 @@ export default function NotificationBell() {
             {loading && <div style={{ padding: 10, color: '#64748b' }}>Loading…</div>}
             {!loading && items.length === 0 && <div style={{ padding: 10, color: '#64748b' }}>No notifications</div>}
             {!loading && items.map(n => (
-              <div key={n.id} style={{ padding: 10, borderBottom: '1px solid #f1f5f9', background: n.read ? '#fff' : '#f9fafb' }}>
+              <div key={n.id} style={{ padding: 10, borderBottom: '1px solid #f1f5f9', background: n.is_read ? '#fff' : '#f9fafb' }}>
                 <div style={{ fontSize: 13, color: '#111827' }}>{n.message || n.type}</div>
                 <div style={{ fontSize: 11, color: '#64748b' }}>{n.created_at ? new Date(n.created_at).toLocaleString() : ''}</div>
-                {!n.read && <button style={{ ...linkBtn, marginTop: 6 }} onClick={() => markRead(n.id)}>Mark read</button>}
+                {!n.is_read && <button style={{ ...linkBtn, marginTop: 6 }} onClick={() => markRead(n.id)}>Mark read</button>}
               </div>
             ))}
           </div>

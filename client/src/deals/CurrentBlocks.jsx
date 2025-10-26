@@ -105,7 +105,7 @@ export default function CurrentBlocks() {
             <tr>
               <th style={th}>Block ID</th>
               <th style={th}>Unit</th>
-              <th style={th}}>Status</th>
+              <th style={th}>Status</th>
               <th style={th}>Requested By</th>
               <th style={th}>Reason</th>
               <th style={th}>Blocked Until</th>

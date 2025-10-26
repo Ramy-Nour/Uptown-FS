@@ -77,6 +77,7 @@ export default function ReservationsQueue() {
             <tr>
               <th style={th}>ID</th>
               <th style={th}>Payment Plan</th>
+              <th style={th}>Unit</th>
               <th style={th}>Status</th>
               <th style={th}>Reservation Date</th>
               <th style={th}>Preliminary Payment</th>
@@ -109,6 +110,7 @@ export default function ReservationsQueue() {
                       ) : null
                     })()}
                   </td>
+                  <td style={td}>{r.unit_code || '-'}</td>
                   <td style={td}>{r.status}</td>
                   <td style={td}>{d.reservation_date || '-'}</td>
                   <td style={td}>{Number(d.preliminary_payment || 0).toLocaleString()}</td>

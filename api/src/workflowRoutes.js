@@ -1359,9 +1359,16 @@ router.get(
     try {
       const { status = 'pending_approval' } = req.query || {}
       const r = await pool.query(
-        `SELECT rf.*, pp.deal_id, pp.status AS payment_plan_status
+        `SELECT rf.*,
+                pp.deal_id,
+                pp.status AS payment_plan_status,
+                u.code AS unit_code
          FROM reservation_forms rf
          LEFT JOIN payment_plans pp ON pp.id = rf.payment_plan_id
+         LEFT JOIN units u ON u.id = COALESCE(
+           NULLIF((rf.details->>'unit_id')::int, 0),
+           NULLIF((pp.details->'calculator'->'unitInfo'->>'unit_id')::int, 0)
+         )
          WHERE ($1 = 'all' OR rf.status = $1)
          ORDER BY rf.id DESC`,
         [String(status)]

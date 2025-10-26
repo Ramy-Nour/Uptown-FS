@@ -11,6 +11,7 @@ export default function PaymentPlanEdits() {
   const [loading, setLoading] = useState(false)
   const [acting, setActing] = useState(new Set())
   const [error, setError] = useState('')
+  const [unitCodes, setUnitCodes] = useState({})
 
   async function load() {
     try {
@@ -88,6 +89,7 @@ export default function PaymentPlanEdits() {
             <tr>
               <th style={th}>Plan ID</th>
               <th style={th}>Version</th>
+              <th style={th}>Unit</th>
               <th style={th}>Requested By</th>
               <th style={th}>Reason</th>
               <th style={th}>Fields</th>
@@ -101,10 +103,32 @@ export default function PaymentPlanEdits() {
               const last = lastEditRequest(p) || {}
               const fields = Array.isArray(last.fields) ? last.fields.join(', ') : ''
               const unitId = Number(p?.details?.calculator?.unitInfo?.unit_id) || 0
+              // fetch unit code lazily
+              let unitCode = '-'
+              if (unitId) {
+                unitCode = unitCodes[unitId] || '-'
+                if (!unitCodes[unitId]) {
+                  ;(async () => {
+                    try {
+                      const resp = await fetchWithAuth(`${API_URL}/api/inventory/units/${unitId}`)
+                      const data = await resp.json()
+                      if (resp.ok) {
+                        const code = data?.unit?.code || '-'
+                        setUnitCodes(prev => ({ ...prev, [unitId]: code }))
+                      } else {
+                        setUnitCodes(prev => ({ ...prev, [unitId]: '-' }))
+                      }
+                    } catch {
+                      setUnitCodes(prev => ({ ...prev, [unitId]: '-' }))
+                    }
+                  })()
+                }
+              }
               return (
                 <tr key={p.id}>
                   <td style={td}>{p.id}</td>
                   <td style={td}>{p.version || 1}</td>
+                  <td style={td}>{unitCode}</td>
                   <td style={td}>{last.by_role || '-'}</td>
                   <td style={td}>{last.reason || '-'}</td>
                   <td style={td}>{fields || '-'}</td>

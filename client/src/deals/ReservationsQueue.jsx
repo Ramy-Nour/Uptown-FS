@@ -96,6 +96,18 @@ export default function ReservationsQueue() {
                     <button style={{ ...btn, marginLeft: 6 }} onClick={() => requestEdits(r.payment_plan_id)}>
                       Request Edits
                     </button>
+                    {(() => {
+                      const unitId = Number((r.details && r.details.unit_id) || 0) || 0
+                      return unitId ? (
+                        <a
+                          href={`/deals/create?unit_id=${unitId}&plan_id=${r.payment_plan_id}`}
+                          style={{ ...btn, marginLeft: 6, textDecoration: 'none', display: 'inline-block' }}
+                          title="Open Create Deal for this unit and plan"
+                        >
+                          Open in Create Deal
+                        </a>
+                      ) : null
+                    })()}
                   </td>
                   <td style={td}>{r.status}</td>
                   <td style={td}>{d.reservation_date || '-'}</td>

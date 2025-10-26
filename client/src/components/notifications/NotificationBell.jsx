@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react'
 import { fetchWithAuth } from '../../lib/apiClient.js'
+import { notifyInfo } from '../../lib/notifications.js'
 
 export default function NotificationBell() {
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
@@ -7,13 +8,22 @@ export default function NotificationBell() {
   const [count, setCount] = useState(0)
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
+  const [prevCount, setPrevCount] = useState(0)
   const ref = useRef(null)
 
   async function loadCount() {
     try {
       const resp = await fetchWithAuth(`${API_URL}/api/notifications/unread-count`)
       const data = await resp.json().catch(() => ({}))
-      if (resp.ok) setCount(Number(data?.count || 0))
+      if (resp.ok) {
+        const next = Number(data?.count || 0)
+        if (next > prevCount) {
+          const diff = next - prevCount
+          notifyInfo(diff === 1 ? 'You have 1 new notification' : `You have ${diff} new notifications`)
+        }
+        setPrevCount(next)
+        setCount(next)
+      }
     } catch {}
   }
 

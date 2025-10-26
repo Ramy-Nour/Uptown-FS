@@ -1455,14 +1455,24 @@ router.get(
     try {
       const unitId = ensureNumber(req.query.unit_id)
       if (!unitId) return bad(res, 400, 'unit_id is required')
-      const r = await pool.query(
-        `SELECT id, deal_id, COALESCE(version, 1) AS version, status, created_at
-         FROM payment_plans
-         WHERE status='approved'
-           AND (details->'calculator'->'unitInfo'->>'unit_id')::int = $1
-         ORDER BY id DESC`,
-        [unitId]
-      )
+      const sql = `
+        SELECT id, deal_id, COALESCE(version, 1) AS version, status, created_at
+        FROM payment_plans
+        WHERE status='approved'
+          AND (
+            (
+              (details->'calculator'->'unitInfo'->>'unit_id') ~ '^[0-9]+
+
+export default router
+              AND ((details->'calculator'->'unitInfo'->>'unit_id')::int = $1)
+            )
+            OR (
+              (details->'calculator'->'unitInfo'->>'unit_code') = (SELECT code FROM units WHERE id=$1)
+            )
+          )
+        ORDER BY id DESC
+      `
+      const r = await pool.query(sql, [unitId])
       return ok(res, { payment_plans: r.rows })
     } catch (e) {
       console.error('GET /api/workflow/payment-plans/approved-for-unit error:', e)

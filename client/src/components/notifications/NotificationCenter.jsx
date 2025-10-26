@@ -11,9 +11,8 @@ const NotificationCenter = () => {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    fetchNotifications()
     fetchUnreadCount()
-    const interval = setInterval(fetchUnreadCount, 30000) // Check every 30 seconds
+    const interval = setInterval(fetchUnreadCount, 60000) // reduce polling to 60s
     return () => clearInterval(interval)
   }, [])
 
@@ -170,7 +169,9 @@ const NotificationCenter = () => {
         open={visible}
         onOpenChange={(open) => {
           setVisible(open)
-          if (open) fetchNotifications()
+          if (open) {
+            fetchNotifications()
+          }
         }}
         placement="bottomRight"
       >

@@ -128,7 +128,11 @@ Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track 
 - [2025-10-26 12:05] Notifications: disable auto pop-up toasts and reduce poll frequency
   - Client: Removed the auto “You have X new notifications” toast on every count increase to avoid repeated pop-ups when navigating or remounting. Increased poll interval from 30s to 60s to reduce noise.
   - Impact: The header bell still shows accurate unread counts and list updates, but no periodic pop-ups will interrupt the user. Counts refresh once per minute.
-  - Files: client/src/components/notifications/NotificationBell.jsx. 12:00] Notifications: fix unread state mismatch in header bell
+  - Files: client/src/components/notifications/NotificationBell.jsx.
+- [2025-10-26 12:20] Blocks: server enforces approved payment plan before blocking a unit
+  - API: POST /api/blocks/request now checks for at least one approved payment plan tied to the unit via details.calculator.unitInfo.unit_id. If none exists, returns 400 with a clear message.
+  - Impact: Prevents blocked units without an approved plan appearing on “Current Blocks.” Existing blocks created previously without plans will still display; future requests must have an approved plan.
+  - Files: api/src/blockManagement.js. 12:00] Notifications: fix unread state mismatch in header bell
   - Client: NotificationBell.jsx now uses the API’s is_read property consistently (was using a local read flag). Marking single notifications or “Mark all read” correctly updates is_read and the unread counter.
   - Impact: Notifications no longer reappear as unread after clicking “read” or after- [2025-10-24 10:50] Create Deal prefill from plan_id + Notification Center (bell)
   - API: Added GET /api/workflow/payment-plans/:id to fetch a plan by id (roles: consultant/FM/FA/SM/admin).

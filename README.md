@@ -136,7 +136,11 @@ Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track 
 - [2025-10-26 12:30] Approved plans lookup: match by unit_id or unit_code
   - API: GET /api/workflow/payment-plans/approved-for-unit now returns approved plans when either unit_id matches or unit_code in the plan snapshot matches the unit’s current code. This covers cases where older plan snapshots stored unit_code but not unit_id, or unit_id was a string.
   - Impact: Current Blocks page will now list approved plans for blocked units that already have plans, even if the snapshot used unit_code rather than unit_id.
-  - Files: api/src/workflowRoutes.js. 12:00] Notifications: fix unread state mismatch in header bell
+  - Files: api/src/workflowRoutes.js.
+- [2025-10-26 12:35] Notifications center: reduced polling to 60s
+  - Client: NotificationCenter.jsx polling for unread count reduced from 30s to 60s to align with the bell and reduce UI noise.
+  - Impact: No pop-up toasts; count still updates accurately once per minute.
+  - Files: client/src/components/notifications/NotificationCenter.jsx. 12:00] Notifications: fix unread state mismatch in header bell
   - Client: NotificationBell.jsx now uses the API’s is_read property consistently (was using a local read flag). Marking single notifications or “Mark all read” correctly updates is_read and the unread counter.
   - Impact: Notifications no longer reappear as unread after clicking “read” or after- [2025-10-24 10:50] Create Deal prefill from plan_id + Notification Center (bell)
   - API: Added GET /api/workflow/payment-plans/:id to fetch a plan by id (roles: consultant/FM/FA/SM/admin).

@@ -637,17 +637,36 @@ router.get(
       const params = []
       if (deal_id) {
         params.push(ensureNumber(deal_id))
-        clauses.push(`deal_id = $${params.length}`)
+        clauses.push(`deal_id = ${params.length}`)
       }
       if (status) {
         params.push(String(status))
-        clauses.push(`status = $${params.length}`)
+        clauses.push(`status = ${params.length}`)
       }
       const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''
       const result = await pool.query(`SELECT * FROM payment_plans ${where} ORDER BY id DESC`, params)
       return ok(res, { payment_plans: result.rows })
     } catch (e) {
       console.error('GET /api/workflow/payment-plans error:', e)
+      return bad(res, 500, 'Internal error')
+    }
+  }
+)
+
+// Get a payment plan by id
+router.get(
+  '/payment-plans/:id',
+  authMiddleware,
+  requireRole(['property_consultant', 'financial_manager', 'financial_admin', 'sales_manager', 'admin', 'superadmin']),
+  async (req, res) => {
+    try {
+      const id = ensureNumber(req.params.id)
+      if (!id) return bad(res, 400, 'Invalid id')
+      const r = await pool.query('SELECT * FROM payment_plans WHERE id=$1', [id])
+      if (r.rows.length === 0) return bad(res, 404, 'Payment plan not found')
+      return ok(res, { payment_plan: r.rows[0] })
+    } catch (e) {
+      console.error('GET /api/workflow/payment-plans/:id error:', e)
       return bad(res, 500, 'Internal error')
     }
   }

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import NotificationBell from '../components/notifications/NotificationBell.jsx'
 
 const BRAND = {
   primary: '#A97E34', // corporate color
@@ -270,30 +271,33 @@ export default function BrandHeader({ title, onLogout }) {
               </div>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {shortcuts.map((s, idx) => {
-              const isActive = pathname && (pathname === s.href || pathname.startsWith(s.href + '/'))
-              return (
-                <HoverButton
-                  key={idx}
-                  onClick={() => { window.location.href = s.href }}
-                  style={{ ...baseBtnStyle, ...(isActive ? activeBtnStyle : null) }}
-                  hoverStyle={isActive ? activeHoverStyle : hoverBtnStyle}
-                >
-                  {s.label}
-                </HoverButton>
-              )
-            })}
-            {onLogout && (
-              <HoverButton
-                onClick={onLogout}
-                style={baseBtnStyle}
-                hoverStyle={hoverBtnStyle}
-              >
-                Logout
-              </HoverButton>
-            )}
-          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            {shortcuts.map((s, idx) => {
+              const isActive = pathname && (pathname === s.href || pathname.startsWith(s.href + '/'))
+              return (
+                <HoverButton
+                  key={idx}
+                  onClick={() => { window.location.href = s.href }}
+                  style={{ ...baseBtnStyle, ...(isActive ? activeBtnStyle : null) }}
+                  hoverStyle={isActive ? activeHoverStyle : hoverBtnStyle}
+                >
+                  {s.label}
+                </HoverButton>
+              )
+            })}
+            <div style={{ marginLeft: 4 }}>
+              <NotificationBell />
+            </div>
+            {onLogout && (
+              <HoverButton
+                onClick={onLogout}
+                style={baseBtnStyle}
+                hoverStyle={hoverBtnStyle}
+              >
+                Logout
+              </HoverButton>
+            )}
+          </div>
         </div>
       </div>
       {apiHealthy === false && (

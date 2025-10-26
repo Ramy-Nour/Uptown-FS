@@ -121,6 +121,12 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-10-24 10:50] Create Deal prefill from plan_id + Notification Center (bell)
+  - API: Added GET /api/workflow/payment-plans/:id to fetch a plan by id (roles: consultant/FM/FA/SM/admin).
+  - Client: Create Deal now accepts plan_id in URL. If present, it hydrates the embedded calculator from that plan’s snapshot after loading the unit.
+  - Client: Added a Notification Bell in the header (right side). Polls unread count and shows a dropdown with notifications:
+    - Endpoints used: GET /api/notifications, GET /api/notifications/unread-count, PATCH /api/notifications/:id/read, PATCH /api/notifications/mark-all-read.
+    - “Mark all read” and per-item “Mark read” implemented.
 - [2025-10-24 10:35] FA: Select approved plans instead of typing ID; Sales: Offer Progress timeline; FM/FA edit-requests on payment plans; Consultant edits dashboard
   - API: Added GET /api/workflow/payment-plans/approved-for-unit?unit_id=… to list approved plans where details.calculator.unitInfo.unit_id matches the unit.
   - Client: On Deals → Current Blocks, FA now selects an Approved Payment Plan from a dropdown per blocked unit. The selector auto-loads plans; manual ID entry removed. We also include unit_id in reservation form details.

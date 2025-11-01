@@ -463,17 +463,18 @@ router.post('/:id/submit', authMiddleware, validate(dealSubmitSchema), async (re
 
     // Auto-evaluate based on calculator snapshot stored in deal.details
     // If evaluation exists and decision = REJECT, mark needs_override and log immediately.
+    // Also enforce: submission is blocked unless an override has already been approved.
     try {
       const det = deal.details || {}
       const evalObj = det?.calculator?.generatedPlan?.evaluation || null
       if (evalObj && evalObj.decision === 'REJECT') {
-        const updOverride = await pool.query(
+        await pool.query(
           `UPDATE deals
            SET needs_override=TRUE,
-               override_requested_by=$1,
-               override_requested_at=now(),
+               override_requested_by=COALESCE(override_requested_by, $1),
+               override_requested_at=COALESCE(override_requested_at, now()),
                updated_at=now()
-           WHERE id=$2 RETURNING *`,
+           WHERE id=$2`,
           [req.user.id, id]
         )
         const overrideNote = {
@@ -484,6 +485,12 @@ router.post('/:id/submit', authMiddleware, validate(dealSubmitSchema), async (re
           at: new Date().toISOString()
         }
         await logHistory(id, req.user.id, 'override_requested', JSON.stringify(overrideNote))
+
+        // Enforce block on submission unless override already approved
+        const approvedAt = deal.override_approved_at
+        if (!approvedAt) {
+          return res.status(400).json({ error: { message: 'Submission denied: payment plan evaluation is REJECT. Top-Management override approval is required.' } })
+        }
       }
     } catch (autoErr) {
       // Do not block submission if evaluation parsing fails

@@ -1321,17 +1321,37 @@ router.post(
       }
 
       // Ensure payment plan exists and is approved by financial manager
-      const planRes = await client.query('SELECT id, status FROM payment_plans WHERE id=$1', [pid])
+      const planRes = await client.query('SELECT id, status, details FROM payment_plans WHERE id=$1', [pid])
       if (planRes.rows.length === 0) { client.release(); return bad(res, 404, 'Payment plan not found') }
       if (planRes.rows[0].status !== 'approved') { client.release(); return bad(res, 400, 'Payment plan must be approved before creating reservation') }
 
-      const det = details && typeof details === 'object' ? details : {}
+      // Resolve unit_id from RF details or the plan snapshot; fallback to unit_code mapping
+      const rfDet = details && typeof details === 'object' ? details : {}
+      let unitId = ensureNumber(rfDet.unit_id)
+      if (!unitId) {
+        const planDet = planRes.rows[0].details || {}
+        const unitInfo = planDet?.calculator?.unitInfo || {}
+        unitId = ensureNumber(unitInfo.unit_id)
+        if (!unitId && unitInfo.unit_code) {
+          const r = await client.query('SELECT id FROM units WHERE code=$1 LIMIT 1', [String(unitInfo.unit_code)])
+          if (r.rows.length > 0) unitId = ensureNumber(r.rows[0].id)
+        }
+      }
+      if (!unitId) { client.release(); return bad(res, 400, 'Unable to resolve unit for reservation form') }
+
+      // Require an active approved block for this unit (blocked until in the future)
+      const blk = await client.query(
+        `SELECT id FROM blocks WHERE unit_id=$1 AND status='approved' AND blocked_until > now() LIMIT 1`,
+        [unitId]
+      )
+      if (blk.rows.length === 0) { client.release(); return bad(res, 400, 'Unit must be currently blocked to create a reservation form') }
+
       await client.query('BEGIN')
       const result = await client.query(
         `INSERT INTO reservation_forms (payment_plan_id, details, created_by, status)
          VALUES ($1, $2, $3, 'pending_approval')
          RETURNING *`,
-        [pid, det, req.user.id]
+        [pid, rfDet, req.user.id]
       )
       const row = result.rows[0]
       await client.query(

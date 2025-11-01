@@ -329,6 +329,24 @@ router.post('/', authMiddleware, validate(dealCreateSchema), async (req, res) =>
       return res.status(400).json({ error: { message: 'A generated payment plan is required to create an offer.' } })
     }
 
+    // Enforce: offers can only be created for AVAILABLE units
+    const unitIdRaw = det?.calculator?.unitInfo?.unit_id
+    const unitId = Number(unitIdRaw)
+    if (!Number.isFinite(unitId) || unitId <= 0) {
+      return res.status(400).json({ error: { message: 'Unit selection is required to create an offer.' } })
+    }
+    const unitRow = await pool.query(
+      `SELECT id, available, unit_status FROM units WHERE id=$1`,
+      [unitId]
+    )
+    if (unitRow.rows.length === 0) {
+      return res.status(404).json({ error: { message: 'Unit not found' } })
+    }
+    const available = unitRow.rows[0].available === true && String(unitRow.rows[0].unit_status || '').toUpperCase() === 'AVAILABLE'
+    if (!available) {
+      return res.status(400).json({ error: { message: 'Offers can only be created for AVAILABLE units.' } })
+    }
+
     const result = await pool.query(
       'INSERT INTO deals (title, amount, details, unit_type, sales_rep_id, policy_id, status, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
       [title.trim(), isFinite(amt) ? amt : 0, det, unitType || null, salesRepId || null, policyId || null, 'draft', req.user.id]
@@ -420,6 +438,19 @@ router.post('/:id/submit', authMiddleware, validate(dealSubmitSchema), async (re
       const hasPlan = !!(plan && Array.isArray(plan.schedule) && plan.schedule.length > 0)
       if (!hasPlan) {
         return res.status(400).json({ error: { message: 'A generated payment plan is required to submit an offer.' } })
+      }
+      // Also enforce that the unit is AVAILABLE at submission time
+      const unitId = Number(det?.calculator?.unitInfo?.unit_id)
+      if (!Number.isFinite(unitId) || unitId <= 0) {
+        return res.status(400).json({ error: { message: 'Unit selection is required to submit an offer.' } })
+      }
+      const unitRow = await pool.query(`SELECT available, unit_status FROM units WHERE id=$1`, [unitId])
+      if (unitRow.rows.length === 0) {
+        return res.status(404).json({ error: { message: 'Unit not found' } })
+      }
+      const available = unitRow.rows[0].available === true && String(unitRow.rows[0].unit_status || '').toUpperCase() === 'AVAILABLE'
+      if (!available) {
+        return res.status(400).json({ error: { message: 'Offers can only be submitted for AVAILABLE units.' } })
       }
     } catch (_) {
       return res.status(400).json({ error: { message: 'A generated payment plan is required to submit an offer.' } })

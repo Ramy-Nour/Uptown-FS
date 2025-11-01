@@ -130,6 +130,11 @@ Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track 
   - API: POST /api/deals/:id/submit also enforces the same rule and returns 400 if the plan is missing.
   - Impact: It is no longer possible to create or submit an offer for a unit without a generated payment plan snapshot attached to the deal.
   - Files: api/src/dealsRoutes.js.
+- [2025-11-01 10:35] Offer eligibility and Reservation prerequisites hardened
+  - API: Offers only for AVAILABLE units: POST /api/deals and POST /api/deals/:id/submit now validate the selected unit (details.calculator.unitInfo.unit_id) is available=TRUE and unit_status='AVAILABLE'. Otherwise 400.
+  - API: Reservation forms require an active approved block: POST /api/workflow/reservation-forms resolves the unit from RF details or the plan snapshot, and requires an approved block (blocked_until > now()) for that unit. Otherwise 400.
+  - Impact: Enforces the workflow: create offer on AVAILABLE unit → request block → create reservation form on BLOCKED unit.
+  - Files: api/src/dealsRoutes.js, api/src/workflowRoutes.js.
 - [2025-11-01 00:15] Blocking flow: fix approved-plans lookup SQL and restore dropdown on Current Blocks
   - API: Repaired corruption in GET /api/workflow/payment-plans/approved-for-unit SQL where a stray newline broke the numeric-regex check and truncated the query. Properly matches by unit_id (numeric JSON field) or by unit_code fallback.
   - Impact: The “Approved Plan” selector on Current Blocks now populates when a unit has an approved plan, unblocking the Reservation Form flow. This also supports older snapshots with only unit_code.

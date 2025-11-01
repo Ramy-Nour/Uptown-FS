@@ -321,6 +321,14 @@ router.post('/', authMiddleware, validate(dealCreateSchema), async (req, res) =>
     const { title, amount, details, unitType, salesRepId, policyId } = req.body || {}
     const amt = Number(amount || 0)
     const det = isObject(details) ? details : {}
+
+    // Enforce: creating an offer/deal requires a generated payment plan from the calculator
+    const plan = det?.calculator?.generatedPlan
+    const hasPlan = !!(plan && Array.isArray(plan.schedule) && plan.schedule.length > 0)
+    if (!hasPlan) {
+      return res.status(400).json({ error: { message: 'A generated payment plan is required to create an offer.' } })
+    }
+
     const result = await pool.query(
       'INSERT INTO deals (title, amount, details, unit_type, sales_rep_id, policy_id, status, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
       [title.trim(), isFinite(amt) ? amt : 0, det, unitType || null, salesRepId || null, policyId || null, 'draft', req.user.id]
@@ -404,6 +412,18 @@ router.post('/:id/submit', authMiddleware, validate(dealSubmitSchema), async (re
     const isAdmin = req.user.role === 'admin'
     if (!isOwner && !isAdmin) return res.status(403).json({ error: { message: 'Forbidden' } })
     if (deal.status !== 'draft') return res.status(400).json({ error: { message: 'Deal must be draft to submit' } })
+
+    // Enforce: submitted deals must contain a generated payment plan
+    try {
+      const det = deal.details || {}
+      const plan = det?.calculator?.generatedPlan
+      const hasPlan = !!(plan && Array.isArray(plan.schedule) && plan.schedule.length > 0)
+      if (!hasPlan) {
+        return res.status(400).json({ error: { message: 'A generated payment plan is required to submit an offer.' } })
+      }
+    } catch (_) {
+      return res.status(400).json({ error: { message: 'A generated payment plan is required to submit an offer.' } })
+    }
 
     // Optional: acceptability flags passed by client to persist
     if (req.body?.acceptability) {

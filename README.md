@@ -125,6 +125,11 @@ Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track 
   - API: Updated POST /api/blocks/request to recognize approved plans linked by either details.calculator.unitInfo.unit_id (numeric string) or unit_code fallback. Uses a safe numeric-regex check before casting. This fixes false “An approved payment plan is required…” when the plan snapshot stored unit_code only or unit_id as a string.
   - Impact: Consultants/Sales Managers can request a block for units that already have an approved plan, regardless of snapshot representation.
   - Files: api/src/blockManagement.js.
+- [2025-11-01 10:20] Enforce payment plan presence when creating or submitting offers (deals)
+  - API: POST /api/deals now requires details.calculator.generatedPlan with a non-empty schedule; otherwise returns 400 “A generated payment plan is required to create an offer.”
+  - API: POST /api/deals/:id/submit also enforces the same rule and returns 400 if the plan is missing.
+  - Impact: It is no longer possible to create or submit an offer for a unit without a generated payment plan snapshot attached to the deal.
+  - Files: api/src/dealsRoutes.js.
 - [2025-11-01 00:15] Blocking flow: fix approved-plans lookup SQL and restore dropdown on Current Blocks
   - API: Repaired corruption in GET /api/workflow/payment-plans/approved-for-unit SQL where a stray newline broke the numeric-regex check and truncated the query. Properly matches by unit_id (numeric JSON field) or by unit_code fallback.
   - Impact: The “Approved Plan” selector on Current Blocks now populates when a unit has an approved plan, unblocking the Reservation Form flow. This also supports older snapshots with only unit_code.

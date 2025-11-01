@@ -11,7 +11,7 @@ export default function CurrentBlocks() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [creating, setCreating] = useState(new Set())
-  // keyed by block id: { selectedPlanId, reservationDate, preliminaryPayment, currency, language, plans: [] }
+  // keyed by block id: { selectedPlanId, reservationDate, language, plans: [] }
   const [form, setForm] = useState({})
 
   async function load() {
@@ -50,10 +50,11 @@ export default function CurrentBlocks() {
       const plans = (data.payment_plans || []).map(p => ({
         id: p.id, label: `#${p.id} v${p.version || 1} (approved)`
       }))
-      setBlockForm(blockRow.id, { plans, selectedPlanId: plans[0]?.id || '' })
+      // Auto-select the latest plan (first in DESC list) and default language
+      setBlockForm(blockRow.id, { plans, selectedPlanId: plans[0]?.id || '', language: 'en' })
     } catch (e) {
       // keep silent; form will show empty selector
-      setBlockForm(blockRow.id, { plans: [], selectedPlanId: '' })
+      setBlockForm(blockRow.id, { plans: [], selectedPlanId: '', language: 'en' })
     }
   }
 
@@ -62,15 +63,13 @@ export default function CurrentBlocks() {
       const f = form[id] || {}
       const paymentPlanId = Number(f.selectedPlanId) || 0
       if (!paymentPlanId) {
-        alert('Select an approved Payment Plan to create a reservation form.')
+        alert('No approved consultant plan is available for this unit.')
         return
       }
       setCreating(s => new Set([...s, id]))
       const row = rows.find(r => r.id === id)
       const details = {
         reservation_date: f.reservationDate || null,
-        preliminary_payment: Number(f.preliminaryPayment || 0) || 0,
-        currency_override: f.currency || 'EGP',
         language: f.language || 'en',
         unit_id: row?.unit_id || null
       }
@@ -82,7 +81,7 @@ export default function CurrentBlocks() {
       const data = await resp.json().catch(() => ({}))
       if (!resp.ok) throw new Error(data?.error?.message || 'Failed to create reservation form')
       alert(`Reservation Form #${data?.reservation_form?.id} created and sent for Financial Manager approval.`)
-      setForm(fm => ({ ...fm, [id]: { ...fm[id], reservationDate: '', preliminaryPayment: '', currency: 'EGP', language: 'en' } }))
+      setForm(fm => ({ ...fm, [id]: { ...fm[id], reservationDate: '', language: 'en' } }))
     } catch (e) {
       alert(e.message || String(e))
     } finally {
@@ -127,15 +126,14 @@ export default function CurrentBlocks() {
                   <td style={td}>{r.blocked_until ? new Date(r.blocked_until).toLocaleString() : '-'}</td>
                   <td style={{ ...td, minWidth: 540 }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                      <select
-                        style={ctrl}
-                        value={f.selectedPlanId || ''}
-                        onChange={e => setBlockForm(r.id, { selectedPlanId: e.target.value })}
+                      {/* Approved plan is auto-fetched and locked; show as read-only */}
+                      <input
+                        style={{ ...ctrl, background: '#f8fafc' }}
+                        value={plans.length ? (plans.find(p => p.id === f.selectedPlanId)?.label || plans[0].label) : 'No approved consultant plans'}
+                        readOnly
+                        title="Approved consultant plan (auto-selected)"
                         onFocus={() => { if (!plans.length) loadPlansForBlock(r) }}
-                      >
-                        {plans.length === 0 ? <option value="">No approved plans for this unit</option> : null}
-                        {plans.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
-                      </select>
+                      />
                       <input
                         style={ctrl}
                         type="date"
@@ -143,20 +141,6 @@ export default function CurrentBlocks() {
                         value={f.reservationDate || ''}
                         onChange={e => setBlockForm(r.id, { reservationDate: e.target.value })}
                       />
-                      <input
-                        style={ctrl}
-                        placeholder="Preliminary Payment"
-                        value={f.preliminaryPayment || ''}
-                        onChange={e => setBlockForm(r.id, { preliminaryPayment: e.target.value })}
-                      />
-                      <select
-                        style={ctrl}
-                        value={f.currency || 'EGP'}
-                        onChange={e => setBlockForm(r.id, { currency: e.target.value })}
-                      >
-                        <option value="EGP">EGP</option>
-                        <option value="USD">USD</option>
-                      </select>
                       <select
                         style={ctrl}
                         value={f.language || 'en'}

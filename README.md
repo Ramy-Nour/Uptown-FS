@@ -121,6 +121,10 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-11-01 10:05] Block request approval-check aligned with approved plan lookup (unit_id or unit_code)
+  - API: Updated POST /api/blocks/request to recognize approved plans linked by either details.calculator.unitInfo.unit_id (numeric string) or unit_code fallback. Uses a safe numeric-regex check before casting. This fixes false “An approved payment plan is required…” when the plan snapshot stored unit_code only or unit_id as a string.
+  - Impact: Consultants/Sales Managers can request a block for units that already have an approved plan, regardless of snapshot representation.
+  - Files: api/src/blockManagement.js.
 - [2025-11-01 00:15] Blocking flow: fix approved-plans lookup SQL and restore dropdown on Current Blocks
   - API: Repaired corruption in GET /api/workflow/payment-plans/approved-for-unit SQL where a stray newline broke the numeric-regex check and truncated the query. Properly matches by unit_id (numeric JSON field) or by unit_code fallback.
   - Impact: The “Approved Plan” selector on Current Blocks now populates when a unit has an approved plan, unblocking the Reservation Form flow. This also supports older snapshots with only unit_code.

@@ -35,6 +35,7 @@ import calculateRoutes from './calculateRoutes.js' // NEW
 import documentsRoutes from './documentsRoutes.js'
 import planningRoutes from './planningRoutes.js'
 import notificationsRoutes from './notificationsRoutes.js'
+import contractsRoutes from './contractsRoutes.js'
 
 // NEW IMPORTS - Add these
 import roleManagementRoutes from './roleManagement.js'
@@ -75,6 +76,7 @@ app.use('/api/config', configRoutes) // System configs (acceptance thresholds)
 app.use('/api', planningRoutes) // /calculate, /generate-plan
 app.use('/api/notifications', notificationsRoutes)
 app.use('/api/blocks', blockManagementRoutes) // Unit block workflow
+app.use('/api/contracts', contractsRoutes) // Contracts workflow
 
 // Puppeteer singleton (reuse browser instance to reduce latency)
 let browserPromise = null

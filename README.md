@@ -121,6 +121,9 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-11-01 10:50] Documentation: add Operational Workflow (Draft for Review)
+  - README: Added a comprehensive end-to-end workflow section covering Models → Standard Plan/Pricing → Inventory → Offers/Plans → Blocks → Reservations → Contracts, with Current vs Planned enforcement clearly labeled. This is a draft pending stakeholder approval and will be finalized after implementation of planned items.
+  - Files: README.md.
 - [2025-11-01 10:05] Block request approval-check aligned with approved plan lookup (unit_id or unit_code)
   - API: Updated POST /api/blocks/request to recognize approved plans linked by either details.calculator.unitInfo.unit_id (numeric string) or unit_code fallback. Uses a safe numeric-regex check before casting. This fixes false “An approved payment plan is required…” when the plan snapshot stored unit_code only or unit_id as a string.
   - Impact: Consultants/Sales Managers can request a block for units that already have an approved plan, regardless of snapshot representation.
@@ -872,6 +875,143 @@ Troubleshooting quick tips
 - If a unit block request returns an error, ensure the unit is AVAILABLE and that the blocks table exists (migrations run automatically on startup).
 
 ---
+
+## Operational Workflow — End-to-End (Draft for Review)
+
+Note: This section is a draft for stakeholder review. It distinguishes between Current Enforcement (what the system enforces today) and Planned Enforcement (to be added). Once approved, we will convert any planned items into implemented features and remove the “Draft” label.
+
+Actors
+- Financial Manager (FM)
+- Top Management (TM: CEO/Chairman/Vice Chairman)
+- Property Consultant (PC)
+- Sales Manager (SM)
+- Financial Admin (FA)
+- Contract Admin (CA)
+- Contract Manager (CM)
+
+Phase 1: Models, Standard Terms, and Inventory
+
+1) Unit Models (structure, dimensions, features)
+- Owner: Financial Manager (requests), Top Management (approves)
+- Current Enforcement:
+  - FM submits model create/update/delete requests → /api/inventory/unit-models and /api/inventory/unit-models/changes
+  - TM approves/rejects via /api/inventory/unit-models/changes/:id/approve|reject
+  - Audit in unit_model_audit
+- Planned Enforcement: none
+
+2) Standard Plan (global financial terms)
+- Owner: Financial Manager; referenced by calculator and APIs
+- Current Enforcement:
+  - Latest active plan is used to build PV baselines and defaults
+- Planned Enforcement (High Priority):
+  - Introduce TM approval workflow:
+    - POST /api/standard-plan → status='pending_approval'
+    - PATCH /api/standard-plan/:id/approve|reject (TM roles)
+  - Consumers use latest status='approved' plan; if none, API returns 422 with guidance
+
+3) Standard Pricing (per-unit-model pricing)
+- Owner: FM creates; TM approves
+- Current Enforcement:
+  - POST /api/workflow/standard-pricing, PATCH /api/workflow/standard-pricing/:id/approve (TM)
+  - On approve: propagate price/area/unit_type to related unit; log standard_pricing_history and unit_inventory_changes
+- Planned Enforcement: none
+
+4) Inventory (units)
+- Owner: FA creates drafts; FM approves to AVAILABLE
+- Current Enforcement:
+  - FA: POST /api/inventory/units (requires approved model pricing) → unit_status='INVENTORY_DRAFT'
+  - FM: PATCH /api/inventory/units/:id/approve → unit_status='AVAILABLE'
+  - Sales roles only see AVAILABLE units in /api/inventory/units
+- Planned Enforcement: none
+
+Phase 2: Offers and Payment Plans
+
+5) Offer (Deal) creation with Calculator
+- Owner: PC (or SM)
+- Current Enforcement:
+  - POST /api/deals requires:
+    - details.calculator.generatedPlan with a non-empty schedule
+    - details.calculator.unitInfo.unit_id resolves to an AVAILABLE unit (available=TRUE AND unit_status='AVAILABLE')
+  - POST /api/deals/:id/submit enforces the same checks at submission time
+  - If evaluation.decision === 'REJECT', submission marks needs_override (does not block)
+- Planned Enforcement (optional, policy decision):
+  - Block submission when decision='REJECT' unless a deal-override has been approved (SM→FM→TM). Currently only auto-flags override.
+
+6) Payment Plans workflow
+- Owner: PC creates; SM/FM/TM approve per policy limits
+- Current Enforcement:
+  - POST /api/workflow/payment-plans (created_by role matters)
+  - FM approval; escalates to TM (dual approvals) if exceeding policy_limit_percent
+  - GET /api/workflow/payment-plans/approved-for-unit?unit_id=… returns approved, consultant-created plans for unit_id or unit_code
+- Planned Enforcement: none
+
+Phase 3: Blocks (Unit Holds)
+
+7) Request Block
+- Owner: PC/SM requests; FM approves
+- Current Enforcement:
+  - Preconditions: Unit AVAILABLE; at least one approved plan tied to the unit (match by unit_id or unit_code)
+  - Endpoint: POST /api/blocks/request
+  - FM approves via PATCH /api/blocks/:id/approve → unit_status='BLOCKED', available=FALSE
+- Planned Enforcement (High Priority):
+  - Financial criteria validation at block time:
+    - Use the approved plan’s snapshot (or recompute) and require evaluation.decision === 'ACCEPT'
+    - If decision='REJECT', require override chain:
+      - Override stages: SM → FM → TM; only with override_status='approved' can FM approve the block
+  - Add audit trail for block overrides (block_overrides table) and status fields (override_status, requested_plan_id)
+
+Phase 4: Reservations
+
+8) Create Reservation Form
+- Owner: FA
+- Current Enforcement:
+  - Requires payment_plan_id status='approved'
+  - Resolves unit_id from RF details or plan snapshot (unit_id or by unit_code mapping)
+  - Requires an active approved block: status='approved' and blocked_until > now()
+  - Endpoint: POST /api/workflow/reservation-forms; FM approves/rejects via PATCH …/approve|reject
+- Planned Enforcement: none
+
+Phase 5: Contracts (Draft → Approvals → Executed)
+
+9) Contracts workflow
+- Owner: CA drafts, CM reviews, TM finalizes
+- Current State:
+  - Tables and reports wiring exist (contracts, contracts_history), team membership exists
+  - No API endpoints implemented yet
+- Planned Enforcement (Medium Priority):
+  - contractsRoutes.js:
+    - POST /api/contracts (CA): requires approved reservation_form; creates contract status='draft'
+    - PATCH /api/contracts/:id/approve-cm (CM): draft → pending_tm
+    - PATCH /api/contracts/:id/approve-tm (TM): pending_tm → approved (ready for print)
+    - PATCH /api/contracts/:id/reject (CM/TM): reject with reason
+    - Optional: PATCH /api/contracts/:id/execute (CA): approved → executed
+
+Validation matrix (authoritative)
+- Offer create: generatedPlan + unit AVAILABLE (enforced)
+- Offer submit: generatedPlan + unit AVAILABLE (enforced)
+- Block request: unit AVAILABLE + approved plan (enforced) + [Planned] financial criteria pass OR override
+- Block approve: [Planned] require financial pass or override_status='approved'
+- Reservation form create: approved plan + active approved block (enforced)
+- Contracts: [Planned] approved reservation only; CM then TM approvals
+
+Key endpoints reference
+- Models: /api/inventory/unit-models, /api/inventory/unit-models/changes (approve by TM)
+- Standard Plan: /api/standard-plan (current), [Planned] approvals by TM
+- Standard Pricing: /api/workflow/standard-pricing (FM create) → approve by TM
+- Inventory Units: /api/inventory/units (FA create draft; FM approve to AVAILABLE)
+- Deals/Offers: /api/deals, /api/deals/:id/submit
+- Payment Plans: /api/workflow/payment-plans, /api/workflow/payment-plans/approved-for-unit
+- Blocks: /api/blocks/request, /api/blocks/:id/approve, /api/blocks/current
+- Reservations: /api/workflow/reservation-forms (create/approve)
+- Contracts: [Planned] /api/contracts… routes
+
+Open decisions before enforcement
+- Should deal submission be blocked when evaluation='REJECT' (with override path), or keep current “auto-flag only”?
+- For block overrides, do we require all three stages (SM→FM→TM) or allow FM-only exceptions within a policy limit?
+
+Once you approve this Draft, I will:
+- Convert “[Planned]” items into implementation tasks
+- Update this section to remove the Draft label and move details into the main User Guide
 
 ## Roadmap (next sessions)
 

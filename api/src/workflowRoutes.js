@@ -1456,21 +1456,26 @@ router.get(
       const unitId = ensureNumber(req.query.unit_id)
       if (!unitId) return bad(res, 400, 'unit_id is required')
       const sql = `
-        SELECT id, deal_id, COALESCE(version, 1) AS version, status, created_at
-        FROM payment_plans
-        WHERE status='approved'
+        SELECT pp.id,
+               pp.deal_id,
+               COALESCE(pp.version, 1) AS version,
+               pp.status,
+               pp.created_at,
+               u.email AS consultant_email
+        FROM payment_plans pp
+        JOIN users u ON u.id = pp.created_by
+        WHERE pp.status='approved'
+          AND u.role = 'property_consultant'
           AND (
             (
-              (details->'calculator'->'unitInfo'->>'unit_id') ~ '^[0-9]+
-
-export default router
-              AND ((details->'calculator'->'unitInfo'->>'unit_id')::int = $1)
+              (pp.details->'calculator'->'unitInfo'->>'unit_id') ~ '^[0-9]+
+              AND ((pp.details->'calculator'->'unitInfo'->>'unit_id')::int = $1)
             )
             OR (
-              (details->'calculator'->'unitInfo'->>'unit_code') = (SELECT code FROM units WHERE id=$1)
+              (pp.details->'calculator'->'unitInfo'->>'unit_code') = (SELECT code FROM units WHERE id=$1)
             )
           )
-        ORDER BY id DESC
+        ORDER BY pp.id DESC
       `
       const r = await pool.query(sql, [unitId])
       return ok(res, { payment_plans: r.rows })

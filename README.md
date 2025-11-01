@@ -121,6 +121,18 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-11-01 00:15] Blocking flow: fix approved-plans lookup SQL and restore dropdown on Current Blocks
+  - API: Repaired corruption in GET /api/workflow/payment-plans/approved-for-unit SQL where a stray newline broke the numeric-regex check and truncated the query. Properly matches by unit_id (numeric JSON field) or by unit_code fallback.
+  - Impact: The “Approved Plan” selector on Current Blocks now populates when a unit has an approved plan, unblocking the Reservation Form flow. This also supports older snapshots with only unit_code.
+  - Files: api/src/workflowRoutes.js.
+- [2025-11-01 00:25] Approved plans scope: only consultant-created plans appear in FA Current Blocks
+  - API: GET /api/workflow/payment-plans/approved-for-unit now filters to plans created by users with role='property_consultant' and includes consultant_email in the payload.
+  - Impact: The Approved Plan dropdown will no longer show standard pricing or finance-created plans; it lists only consultant-created approved plans for the selected unit, aligning with the intended workflow.
+  - Files: api/src/workflowRoutes.js.
+- [2025-11-01 00:40] FA Current Blocks UX: plan auto-selected and locked; date, preliminary payment, and language editable
+  - Client: On Deals → Current Blocks, the “Approved Plan” is auto-fetched for each blocked unit and displayed read-only. Financial Admin can set Reservation Date, Preliminary Payment, and Language. Currency is removed and cannot be changed. The create payload includes preliminary_payment and omits currency_override.
+  - Impact: Keeps FA from changing the plan or currency while allowing Preliminary Payment entry, which will count toward the Down Payment in downstream processing.
+  - Files: client/src/deals/CurrentBlocks.jsx.
 - [2025-10-26 12:00] Notifications: fix unread state mismatch in header bell
   - Client: NotificationBell.jsx now uses the API’s is_read property consistently (was using a local read flag). Marking single notifications or “Mark all read” correctly updates is_read and the unread counter.
   - Impact: Notifications no longer reappear as unread after clicking “read” or after logging in again. Styling and badge counts reflect server state.
@@ -136,9 +148,9 @@ Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track 
 - [2025-10-26 12:30] Approved plans lookup: match by unit_id or unit_code
   - API: GET /api/workflow/payment-plans/approved-for-unit now returns approved plans when either unit_id matches or unit_code in the plan snapshot matches the unit’s current code. This covers cases where older plan snapshots stored unit_code but not unit_id, or unit_id was a string.
   - Impact: Current Blocks page will now list approved plans for blocked units that already have plans, even if the snapshot used unit_code rather than unit_id.
-  - Files: api/src/workflowRoutes.js. 12:00] Notifications: fix unread state mismatch in header bell
-  - Client: NotificationBell.jsx now uses the API’s is_read property consistently (was using a local read flag). Marking single notifications or “Mark all read” correctly updates is_read and the unread counter.
-  - Impact: Notifications no longer reappear as unread after clicking “read” or after- [2025-10-24 10:50] Create Deal prefill from plan_id + Notification Center (bell)
+  - Files: api/src/workflowRoutes.js.
+  - Note: Fixed a formatting glitch in the README entry and implemented the corresponding code fix above.
+- [2025-10-24 10:50] Create Deal prefill from plan_id + Notification Center (bell)
   - API: Added GET /api/workflow/payment-plans/:id to fetch a plan by id (roles: consultant/FM/FA/SM/admin).
   - Client: Create Deal now accepts plan_id in URL. If present, it hydrates the embedded calculator from that plan’s snapshot after loading the unit.
   - Client: Added a Notification Bell in the header (right side). Polls unread count and shows a dropdown with notifications:

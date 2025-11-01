@@ -125,6 +125,10 @@ Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track 
   - API: Repaired corruption in GET /api/workflow/payment-plans/approved-for-unit SQL where a stray newline broke the numeric-regex check and truncated the query. Properly matches by unit_id (numeric JSON field) or by unit_code fallback.
   - Impact: The “Approved Plan” selector on Current Blocks now populates when a unit has an approved plan, unblocking the Reservation Form flow. This also supports older snapshots with only unit_code.
   - Files: api/src/workflowRoutes.js.
+- [2025-11-01 00:25] Approved plans scope: only consultant-created plans appear in FA Current Blocks
+  - API: GET /api/workflow/payment-plans/approved-for-unit now filters to plans created by users with role='property_consultant' and includes consultant_email in the payload.
+  - Impact: The Approved Plan dropdown will no longer show standard pricing or finance-created plans; it lists only consultant-created approved plans for the selected unit, aligning with the intended workflow.
+  - Files: api/src/workflowRoutes.js.
 - [2025-10-26 12:00] Notifications: fix unread state mismatch in header bell
   - Client: NotificationBell.jsx now uses the API’s is_read property consistently (was using a local read flag). Marking single notifications or “Mark all read” correctly updates is_read and the unread counter.
   - Impact: Notifications no longer reappear as unread after clicking “read” or after logging in again. Styling and badge counts reflect server state.

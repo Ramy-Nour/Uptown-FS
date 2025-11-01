@@ -1462,8 +1462,6 @@ router.get(
           AND (
             (
               (details->'calculator'->'unitInfo'->>'unit_id') ~ '^[0-9]+
-
-export default router
               AND ((details->'calculator'->'unitInfo'->>'unit_id')::int = $1)
             )
             OR (

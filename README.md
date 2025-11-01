@@ -129,9 +129,9 @@ Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track 
   - API: GET /api/workflow/payment-plans/approved-for-unit now filters to plans created by users with role='property_consultant' and includes consultant_email in the payload.
   - Impact: The Approved Plan dropdown will no longer show standard pricing or finance-created plans; it lists only consultant-created approved plans for the selected unit, aligning with the intended workflow.
   - Files: api/src/workflowRoutes.js.
-- [2025-11-01 00:40] FA Current Blocks UX: plan auto-selected and locked; only date and language editable
-  - Client: On Deals → Current Blocks, the “Approved Plan” is auto-fetched for each blocked unit and displayed read-only. Financial Admin can set only Reservation Date and Language. Currency and Preliminary Payment inputs are removed, and the create payload omits currency_override and preliminary_payment.
-  - Impact: Prevents accidental plan/currency changes by FA and aligns with policy that only consultant-approved plans can be used.
+- [2025-11-01 00:40] FA Current Blocks UX: plan auto-selected and locked; date, preliminary payment, and language editable
+  - Client: On Deals → Current Blocks, the “Approved Plan” is auto-fetched for each blocked unit and displayed read-only. Financial Admin can set Reservation Date, Preliminary Payment, and Language. Currency is removed and cannot be changed. The create payload includes preliminary_payment and omits currency_override.
+  - Impact: Keeps FA from changing the plan or currency while allowing Preliminary Payment entry, which will count toward the Down Payment in downstream processing.
   - Files: client/src/deals/CurrentBlocks.jsx.
 - [2025-10-26 12:00] Notifications: fix unread state mismatch in header bell
   - Client: NotificationBell.jsx now uses the API’s is_read property consistently (was using a local read flag). Marking single notifications or “Mark all read” correctly updates is_read and the unread counter.

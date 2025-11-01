@@ -11,7 +11,7 @@ export default function CurrentBlocks() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [creating, setCreating] = useState(new Set())
-  // keyed by block id: { selectedPlanId, reservationDate, language, plans: [] }
+  // keyed by block id: { selectedPlanId, reservationDate, preliminaryPayment, language, plans: [] }
   const [form, setForm] = useState({})
 
   async function load() {
@@ -66,10 +66,17 @@ export default function CurrentBlocks() {
         alert('No approved consultant plan is available for this unit.')
         return
       }
+      // Validate preliminary payment as a non-negative number
+      const prelim = f.preliminaryPayment === '' || f.preliminaryPayment == null ? 0 : Number(f.preliminaryPayment)
+      if (!Number.isFinite(prelim) || prelim < 0) {
+        alert('Preliminary Payment must be a non-negative number.')
+        return
+      }
       setCreating(s => new Set([...s, id]))
       const row = rows.find(r => r.id === id)
       const details = {
         reservation_date: f.reservationDate || null,
+        preliminary_payment: prelim,
         language: f.language || 'en',
         unit_id: row?.unit_id || null
       }
@@ -81,7 +88,7 @@ export default function CurrentBlocks() {
       const data = await resp.json().catch(() => ({}))
       if (!resp.ok) throw new Error(data?.error?.message || 'Failed to create reservation form')
       alert(`Reservation Form #${data?.reservation_form?.id} created and sent for Financial Manager approval.`)
-      setForm(fm => ({ ...fm, [id]: { ...fm[id], reservationDate: '', language: 'en' } }))
+      setForm(fm => ({ ...fm, [id]: { ...fm[id], reservationDate: '', preliminaryPayment: '', language: 'en' } }))
     } catch (e) {
       alert(e.message || String(e))
     } finally {
@@ -140,6 +147,12 @@ export default function CurrentBlocks() {
                         placeholder="Reservation Date"
                         value={f.reservationDate || ''}
                         onChange={e => setBlockForm(r.id, { reservationDate: e.target.value })}
+                      />
+                      <input
+                        style={ctrl}
+                        placeholder="Preliminary Payment"
+                        value={f.preliminaryPayment || ''}
+                        onChange={e => setBlockForm(r.id, { preliminaryPayment: e.target.value })}
                       />
                       <select
                         style={ctrl}

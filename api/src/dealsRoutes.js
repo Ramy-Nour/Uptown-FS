@@ -321,6 +321,32 @@ router.post('/', authMiddleware, validate(dealCreateSchema), async (req, res) =>
     const { title, amount, details, unitType, salesRepId, policyId } = req.body || {}
     const amt = Number(amount || 0)
     const det = isObject(details) ? details : {}
+
+    // Enforce: creating an offer/deal requires a generated payment plan from the calculator
+    const plan = det?.calculator?.generatedPlan
+    const hasPlan = !!(plan && Array.isArray(plan.schedule) && plan.schedule.length > 0)
+    if (!hasPlan) {
+      return res.status(400).json({ error: { message: 'A generated payment plan is required to create an offer.' } })
+    }
+
+    // Enforce: offers can only be created for AVAILABLE units
+    const unitIdRaw = det?.calculator?.unitInfo?.unit_id
+    const unitId = Number(unitIdRaw)
+    if (!Number.isFinite(unitId) || unitId <= 0) {
+      return res.status(400).json({ error: { message: 'Unit selection is required to create an offer.' } })
+    }
+    const unitRow = await pool.query(
+      `SELECT id, available, unit_status FROM units WHERE id=$1`,
+      [unitId]
+    )
+    if (unitRow.rows.length === 0) {
+      return res.status(404).json({ error: { message: 'Unit not found' } })
+    }
+    const available = unitRow.rows[0].available === true && String(unitRow.rows[0].unit_status || '').toUpperCase() === 'AVAILABLE'
+    if (!available) {
+      return res.status(400).json({ error: { message: 'Offers can only be created for AVAILABLE units.' } })
+    }
+
     const result = await pool.query(
       'INSERT INTO deals (title, amount, details, unit_type, sales_rep_id, policy_id, status, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
       [title.trim(), isFinite(amt) ? amt : 0, det, unitType || null, salesRepId || null, policyId || null, 'draft', req.user.id]
@@ -405,6 +431,31 @@ router.post('/:id/submit', authMiddleware, validate(dealSubmitSchema), async (re
     if (!isOwner && !isAdmin) return res.status(403).json({ error: { message: 'Forbidden' } })
     if (deal.status !== 'draft') return res.status(400).json({ error: { message: 'Deal must be draft to submit' } })
 
+    // Enforce: submitted deals must contain a generated payment plan
+    try {
+      const det = deal.details || {}
+      const plan = det?.calculator?.generatedPlan
+      const hasPlan = !!(plan && Array.isArray(plan.schedule) && plan.schedule.length > 0)
+      if (!hasPlan) {
+        return res.status(400).json({ error: { message: 'A generated payment plan is required to submit an offer.' } })
+      }
+      // Also enforce that the unit is AVAILABLE at submission time
+      const unitId = Number(det?.calculator?.unitInfo?.unit_id)
+      if (!Number.isFinite(unitId) || unitId <= 0) {
+        return res.status(400).json({ error: { message: 'Unit selection is required to submit an offer.' } })
+      }
+      const unitRow = await pool.query(`SELECT available, unit_status FROM units WHERE id=$1`, [unitId])
+      if (unitRow.rows.length === 0) {
+        return res.status(404).json({ error: { message: 'Unit not found' } })
+      }
+      const available = unitRow.rows[0].available === true && String(unitRow.rows[0].unit_status || '').toUpperCase() === 'AVAILABLE'
+      if (!available) {
+        return res.status(400).json({ error: { message: 'Offers can only be submitted for AVAILABLE units.' } })
+      }
+    } catch (_) {
+      return res.status(400).json({ error: { message: 'A generated payment plan is required to submit an offer.' } })
+    }
+
     // Optional: acceptability flags passed by client to persist
     if (req.body?.acceptability) {
       await setAcceptabilityFlags(id, req.body.acceptability, req.user)
@@ -412,17 +463,18 @@ router.post('/:id/submit', authMiddleware, validate(dealSubmitSchema), async (re
 
     // Auto-evaluate based on calculator snapshot stored in deal.details
     // If evaluation exists and decision = REJECT, mark needs_override and log immediately.
+    // Also enforce: submission is blocked unless an override has already been approved.
     try {
       const det = deal.details || {}
       const evalObj = det?.calculator?.generatedPlan?.evaluation || null
       if (evalObj && evalObj.decision === 'REJECT') {
-        const updOverride = await pool.query(
+        await pool.query(
           `UPDATE deals
            SET needs_override=TRUE,
-               override_requested_by=$1,
-               override_requested_at=now(),
+               override_requested_by=COALESCE(override_requested_by, $1),
+               override_requested_at=COALESCE(override_requested_at, now()),
                updated_at=now()
-           WHERE id=$2 RETURNING *`,
+           WHERE id=$2`,
           [req.user.id, id]
         )
         const overrideNote = {
@@ -433,6 +485,12 @@ router.post('/:id/submit', authMiddleware, validate(dealSubmitSchema), async (re
           at: new Date().toISOString()
         }
         await logHistory(id, req.user.id, 'override_requested', JSON.stringify(overrideNote))
+
+        // Enforce block on submission unless override already approved
+        const approvedAt = deal.override_approved_at
+        if (!approvedAt) {
+          return res.status(400).json({ error: { message: 'Submission denied: payment plan evaluation is REJECT. Top-Management override approval is required.' } })
+        }
       }
     } catch (autoErr) {
       // Do not block submission if evaluation parsing fails

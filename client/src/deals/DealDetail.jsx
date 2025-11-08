@@ -547,6 +547,24 @@ export default function DealDetail() {
                   </div>
                 )
               })()}
+
+              {/* Compact badges: Financial decision + deal override status */}
+              {(() => {
+                const badges = []
+                const badge = (bg, color, text) => (
+                  <span key={text} style={{ padding: '4px 8px', borderRadius: 999, fontSize: 12, background: bg, color, marginRight: 6 }}>{text}</span>
+                )
+                const fin = String(evaluation?.decision || '').toUpperCase()
+                if (fin === 'ACCEPT') badges.push(badge('#ecfdf5', '#065f46', 'Financial: ACCEPT'))
+                else if (fin === 'REJECT') badges.push(badge('#fef2f2', '#991b1b', 'Financial: REJECT'))
+
+                const ovApproved = !!deal?.override_approved_at
+                const needsOv = !!deal?.needs_override
+                if (ovApproved) badges.push(badge('#ecfdf5', '#065f46', 'Override: Approved (TM)'))
+                else if (needsOv) badges.push(badge('#eff6ff', '#1e40af', 'Override: Pending'))
+
+                return badges.length ? <div style={{ marginBottom: 10 }}>{badges}</div> : null
+              })()}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div style={{ border: '1px dashed #d1d9e6', borderRadius: 10, padding: 10 }}>
                   <strong>PV Comparison</strong>

@@ -5,6 +5,7 @@ const BRAND = { primary: '#A97E34', primaryDark: '#8B672C', muted: '#d1d5db' }
 const th = { textAlign: 'left', padding: 10, borderBottom: '1px solid #eef2f7', fontSize: 13, color: '#475569', background: '#f9fbfd' }
 const td = { padding: 10, borderBottom: '1px solid #f2f5fa', fontSize: 14 }
 const btn = { padding: '8px 10px', borderRadius: 8, border: '1px solid #d1d9e6', background: '#fff', cursor: 'pointer' }
+const badge = (bg, color) => ({ padding: '4px 8px', borderRadius: 999, fontSize: 12, background: bg, color })
 
 function ProgressTrain({ status }) {
   // steps: Blocked -> Reserved -> Contracted
@@ -39,6 +40,30 @@ function ProgressTrain({ status }) {
       })}
     </div>
   )
+}
+
+function OverrideBadges({ r }) {
+  const fin = String(r.block_financial_decision || '').toUpperCase()
+  const st = String(r.block_override_status || '').toLowerCase()
+  const items = []
+  if (fin === 'ACCEPT') {
+    items.push(<span key="fin-accept" style={badge('#ecfdf5', '#065f46')}>Financial: ACCEPT</span>)
+  } else if (fin === 'REJECT') {
+    items.push(<span key="fin-reject" style={badge('#fef2f2', '#991b1b')}>Financial: REJECT</span>)
+  }
+  if (st) {
+    const map = {
+      pending_sm: { label: 'Override: Pending SM', bg: '#eff6ff', color: '#1e40af' },
+      pending_fm: { label: 'Override: Pending FM', bg: '#eff6ff', color: '#1e40af' },
+      pending_tm: { label: 'Override: Pending TM', bg: '#eff6ff', color: '#1e40af' },
+      approved: { label: 'Override: Approved', bg: '#ecfdf5', color: '#065f46' },
+      rejected: { label: 'Override: Rejected', bg: '#fef2f2', color: '#991b1b' }
+    }
+    const m = map[st] || { label: `Override: ${st}`, bg: '#f8fafc', color: '#334155' }
+    items.push(<span key="ov-status" style={badge(m.bg, m.color)}>{m.label}</span>)
+  }
+  if (!items.length) return <span style={{ color: '#64748b' }}>—</span>
+  return <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{items}</div>
 }
 
 export default function OfferProgress() {
@@ -88,11 +113,12 @@ export default function OfferProgress() {
               <th style={th}>Block</th>
               <th style={th}>Reservation</th>
               <th style={th}>Contract</th>
+              <th style={th}>Override</th>
               <th style={th}>Progress</th>
             </tr>
           </thead>
           <tbody>
-            {loading && <tr><td style={td} colSpan={6}>Loading…</td></tr>}
+            {loading && <tr><td style={td} colSpan={7}>Loading…</td></tr>}
             {!loading && rows.map(r => (
               <tr key={`${r.unit_id}-${r.block_id || 'n'}`}>
                 <td style={td}>{r.unit_code}</td>
@@ -100,10 +126,11 @@ export default function OfferProgress() {
                 <td style={td}>{r.block_status || '-'}</td>
                 <td style={td}>{r.reservation_status || '-'}</td>
                 <td style={td}>{r.contract_status || '-'}</td>
+                <td style={td}><OverrideBadges r={r} /></td>
                 <td style={td}><ProgressTrain status={computeStatus(r)} /></td>
               </tr>
             ))}
-            {!loading && rows.length === 0 && <tr><td style={td} colSpan={6}>No items to display.</td></tr>}
+            {!loading && rows.length === 0 && <tr><td style={td} colSpan={7}>No items to display.</td></tr>}
           </tbody>
         </table>
       </div>

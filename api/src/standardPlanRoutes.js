@@ -15,7 +15,7 @@ router.get('/latest', authMiddleware, requireRole(['admin','superadmin','sales_m
   try {
     const r = await pool.query(
       `SELECT id, active, std_financial_rate_percent, plan_duration_years, installment_frequency, npv_tolerance_percent,
-              created_at, updated_at, created_by, updated_by
+              created_at, updated_at, created_by, updated_by, status, approved_by
        FROM standard_plan
        WHERE active=TRUE
        ORDER BY id DESC
@@ -31,7 +31,39 @@ router.get('/latest', authMiddleware, requireRole(['admin','superadmin','sales_m
   }
 })
 
-// Top Management: create a new global standard plan (deactivates previous active)
+// Financial Manager: request a new global standard plan (pending TM approval)
+router.post('/request', authMiddleware, requireRole(['financial_manager']), async (req, res) => {
+  try {
+    let { std_financial_rate_percent, plan_duration_years, installment_frequency, npv_tolerance_percent } = req.body || {}
+    const rate = Number(std_financial_rate_percent)
+    const years = Number(plan_duration_years)
+    const freq = String(installment_frequency || '').toLowerCase()
+    const npvTol = npv_tolerance_percent != null ? Number(npv_tolerance_percent) : null
+
+    if (!Number.isFinite(rate)) return bad(res, 400, 'std_financial_rate_percent must be a number')
+    if (!Number.isInteger(years) || years <= 0) return bad(res, 400, 'plan_duration_years must be an integer >= 1')
+    if (!['monthly','quarterly','biannually','annually'].includes(freq)) {
+      return bad(res, 400, 'installment_frequency must be one of monthly|quarterly|biannually|annually')
+    }
+    if (npvTol != null && (!Number.isFinite(npvTol) || npvTol < 0 || npvTol > 100)) {
+      return bad(res, 400, 'npv_tolerance_percent must be 0..100 when provided')
+    }
+
+    const ins = await pool.query(
+      `INSERT INTO standard_plan (active, status, std_financial_rate_percent, plan_duration_years, installment_frequency, npv_tolerance_percent, created_by, updated_by)
+       VALUES (FALSE, 'pending_approval', $1, $2, $3, $4, $5, $5)
+       RETURNING *`,
+      [rate, years, freq, npvTol, req.user.id]
+    )
+
+    return ok(res, { standardPlan: ins.rows[0] })
+  } catch (e) {
+    console.error('POST /api/standard-plan/request error:', e)
+    return bad(res, 500, 'Internal error')
+  }
+})
+
+// Top Management: create and activate a new global standard plan directly (deactivates previous active)
 router.post('/', authMiddleware, requireRole(['ceo','chairman','vice_chairman']), async (req, res) => {
   try {
     let { std_financial_rate_percent, plan_duration_years, installment_frequency, npv_tolerance_percent } = req.body || {}
@@ -52,8 +84,8 @@ router.post('/', authMiddleware, requireRole(['ceo','chairman','vice_chairman'])
     await pool.query('UPDATE standard_plan SET active=FALSE, updated_at=now(), updated_by=$1 WHERE active=TRUE', [req.user.id])
 
     const ins = await pool.query(
-      `INSERT INTO standard_plan (active, std_financial_rate_percent, plan_duration_years, installment_frequency, npv_tolerance_percent, created_by, updated_by)
-       VALUES (TRUE, $1, $2, $3, $4, $5, $5)
+      `INSERT INTO standard_plan (active, status, std_financial_rate_percent, plan_duration_years, installment_frequency, npv_tolerance_percent, created_by, updated_by, approved_by)
+       VALUES (TRUE, 'approved', $1, $2, $3, $4, $5, $5, $5)
        RETURNING *`,
       [rate, years, freq, npvTol, req.user.id]
     )
@@ -65,7 +97,49 @@ router.post('/', authMiddleware, requireRole(['ceo','chairman','vice_chairman'])
   }
 })
 
-// Top Management: update an existing standard plan record
+// Top Management: approve/reject a pending standard plan
+router.patch('/:id/approve', authMiddleware, requireRole(['ceo','chairman','vice_chairman']), async (req, res) => {
+  try {
+    const id = num(req.params.id)
+    if (!id) return bad(res, 400, 'Invalid id')
+
+    // Deactivate others, mark this one active+approved
+    await pool.query('UPDATE standard_plan SET active=FALSE, updated_at=now(), updated_by=$1 WHERE active=TRUE AND id<>$2', [req.user.id, id])
+    const r = await pool.query(
+      `UPDATE standard_plan
+       SET status='approved', active=TRUE, approved_by=$1, updated_by=$1, updated_at=now()
+       WHERE id=$2 AND status='pending_approval'
+       RETURNING *`,
+      [req.user.id, id]
+    )
+    if (r.rows.length === 0) return bad(res, 404, 'Not found or not pending')
+    return ok(res, { standardPlan: r.rows[0] })
+  } catch (e) {
+    console.error('PATCH /api/standard-plan/:id/approve error:', e)
+    return bad(res, 500, 'Internal error')
+  }
+})
+
+router.patch('/:id/reject', authMiddleware, requireRole(['ceo','chairman','vice_chairman']), async (req, res) => {
+  try {
+    const id = num(req.params.id)
+    if (!id) return bad(res, 400, 'Invalid id')
+    const r = await pool.query(
+      `UPDATE standard_plan
+       SET status='rejected', active=FALSE, approved_by=$1, updated_by=$1, updated_at=now()
+       WHERE id=$2 AND status='pending_approval'
+       RETURNING *`,
+      [req.user.id, id]
+    )
+    if (r.rows.length === 0) return bad(res, 404, 'Not found or not pending')
+    return ok(res, { standardPlan: r.rows[0] })
+  } catch (e) {
+    console.error('PATCH /api/standard-plan/:id/reject error:', e)
+    return bad(res, 500, 'Internal error')
+  }
+})
+
+// Top Management: update an existing standard plan record (keep for minor edits)
 router.patch('/:id', authMiddleware, requireRole(['ceo','chairman','vice_chairman']), async (req, res) => {
   try {
     const id = num(req.params.id)
@@ -97,15 +171,15 @@ router.patch('/:id', authMiddleware, requireRole(['ceo','chairman','vice_chairma
         if (k === 'active') {
           v = !!v
         }
-        fields.push(`${k}=$${pc++}`)
+        fields.push(`${k}=${pc++}`)
         params.push(v)
       }
     }
 
     if (fields.length === 0) return bad(res, 400, 'No fields to update')
-    fields.push(`updated_by=$${pc++}`)
+    fields.push(`updated_by=${pc++}`)
     params.push(req.user.id)
-    const idPh = `$${pc++}`
+    const idPh = `${pc++}`
     params.push(id)
 
     // If setting active=TRUE, deactivate other active records

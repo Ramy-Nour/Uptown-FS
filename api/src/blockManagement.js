@@ -1210,6 +1210,17 @@ export default router
     // If decision is REJECT/missing, we start the override chain by setting override_status='pending_sm'
     if (decision !== 'ACCEPT') {
       await createNotification('block_override_requested', req.user.id, 'blocks', result.rows[0].id, 'Block override requested (pending Sales Manager).')
+
+      // Additionally notify Top-Management that a direct override may be required (bypass path enabled)
+      try {
+        await pool.query(
+          `INSERT INTO notifications (user_id, type, ref_table, ref_id, message)
+           SELECT u.id, 'block_override_requested_tm', 'blocks', $1, 'Block override requested by consultant. You may approve directly (TM bypass).'
+           FROM users u
+           WHERE u.role IN ('ceo','chairman','vice_chairman','top_management') AND u.active=TRUE`,
+          [result.rows[0].id]
+        )
+      } catch (_) {}
     } else {
       await createNotification('block_request', req.user.id, 'blocks', result.rows[0].id, 'New block request requires approval')
     }

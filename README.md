@@ -121,6 +121,12 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-11-08 14:25] DB compatibility + progress query fix
+  - API: Fixed /api/inventory/progress to use proper SQL placeholders ($1, $2, …) instead of inlined numbers. This resolves “bind message supplies 1 parameters, but prepared statement requires 0” errors in Postgres logs.
+  - DB: Added migration 043_notifications_updated_at_and_standard_plan_compat.sql:
+    - notifications: add updated_at TIMESTAMPTZ to satisfy legacy queries that update this column.
+    - standard_plan: add status TEXT and approved_by INTEGER (nullable) to satisfy legacy selectors that reference these columns.
+  - Impact: Removes repeated DB errors in logs; keeps current logic intact while tolerating older client/server code paths.
 - [2025-11-08 12:00] Block request approval-plan lookup hardened; approved-for-unit endpoint SQL repaired
   - API: In POST /api/blocks/request, the approved plan lookup now trims unit_id and unit_code from the plan snapshot before matching, accepting numeric strings with whitespace and codes with incidental spaces. This resolves false “An approved payment plan is required…” when snapshots stored unit_id like "1 " or unit_code with trailing spaces.
   - API: Repaired GET /api/workflow/payment-plans/approved-for-unit SQL (removed accidental inserted text and added TRIM on snapshot fields and target unit code). The endpoint again lists approved consultant-created plans for the unit reliably.

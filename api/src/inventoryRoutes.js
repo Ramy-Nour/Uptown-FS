@@ -1422,16 +1422,17 @@ router.get('/progress', authMiddleware, requireRole(['property_consultant','sale
   try {
     const role = req.user.role
     const params = []
-    let where = "b.status IN ('approved','expired','pending')"
+    const whereParts = ["b.status IN ('approved','expired','pending')"]
     let joinTeam = ''
     if (role === 'property_consultant') {
-      where += ` AND b.requested_by = ${params.length + 1}`
+      whereParts.push(`b.requested_by = ${params.length + 1}`)
       params.push(req.user.id)
     } else if (role === 'sales_manager') {
       joinTeam = ' JOIN sales_team_members stm ON stm.consultant_user_id = b.requested_by AND stm.active=TRUE '
-      where += ` AND stm.manager_user_id = ${params.length + 1}`
+      whereParts.push(`stm.manager_user_id = ${params.length + 1}`)
       params.push(req.user.id)
     }
+    const where = whereParts.join(' AND ')
 
     // Latest reservation form per unit via payment_plans.details.calculator.unitInfo.unit_id
     const sql = `

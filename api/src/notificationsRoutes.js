@@ -55,7 +55,7 @@ router.patch('/:id/read', authLimiter, authMiddleware, async (req, res) => {
   try {
     const notificationId = Number(req.params.id)
     await pool.query(
-      `UPDATE notifications SET is_read = true, updated_at = now()
+      `UPDATE notifications SET is_read = true
        WHERE id = $1 AND user_id = $2`,
       [notificationId, req.user.id]
     )
@@ -70,7 +70,7 @@ router.patch('/:id/read', authLimiter, authMiddleware, async (req, res) => {
 router.patch('/mark-all-read', authLimiter, authMiddleware, async (req, res) => {
   try {
     await pool.query(
-      'UPDATE notifications SET is_read = true, updated_at = now() WHERE user_id = $1 AND is_read = false',
+      'UPDATE notifications SET is_read = true WHERE user_id = $1 AND is_read = false',
       [req.user.id]
     )
     res.json({ ok: true })

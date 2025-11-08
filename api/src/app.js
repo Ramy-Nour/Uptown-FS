@@ -54,6 +54,8 @@ const require = createRequire(import.meta.url)
 const libre = require('libreoffice-convert')
 
 const app = express()
+// Behind Docker/network proxies, enable trust proxy so express-rate-limit can read X-Forwarded-For safely
+app.set('trust proxy', 1)
 
 // Core middleware (must be early)
 app.use(helmet())

@@ -230,10 +230,19 @@ export default function CreateDeal() {
       if (durationStr === null) return
       const durationDays = Number(durationStr) || 7
       const reason = window.prompt('Reason for block (optional):', '') || ''
+      // Derive decision from embedded calculator snapshot if available
+      let decision = null
+      try {
+        const snapFn = window.__uptown_calc_getSnapshot
+        if (typeof snapFn === 'function') {
+          const snap = snapFn()
+          decision = snap?.generatedPlan?.evaluation?.decision || snap?.evaluation?.decision || null
+        }
+      } catch {}
       const resp = await fetchWithAuth(`${API_URL}/api/blocks/request`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ unitId: Number(selectedUnit.id), durationDays, reason })
+        body: JSON.stringify({ unitId: Number(selectedUnit.id), durationDays, reason, decision })
       })
       const data = await resp.json()
       if (!resp.ok) throw new Error(data?.error?.message || 'Failed to request unit block')

@@ -121,6 +121,15 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-11-08 15:20] Policy update: Block requests no longer require an approved payment plan when calculator decision = ACCEPT
+  - API: POST /api/blocks/request no longer checks for an approved payment plan. It now accepts an optional decision field in the body and records it as financial_decision.
+    - If decision === 'ACCEPT': request proceeds to FM approval with override_status=null.
+    - If decision !== 'ACCEPT' or missing: override_status='pending_sm' and the normal override chain applies (SM → FM → TM).
+  - Client: Both “Request Unit Block” buttons now include the current calculator decision in the payload:
+    - client/src/components/calculator/BlockUnitButton.jsx
+    - client/src/deals/CreateDeal.jsx (Selected Unit panel button)
+  - FM approval rule remains: FM can approve only if financial_decision is ACCEPT or an override is approved. Units are set to BLOCKED on approval; expiry job unchanged.
+  - Impact: Sales Consultant can request a block immediately when the calculator ACCEPTS the plan, without a separate payment plan approval workflow. REJECT cases continue through override.
 - [2025-11-08 14:25] DB compatibility + progress query fix
   - API: Fixed /api/inventory/progress to use proper SQL placeholders ($1, $2, …) instead of inlined numbers. This resolves “bind message supplies 1 parameters, but prepared statement requires 0” errors in Postgres logs.
   - DB: Added migration 043_notifications_updated_at_and_standard_plan_compat.sql:

@@ -125,8 +125,10 @@ Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track 
   - Client: Deals → Block Requests now shows override status badges (Financial: ACCEPT/REJECT/Unknown; Override: Pending SM/FM/TM/Approved/Rejected) and role-based override actions:
     - SM Approve Override (pending_sm → pending_fm), FM Approve Override (pending_fm → pending_tm), TM Approve Override (works even if SM/FM not approved; bypass recorded), Reject Override (SM/FM/TM).
     - FM Approve now shows a tooltip indicating it requires Financial ACCEPT or TM override approved.
+  - Client: Deals → Offer Progress adds an “Override” column with compact badges (Financial + Override status) when available in API payload.
+  - Client: Deals → Deal Detail shows compact badges under Acceptance Evaluation (Financial decision + deal-level override status) alongside the existing timeline.
   - API: On REJECT-plan block requests, Top Management is notified directly (bypass) in addition to starting the normal override sequence at pending_sm.
-  - Files: client/src/deals/BlockRequests.jsx, api/src/blockManagement.js, api/src/blockOverrides.js.
+  - Files: client/src/deals/BlockRequests.jsx, client/src/deals/OfferProgress.jsx, client/src/deals/DealDetail.jsx, api/src/blockManagement.js, api/src/blockOverrides.js.
 - [2025-11-01 10:50] Documentation: add Operational Workflow (Draft for Review)
   - README: Added a comprehensive end-to-end workflow section covering Models → Standard Plan/Pricing → Inventory → Offers/Plans → Blocks → Reservations → Contracts, with Current vs Planned enforcement clearly labeled. This is a draft pending stakeholder approval and will be finalized after implementation of planned items.
   - Files: README.md.

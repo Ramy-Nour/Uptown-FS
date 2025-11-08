@@ -121,6 +121,10 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-11-08 12:00] Block request approval-plan lookup hardened; approved-for-unit endpoint SQL repaired
+  - API: In POST /api/blocks/request, the approved plan lookup now trims unit_id and unit_code from the plan snapshot before matching, accepting numeric strings with whitespace and codes with incidental spaces. This resolves false “An approved payment plan is required…” when snapshots stored unit_id like "1 " or unit_code with trailing spaces.
+  - API: Repaired GET /api/workflow/payment-plans/approved-for-unit SQL (removed accidental inserted text and added TRIM on snapshot fields and target unit code). The endpoint again lists approved consultant-created plans for the unit reliably.
+  - Files: api/src/blockManagement.js, api/src/workflowRoutes.js.
 - [2025-11-01 11:10] UI hints for Block Override Chain + TM direct notification on REJECT
   - Client: Deals → Block Requests now shows override status badges (Financial: ACCEPT/REJECT/Unknown; Override: Pending SM/FM/TM/Approved/Rejected) and role-based override actions:
     - SM Approve Override (pending_sm → pending_fm), FM Approve Override (pending_fm → pending_tm), TM Approve Override (works even if SM/FM not approved; bypass recorded), Reject Override (SM/FM/TM).

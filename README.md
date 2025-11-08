@@ -121,6 +121,12 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-11-01 11:10] UI hints for Block Override Chain + TM direct notification on REJECT
+  - Client: Deals → Block Requests now shows override status badges (Financial: ACCEPT/REJECT/Unknown; Override: Pending SM/FM/TM/Approved/Rejected) and role-based override actions:
+    - SM Approve Override (pending_sm → pending_fm), FM Approve Override (pending_fm → pending_tm), TM Approve Override (works even if SM/FM not approved; bypass recorded), Reject Override (SM/FM/TM).
+    - FM Approve now shows a tooltip indicating it requires Financial ACCEPT or TM override approved.
+  - API: On REJECT-plan block requests, Top Management is notified directly (bypass) in addition to starting the normal override sequence at pending_sm.
+  - Files: client/src/deals/BlockRequests.jsx, api/src/blockManagement.js, api/src/blockOverrides.js.
 - [2025-11-01 10:50] Documentation: add Operational Workflow (Draft for Review)
   - README: Added a comprehensive end-to-end workflow section covering Models → Standard Plan/Pricing → Inventory → Offers/Plans → Blocks → Reservations → Contracts, with Current vs Planned enforcement clearly labeled. This is a draft pending stakeholder approval and will be finalized after implementation of planned items.
   - Files: README.md.

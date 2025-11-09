@@ -15,7 +15,8 @@ export default function BlockUnitButton({ role, unitInfo, clientInfo, genResult,
     return v != null && String(v).trim() !== ''
   })
 
-  const planAccepted = (genResult?.evaluation?.decision === 'ACCEPT')
+  const planDecision = genResult?.evaluation?.decision
+  const planAccepted = (planDecision === 'ACCEPT')
   const canBlock = uid > 0 && planAccepted && hasAllClientInfo
 
   async function requestUnitBlock() {
@@ -34,7 +35,7 @@ export default function BlockUnitButton({ role, unitInfo, clientInfo, genResult,
       const resp = await fetchWithAuth(`${API_URL}/api/blocks/request`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ unitId: uid, durationDays, reason })
+        body: JSON.stringify({ unitId: uid, durationDays, reason, decision: planDecision })
       })
       const data = await resp.json()
       if (!resp.ok) throw new Error(data?.error?.message || 'Failed to request unit block')

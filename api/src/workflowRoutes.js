@@ -185,9 +185,9 @@ router.get(
  * Sales team membership listing
  * Allows viewing existing manager assignments.
  * Optional query params:
- *  - consultant_user_id (number)
- *  - manager_user_id (number)
- *  - active (boolean, default true)
+ * - consultant_user_id (number)
+ * - manager_user_id (number)
+ * - active (boolean, default true)
  */
 router.get(
   '/sales-teams/memberships',
@@ -361,7 +361,7 @@ router.patch(
       for (const f of allowedFields) {
         if (Object.prototype.hasOwnProperty.call(req.body || {}, f)) {
           params.push(req.body[f])
-          updates.push(`${f} = ${params.length}`)
+          updates.push(`${f} = $${params.length}`)
         }
       }
       if (updates.length === 0) {
@@ -387,7 +387,7 @@ router.patch(
             status='pending_approval',
             approved_by=NULL,
             updated_at=now()
-        WHERE id=${params.length + 1}
+        WHERE id=$${params.length + 1}
         RETURNING *`
       const updateParams = params.concat([id])
       const updRes = await client.query(updateSql, updateParams)
@@ -465,13 +465,13 @@ router.patch(
         // Build dynamic UPDATE for units
         const sets = []
         const params = []
-        if (Number.isFinite(newPrice)) { params.push(newPrice); sets.push(`base_price=${params.length}`) }
-        if (newArea != null && Number.isFinite(newArea) && newArea > 0) { params.push(newArea); sets.push(`area=${params.length}`) }
-        if (newUnitTypeName) { params.push(newUnitTypeName); sets.push(`unit_type=${params.length}`) }
-        if (resolvedUnitTypeId != null) { params.push(resolvedUnitTypeId); sets.push(`unit_type_id=${params.length}`) }
+        if (Number.isFinite(newPrice)) { params.push(newPrice); sets.push(`base_price=$${params.length}`) }
+        if (newArea != null && Number.isFinite(newArea) && newArea > 0) { params.push(newArea); sets.push(`area=$${params.length}`) }
+        if (newUnitTypeName) { params.push(newUnitTypeName); sets.push(`unit_type=$${params.length}`) }
+        if (resolvedUnitTypeId != null) { params.push(resolvedUnitTypeId); sets.push(`unit_type_id=$${params.length}`) }
 
         params.push(unitId)
-        const sql = `UPDATE units SET ${sets.join(', ')}, updated_at=now() WHERE id=${params.length}`
+        const sql = `UPDATE units SET ${sets.join(', ')}, updated_at=now() WHERE id=$${params.length}`
         const upd = await client.query(sql, params)
 
         // Log propagate in standard_pricing_history
@@ -637,11 +637,11 @@ router.get(
       const params = []
       if (deal_id) {
         params.push(ensureNumber(deal_id))
-        clauses.push(`deal_id = ${params.length}`)
+        clauses.push(`deal_id = $${params.length}`)
       }
       if (status) {
         params.push(String(status))
-        clauses.push(`status = ${params.length}`)
+        clauses.push(`status = $${params.length}`)
       }
       const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''
       const result = await pool.query(`SELECT * FROM payment_plans ${where} ORDER BY id DESC`, params)
@@ -1493,35 +1493,13 @@ router.get(
           AND u.role = 'property_consultant'
           AND (
             (
-              TRIM(COALESCE(pp.details->'calculator'->'unitInfo'->>'unit_id','')) ~ '^[0-9]+
-        ORDER BY pp.id DESC
-      `
-      const r = await pool.query(sql, [unitId])
-      return ok(res, { payment_plans: r.rows })
-    } catch (e) {
-      console.error('GET /api/workflow/payment-plans/approved-for-unit error:', e)
-      return bad(res, 500, 'Internal error')
-    }
-  }
-)
-
-export default router
+              TRIM(COALESCE(pp.details->'calculator'->'unitInfo'->>'unit_id','')) ~ '^[0-9]+$'
               AND (TRIM(pp.details->'calculator'->'unitInfo'->>'unit_id')::int = t.unit_id)
             )
             OR (
               TRIM(COALESCE(pp.details->'calculator'->'unitInfo'->>'unit_code','')) = t.unit_code
             )
           )
-        ORDER BY pp.id DESC
-      `
-      const r = await pool.query(sql, [unitId])
-      return ok(res, { payment_plans: r.rows })
-    } catch (e) {
-      console.error('GET /api/workflow/payment-plans/approved-for-unit error:', e)
-      return bad(res, 500, 'Internal error')
-    }
-  }
-)
         ORDER BY pp.id DESC
       `
       const r = await pool.query(sql, [unitId])

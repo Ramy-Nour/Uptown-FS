@@ -1494,6 +1494,7 @@ router.get(
           AND (
             (
               TRIM(COALESCE(pp.details->'calculator'->'unitInfo'->>'unit_id','')) ~ '^[0-9]+
+        ORDER BY pp.id DESC
       `
       const r = await pool.query(sql, [unitId])
       return ok(res, { payment_plans: r.rows })
@@ -1511,6 +1512,16 @@ export default router
               TRIM(COALESCE(pp.details->'calculator'->'unitInfo'->>'unit_code','')) = t.unit_code
             )
           )
+        ORDER BY pp.id DESC
+      `
+      const r = await pool.query(sql, [unitId])
+      return ok(res, { payment_plans: r.rows })
+    } catch (e) {
+      console.error('GET /api/workflow/payment-plans/approved-for-unit error:', e)
+      return bad(res, 500, 'Internal error')
+    }
+  }
+)
         ORDER BY pp.id DESC
       `
       const r = await pool.query(sql, [unitId])

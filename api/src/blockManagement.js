@@ -51,9 +51,7 @@ async function createNotification(type, userId, refTable, refId, message) {
        VALUES ($1, $2, $3, $4, $5)`,
       [userId || null, type, refTable, refId, message]
     )
-  } catch (_) {
-    // swallow
-  }
+  } catch (_) {}
 }
 
 // Request unit block
@@ -63,7 +61,7 @@ router.post(
   requireRole(['property_consultant','sales_manager']),
   validate(blockRequestSchema),
   async (req, res) => {
-    const { unitId, durationDays, reason, decision } = req.body || {}
+    const { unitId, durationDays, reason } = req.body || {}
     try {
       await ensureBlocksSchema()
 
@@ -89,51 +87,78 @@ router.post(
         return res.status(400).json({ error: { message: 'Unit is already blocked' } })
       }
 
-      // New policy: do NOT require an approved payment plan when calculator decision is ACCEPT.
-      // We accept an optional 'decision' from the client snapshot and record it.
-      const finDecision = typeof decision === 'string' ? decision.toUpperCase() : null
-
-      const d = Number(durationDays)
-      const ins = await pool.query(
+      // Require an approved payment plan for this unit (match by unit_id or unit_code, whitespace tolerant)
+      const approvedPlan = await pool.query(
         `
-        INSERT INTO blocks (
-          unit_id, requested_by, duration_days, reason, status, blocked_until,
-          created_at, updated_at, requested_plan_id, financial_decision, financial_checked_at, override_status
+        WITH target AS (
+          SELECT $1::int AS unit_id, TRIM(u.code) AS unit_code
+          FROM units u
+          WHERE u.id = $1
         )
-        VALUES (
-          $1, $2, $3, $4, 'pending', NOW() + ($3::int) * INTERVAL '1 day',
-          NOW(), NOW(), NULL, $5, NOW(), $6
-        )
-        RETURNING *
-        `,
-        [unitId, req.user.id, d, reason || null, finDecision, (finDecision === 'ACCEPT') ? null : 'pending_sm']
-      )
-
-      // Notifications
-      if (finDecision !== 'ACCEPT') {
-        await createNotification('block_override_requested', req.user.id, 'blocks', ins.rows[0].id, 'Block override requested (pending Sales Manager).')
-        try {
-          await pool.query(
-            `
-            INSERT INTO notifications (user_id, type, ref_table, ref_id, message)
-            SELECT u.id, 'block_override_requested_tm', 'blocks', $1, 'Block override requested by consultant. You may approve directly (TM bypass).'
-            FROM users u
-            WHERE u.role IN ('ceo','chairman','vice_chairman','top_management') AND u.active=TRUE
-            `,
-            [ins.rows[0].id]
+        SELECT pp.id, pp.details
+        FROM payment_plans pp, target t
+        WHERE pp.status='approved'
+          AND (
+            (
+              TRIM(COALESCE(pp.details->'calculator'->'unitInfo'->>'unit_id','')) ~ '^[0-9]+
+            AND (TRIM(pp.details->'calculator'->'unitInfo'->>'unit_id')::int = t.unit_id)
           )
-        } catch (_) {}
-      } else {
-        await createNotification('block_request', req.user.id, 'blocks', ins.rows[0].id, 'New block request requires approval')
-      }
-
-      return res.json({ ok: true, block: ins.rows[0] })
-    } catch (error) {
-      console.error('Block request error:', error)
-      return res.status(500).json({ error: { message: 'Internal error' } })
+          OR (
+            TRIM(COALESCE(pp.details->'calculator'->'unitInfo'->>'unit_code','')) = t.unit_code
+          )
+        )
+      ORDER BY pp.id DESC
+      LIMIT 1
+      `,
+      [unitId]
+    )
+    if (approvedPlan.rows.length === 0) {
+      return res.status(400).json({ error: { message: 'An approved payment plan is required to request a block for this unit.' } })
     }
+
+    const planDetails = approvedPlan.rows[0].details || {}
+    const decision = planDetails?.calculator?.generatedPlan?.evaluation?.decision || null
+
+    const d = Number(durationDays)
+    const ins = await pool.query(
+      `
+      INSERT INTO blocks (
+        unit_id, requested_by, duration_days, reason, status, blocked_until,
+        created_at, updated_at, requested_plan_id, financial_decision, financial_checked_at, override_status
+      )
+      VALUES (
+        $1, $2, $3, $4, 'pending', NOW() + ($3::int) * INTERVAL '1 day',
+        NOW(), NOW(), $5, $6, NOW(), $7
+      )
+      RETURNING *
+      `,
+      [unitId, req.user.id, d, reason || null, approvedPlan.rows[0].id, decision, (decision === 'ACCEPT') ? null : 'pending_sm']
+    )
+
+    // Notifications
+    if (decision !== 'ACCEPT') {
+      await createNotification('block_override_requested', req.user.id, 'blocks', ins.rows[0].id, 'Block override requested (pending Sales Manager).')
+      try {
+        await pool.query(
+          `
+          INSERT INTO notifications (user_id, type, ref_table, ref_id, message)
+          SELECT u.id, 'block_override_requested_tm', 'blocks', $1, 'Block override requested by consultant. You may approve directly (TM bypass).'
+          FROM users u
+          WHERE u.role IN ('ceo','chairman','vice_chairman','top_management') AND u.active=TRUE
+          `,
+          [ins.rows[0].id]
+        )
+      } catch (_) {}
+    } else {
+      await createNotification('block_request', req.user.id, 'blocks', ins.rows[0].id, 'New block request requires approval')
+    }
+
+    return res.json({ ok: true, block: ins.rows[0] })
+  } catch (error) {
+    console.error('Block request error:', error)
+    return res.status(500).json({ error: { message: 'Internal error' } })
   }
-)
+})
 
 // FM approve/reject
 router.patch('/:id/approve', authMiddleware, requireRole(['financial_manager']), validate(blockApproveSchema), async (req, res) => {
@@ -404,7 +429,7 @@ export default router
       const planDetails = approvedPlan.rows[0].details || {}
       const decision = planDetails?.calculator?.generatedPlan?.evaluation?.decision || null
 
-      const d = Number(durationDays)
+      const d = Number(durationDays) || 7
       const ins = await pool.query(
         `
         INSERT INTO blocks (

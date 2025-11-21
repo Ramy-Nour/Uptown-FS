@@ -141,7 +141,20 @@ router.post(
       }
 
       if (!hasValidPlan) {
-        return res.status(400).json({ error: { message: 'An approved payment plan (or valid Deal) is required to request a block for this unit.' } })
+        // Diagnostic: why did we fail?
+        const diag = await pool.query(
+          `SELECT id, status, details->'calculator'->'generatedPlan'->'evaluation'->>'decision' as decision,
+                  details->'calculator'->'unitInfo'->>'unit_id' as uid
+           FROM deals 
+           WHERE created_by = $1 ORDER BY id DESC LIMIT 3`,
+          [req.user.id]
+        )
+        const diagMsg = diag.rows.map(r => `[ID:${r.id} St:${r.status} Dec:${r.decision} UID:${r.uid}]`).join(', ')
+        return res.status(400).json({ 
+          error: { 
+            message: `No valid plan found. Debug: User ${req.user.id}, Target Unit ${unitId}. Found: ${diagMsg}` 
+          } 
+        })
       }
 
       const decision = planDetails?.calculator?.generatedPlan?.evaluation?.decision || null

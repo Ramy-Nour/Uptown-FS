@@ -112,11 +112,38 @@ router.post(
         `,
         [unitId]
       )
-      if (approvedPlan.rows.length === 0) {
-        return res.status(400).json({ error: { message: 'An approved payment plan is required to request a block for this unit.' } })
+
+      let hasValidPlan = approvedPlan.rows.length > 0
+      let planDetails = approvedPlan.rows[0]?.details || {}
+      let planId = approvedPlan.rows[0]?.id || null
+
+      // Fallback: Check for a valid Deal (Draft or Pending) with ACCEPT decision
+      // This allows blocking immediately after creating a deal, even if no formal "payment_plan" row exists yet.
+      if (!hasValidPlan) {
+        const validDeal = await pool.query(
+          `
+          SELECT d.id, d.details
+          FROM deals d
+          WHERE d.created_by = $1
+            AND d.status NOT IN ('rejected', 'cancelled')
+            AND (d.details->'calculator'->'unitInfo'->>'unit_id')::int = $2
+            AND d.details->'calculator'->'generatedPlan'->'evaluation'->>'decision' = 'ACCEPT'
+          ORDER BY d.id DESC
+          LIMIT 1
+          `,
+          [req.user.id, unitId]
+        )
+        if (validDeal.rows.length > 0) {
+          hasValidPlan = true
+          planDetails = validDeal.rows[0].details || {}
+          // planId remains null as there is no payment_plans row
+        }
       }
 
-      const planDetails = approvedPlan.rows[0].details || {}
+      if (!hasValidPlan) {
+        return res.status(400).json({ error: { message: 'An approved payment plan (or valid Deal) is required to request a block for this unit.' } })
+      }
+
       const decision = planDetails?.calculator?.generatedPlan?.evaluation?.decision || null
 
       // Use default of 7 days if not provided
@@ -133,7 +160,7 @@ router.post(
         )
         RETURNING *
         `,
-        [unitId, req.user.id, d, reason || null, approvedPlan.rows[0].id, decision, (decision === 'ACCEPT') ? null : 'pending_sm']
+        [unitId, req.user.id, d, reason || null, planId, decision, (decision === 'ACCEPT') ? null : 'pending_sm']
       )
 
       // Notifications

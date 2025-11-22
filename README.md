@@ -1075,6 +1075,9 @@ Planned enhancements
 - Override Timeline UI refinements
   - Improve visuals: larger circles, labels under nodes, responsive layout, and hover tooltips with timestamps and approver names.
   - Show the same override timeline on the Sales Manager Approvals page (implemented initial compact timeline badge).
+- TM override visibility on block/unblock workflows
+  - Surface a clear “TM Override (FM bypassed)” badge in block/unblock UI views (e.g., Current Blocks, Block Requests, and any block detail drawer) whenever tm_override=true or when TM approved unblock directly from pending_fm.
+  - Ensure this flag appears both in per-row summaries and in any detailed modal/panel so auditors can see when FM was bypassed.
 - Unit Lifecycle Timeline (future)
   - Add a similar timeline to track unit state across Blocked → Reserved → Contracted (and back if expired/unblocked).
   - Integrate with blocks table and reservation/contract events to display timestamps per transition.

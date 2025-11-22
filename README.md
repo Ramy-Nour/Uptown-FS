@@ -121,6 +121,12 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-11-22 12:20] CRM Admin Role & Inventory Workflow Refactor
+  - Role: Introduced `crm_admin` role for managing unit inventory (creating drafts, requesting changes).
+  - Workflow: Inventory drafts are now created by `crm_admin` and must be approved by `Top Management` (CEO, Chairman, Vice Chairman) to become AVAILABLE.
+  - Workflow: Inventory change requests (edit/delete approved units) are submitted by `crm_admin` and approved by `Financial Manager`.
+  - Access: `Financial Admin` no longer manages inventory drafts; focus is restricted to financial workflows (Standard Pricing, Current Blocks, Reservations).
+  - UI/API: Updated routes, navigation, and dashboards to enforce these new role boundaries.
 - [2025-11-22 12:00] CRM Admin vs Financial Admin responsibilities – future adjustments
   - README: Documented two follow-up actions for the already-implemented CRM Admin inventory role:
     - Adjust exactly which pages Financial Admin should still see (for example, whether they keep or lose specific admin pages).

@@ -121,6 +121,9 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-11-22 11:30] Ops: one-liner to create or promote a superadmin user by email via psql
+  - DB: Documented a docker compose exec db psql command that will INSERT a user row with role='superadmin' and active=true for a given email if it does not exist yet, or UPDATE the existing row to role='superadmin', active=true if it already exists. This bypasses the normal registration UI but still relies on the same users table and role checks in authRoutes.js.
+  - Verification: After running the SQL, you can trigger a password reset from the login screen for that email, then log in and confirm the role via /api/auth/users (requires superadmin) or by viewing protected admin pages.
 - [2025-11-22 09:00] Blocking flow: allow blocks based on valid Deals (Draft/Pending)
   - API: Updated POST /api/blocks/request to fallback to checking for a valid Deal if no approved payment plan is found. This allows Consultants to block units immediately after creating a Deal (even if Draft), provided the plan evaluation decision is 'ACCEPT'.
   - Fix: Resolved an issue where `app.js` was importing an outdated backup file (`blockManagement.fixed.js`), preventing fixes from taking effect. Corrected import to `blockManagement.js`.

@@ -443,7 +443,7 @@ router.get('/units', authMiddleware, requireRole(['admin','superadmin','sales_ma
     // - Admin roles see all units.
     const salesRoles = ['property_consultant', 'sales_manager']
     if (salesRoles.includes(req.user.role)) {
-      clauses.push('u.available = TRUE', "u.unit_status='AVAILABLE'", 'u.model_id IS NOT NULL')
+      clauses.push(`(u.available = TRUE OR u.unit_status = 'BLOCKED')`, "u.model_id IS NOT NULL")
     }
 
     if (typeId) {

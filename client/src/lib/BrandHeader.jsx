@@ -146,30 +146,6 @@ export default function BrandHeader({ title, onLogout }) {
         return [
           { label: 'Users', href: '/admin/users' },
           { label: 'Sales Team', href: '/admin/sales' },
-          { label: 'Contracts Team', href: '/admin/contracts-team' },
-          { label: 'Finance Team', href: '/admin/finance-team' },
-          { label: 'Payment Thresholds', href: '/admin/payment-thresholds' }
-        ]
-      case 'financial_manager':
-        return [
-          ...baseWithCalc,
-          queuesLink,
-          { label: 'Current Blocks', href: '/deals/current-blocks' },
-          { label: 'Reservations', href: '/deals/reservations-queue' },
-          { label: 'Inventory Drafts', href: '/admin/inventory-drafts' },
-          { label: 'Inventory Changes', href: '/admin/inventory-changes' },
-          { label: 'Rejected Requests', href: '/admin/rejected-pricings' },
-          { label: 'Finance Team', href: '/admin/finance-team' },
-          { label: 'Standard Pricing', href: '/admin/standard-pricing' },
-          { label: 'Unit Models', href: '/admin/unit-models' },
-          { label: 'Holds', href: '/admin/holds' },
-          { label: 'Payment Thresholds', href: '/admin/payment-thresholds' },
-       ]
-      case 'financial_admin':
-        return [
-          ...baseWithCalc,
-          { label: 'Current Blocks', href: '/deals/current-blocks' },
-          { label: 'Inventory', href: '/admin/inventory' },
           { label: 'My Inventory Requests', href: '/admin/inventory-change-history' },
           { label: 'Standard Pricing', href: '/admin/standard-pricing' },
           { label: 'My Proposals', href: '/deals/my-proposals' }

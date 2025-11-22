@@ -123,10 +123,10 @@ export default function InventoryList() {
             <div style={{ fontSize: 14, lineHeight: 1.5 }}>
               Inventory appears here only after:
               <ul style={{ marginTop: 6, marginBottom: 0, paddingLeft: 18 }}>
-                <li>Financial Admin creates a unit as a draft and links it to a Unit Model that already has approved standard pricing.</li>
-                <li>Financial Manager approves the draft in Admin → Inventory Drafts, which marks the unit AVAILABLE.</li>
+                <li>CRM Admin creates a unit as a draft and links it to a Unit Model that already has approved standard pricing.</li>
+                <li>Top Management approves the draft in Admin → Inventory Drafts, which marks the unit AVAILABLE.</li>
               </ul>
-              If you already added inventory in Admin, ask a Financial Manager to approve it so it becomes visible to sales.
+              If you already added inventory in Admin, ask a member of Top Management to approve it so it becomes visible to sales.
             </div>
           ) : (
             <div style={{ fontSize: 14, lineHeight: 1.5 }}>

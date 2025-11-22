@@ -30,6 +30,7 @@ export default function Units() {
 
   // current user role
   const role = JSON.parse(localStorage.getItem('auth_user') || '{}')?.role
+  const isCrmInventoryAdmin = role === 'crm_admin'
 
   // form state
   const [form, setForm] = useState({
@@ -122,8 +123,8 @@ export default function Units() {
       let resp
       let createdOrEditedId = editingId
 
-      if (role === 'financial_admin') {
-        // FA: draft creation, draft update, or change-request for approved units
+      if (isCrmInventoryAdmin) {
+        // CRM Admin: draft creation, draft update, or change-request for approved units
         if (editingId) {
           if (editingStatus && editingStatus !== 'INVENTORY_DRAFT') {
             // Request change for approved unit
@@ -187,7 +188,7 @@ export default function Units() {
           const data = await resp.json()
           if (!resp.ok) throw new Error(data?.error?.message || 'Save failed')
           createdOrEditedId = data?.unit?.id
-          notifySuccess('Unit draft created and linked to model. Awaiting Financial Manager approval.')
+          notifySuccess('Unit draft created and linked to model. Awaiting Top Management approval.')
         }
       } else { // Superadmin path
         const body = {
@@ -311,7 +312,7 @@ export default function Units() {
 
         <form onSubmit={saveUnit} style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 8, marginBottom: 12 }}>
           <input placeholder="Code" value={form.code} onChange={e => setForm(s => ({ ...s, code: e.target.value }))} style={ctrl} required />
-          {role !== 'financial_admin' && (
+          {!isCrmInventoryAdmin && (
             <>
               <input placeholder="Description" value={form.description} onChange={e => setForm(s => ({ ...s, description: e.target.value }))} style={ctrl} />
               <input placeholder="Unit Type" value={form.unit_type} onChange={e => setForm(s => ({ ...s, unit_type: e.target.value }))} style={ctrl} />
@@ -326,7 +327,7 @@ export default function Units() {
               </select>
             </>
           )}
-          {role === 'financial_admin' && (
+          {isCrmInventoryAdmin && (
             <>
               <input placeholder="Unit Number" value={form.unit_number} onChange={e => setForm(s => ({ ...s, unit_number: e.target.value }))} style={ctrl} />
               <input placeholder="Floor" value={form.floor} onChange={e => setForm(s => ({ ...s, floor: e.target.value }))} style={ctrl} />
@@ -341,7 +342,7 @@ export default function Units() {
           </div>
         </form>
 
-        {role === 'financial_admin' && (
+        {isCrmInventoryAdmin && (
           <div style={{ border: '1px solid #e6eaf0', borderRadius: 10, padding: 10, marginBottom: 12 }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               <div>
@@ -357,7 +358,7 @@ export default function Units() {
                 {modelsError ? <div style={errorText}>{modelsError}</div> : null}
               </div>
               <div style={{ display: 'flex', alignItems: 'end' }}>
-                <span style={metaText}>Financial Admin must select a model with approved standard pricing. The unit will be created as a draft already linked to the selected model, with prices and areas propagated. Financial Manager approval is required to finalize.</span>
+                <span style={metaText}>CRM Admin must select a model with approved standard pricing. The unit will be created as a draft already linked to the selected model, with prices and areas propagated. Top Management approval is required to finalize.</span>
               </div>
             </div>
           </div>
@@ -444,7 +445,7 @@ export default function Units() {
                   <td style={td}>{unit.unit_status}</td>
                   <td style={{ ...td, display: 'flex', gap: 8 }}>
                     <LoadingButton onClick={() => { setDetailsUnit(unit); setDetailsOpen(true) }}>Details</LoadingButton>
-                    {role === 'financial_admin' ? (
+                    {isCrmInventoryAdmin ? (
                       <>
                         {unit.unit_status === 'INVENTORY_DRAFT' ? (
                           <>

@@ -98,6 +98,7 @@ const VALID_ROLES = [
   'property_consultant',
   'financial_manager',
   'financial_admin',
+  'crm_admin',
   'contract_manager',
   'contract_person',
   'chairman',

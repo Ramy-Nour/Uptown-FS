@@ -121,12 +121,9 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
-- [2025-11-22 12:20] CRM Admin inventory role + Top Management draft approvals
-  - API: Added a new crm_admin role and granted it inventory-management capabilities previously held by Financial Admin (create/read/update unit drafts via /api/inventory/units, request changes on approved units, and view inventory change history). Financial Admin remains responsible for reservations, documents, and other finance workflows.
-  - API: Inventory draft approval endpoints now require Top Management roles (ceo/chairman/vice_chairman/top_management) instead of Financial Manager; new draft notifications go to Top Management.
-  - Client: Introduced CRM Admin navigation (Inventory + My Inventory Requests) and moved the Inventory Drafts approval page from the Financial Manager menu to the Top Management menu. Units Catalog now uses the CRM Admin draft flow and updated helper text.
-  - Client: Updated inventory-related empty‑state and help text to reference CRM Admin and Top Management (Deals → Inventory, Admin → Inventory Drafts, Admin → Inventory Changes).
-  - Files: api/src/authRoutes.js, api/src/inventoryRoutes.js, api/src/unitsRoutes.js, client/src/lib/BrandHeader.jsx, client/src/main.jsx, client/src/admin/Users.jsx, client/src/admin/Units.jsx, client/src/admin/InventoryDrafts.jsx, client/src/admin/InventoryChanges.jsx.jsx, client/src/admin/InventoryChangeHistory.jsx.jsx, client/src/deals/InventoryList.jsx.
+- [2025-11-22 12:00] Document CRM sub-role for future inventory draft creation
+  - README: Recorded a future action item to introduce a CRM Admin sub-role responsible for creating inventory unit drafts (units linked to a Unit Model with approved standard pricing), instead of Financial Admin.
+  - README: Clarified that implementation will require backend role/route updates and frontend admin UI changes, but no code changes were made in this step.
 - [2025-11-22 11:30] Restore FM Header & Blocked Units Visibility
   - Client: Inventory list now includes BLOCKED units for Sales Managers and Consultants, displayed with a 'BLOCKED' badge and disabled 'Create Offer' button. This ensures visibility of unavailable inventory.
   - Client: Restored the "Block Requests" navigation link in the global header for Financial Managers.

@@ -487,7 +487,7 @@ export default function DealDetail() {
             <div><strong>First Payment Date:</strong> {(deal?.details?.calculator?.inputs?.firstPaymentDate) || (deal?.details?.calculator?.inputs?.offerDate) || new Date().toISOString().slice(0, 10)}</div>
           </div>
           {schedule.length === 0 ? (
-            <p style={{ color: '#64748b' }}>No saved schedule. Use Edit in Calculator to generate and save one.</p>
+            <p style={{ color: '#64748b' }}>No saved schedule. Use Edit Offer to generate and save one.</p>
           ) : (
             <div style={{ overflow: 'auto', border: '1px solid #e6eaf0', borderRadius: 12 }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -792,7 +792,7 @@ export default function DealDetail() {
       ) : (
         <div style={{ marginBottom: 16 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-            <h3 style={{ margin: 0 }}>Edit in Calculator</h3>
+            <h3 style={{ margin: 0 }}>Edit Offer</h3>
             <div style={{ display: 'flex', gap: 8 }}>
               <LoadingButton onClick={saveCalculator} loading={savingCalc} variant="primary">Save</LoadingButton>
               <LoadingButton onClick={() => setEditCalc(false)} disabled={savingCalc}>Cancel</LoadingButton>
@@ -853,8 +853,8 @@ export default function DealDetail() {
 
       {/* Actions — restrict printing offer until approved */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-        {canEdit && !editCalc && <LoadingButton onClick={() => setEditCalc(true)}>Edit in Calculator</LoadingButton>}
-        {canSubmit && (
+        {canEdit && !editCalc && <LoadingButton onClick={() => setEditCalc(true)}>Edit Offer</LoadingButton>}
+        {canSubmit && role !== 'property_consultant' && (
           <LoadingButton
             onClick={async () => {
               const savedPlan = deal?.details?.calculator?.generatedPlan
@@ -932,7 +932,6 @@ export default function DealDetail() {
             Request Override
           </LoadingButton>
         )}
-        <LoadingButton onClick={printSchedule}>Print Schedule</LoadingButton>
         {(role === 'property_consultant' && (deal.status === 'approved' || deal.status === 'draft')) && (
           <>
             <LoadingButton onClick={() => generateDocFromSaved('pricing_form')}>Print Offer (Pricing Form PDF)</LoadingButton>
@@ -941,34 +940,51 @@ export default function DealDetail() {
               const snap = deal?.details?.calculator
               const acceptedBySystem = snap?.generatedPlan?.evaluation?.decision === 'ACCEPT'
               const overrideApproved = !!deal?.override_approved_at
-              const canBlock = acceptedBySystem || overrideApproved
+              const unitStatus = (snap?.unitInfo?.unit_status || '').toUpperCase()
+              const isBlocked = unitStatus === 'BLOCKED' || snap?.unitInfo?.available === false
+              const canBlockOrUnblock = acceptedBySystem || overrideApproved
               const unitId = Number(snap?.unitInfo?.unit_id) || 0
               if (!unitId) return null
+              const label = isBlocked ? 'Request Unit Unblock' : 'Request Unit Block'
+              const title = canBlockOrUnblock
+                ? (isBlocked ? 'Request to unblock this unit' : 'Request a block on this unit')
+                : 'Available after plan is ACCEPTED or override is approved'
               return (
                 <LoadingButton
                   onClick={async () => {
                     const durationStr = window.prompt('Block duration in days (default 7):', '7')
                     if (durationStr === null) return
                     const durationDays = Number(durationStr) || 7
-                    const reason = window.prompt('Reason for block (optional):', '') || ''
+                    const reason = window.prompt(isBlocked ? 'Reason for unblock request (optional):' : 'Reason for block (optional):', '') || ''
                     try {
-                      const resp = await fetchWithAuth(`${API_URL}/api/blocks/request`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ unitId: unitId, durationDays, reason })
-                      })
-                      const data = await resp.json()
-                      if (!resp.ok) notifyError(data?.error?.message || 'Failed to request unit block')
-                      else notifySuccess('Block request submitted for approval.')
+                      if (isBlocked) {
+                        const resp = await fetchWithAuth(`${API_URL}/api/blocks/request-unblock`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ unitId: unitId, reason })
+                        })
+                        const data = await resp.json()
+                        if (!resp.ok) notifyError(data?.error?.message || 'Failed to request unit unblock')
+                        else notifySuccess('Unblock request submitted. Waiting for Financial Manager review.')
+                      } else {
+                        const resp = await fetchWithAuth(`${API_URL}/api/blocks/request`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ unitId: unitId, durationDays, reason })
+                        })
+                        const data = await resp.json()
+                        if (!resp.ok) notifyError(data?.error?.message || 'Failed to request unit block')
+                        else notifySuccess('Block request submitted for approval.')
+                      }
                     } catch (err) {
-                      notifyError(err, 'Failed to request unit block')
+                      notifyError(err, isBlocked ? 'Failed to request unit unblock' : 'Failed to request unit block')
                     }
                   }}
-                  disabled={!canBlock}
-                  style={{ opacity: canBlock ? 1 : 0.6 }}
-                  title={canBlock ? 'Request a block on this unit' : 'Available after plan is ACCEPTED or override is approved'}
+                  disabled={!canBlockOrUnblock}
+                  style={{ opacity: canBlockOrUnblock ? 1 : 0.6 }}
+                  title={title}
                 >
-                  Request Unit Block
+                  {label}
                 </LoadingButton>
               )
             })()}
@@ -1041,7 +1057,9 @@ export default function DealDetail() {
         {(role === 'contract_person' && deal.status === 'approved') && (
           <LoadingButton onClick={() => generateDocFromSaved('contract')}>Generate Contract (PDF)</LoadingButton>
         )}
-        <LoadingButton onClick={generateChecksSheetFromSaved}>Generate Checks Sheet (.xlsx)</LoadingButton>
+        {role === 'financial_admin' && (
+          <LoadingButton onClick={generateChecksSheetFromSaved}>Generate Checks Sheet (.xlsx)</LoadingButton>
+        )}
         <LoadingButton
           onClick={async () => {
             if (!deal.sales_rep_id) {

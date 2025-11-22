@@ -121,6 +121,30 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-11-22 19:30] Unit Unblock workflow via FM → TM and Deal Detail button wiring
+  - API: Refactored api/src/blockManagement.js into a single, clean module and added an explicit unblock workflow:
+    - POST /api/blocks/request-unblock records an unblock request for an active approved block (no direct unit change).
+    - PATCH /api/blocks/:id/unblock-fm-approve lets Financial Manager approve the unblock and forward it to Top Management (unblock_status='pending_tm').
+    - PATCH /api/blocks/:id/unblock-tm-approve lets Top Management approve the unblock; the block is marked expired and the unit becomes AVAILABLE again.
+    - PATCH /api/blocks/:id/unblock-reject lets FM or TM reject the unblock request with an optional reason.
+    - GET /api/blocks/unblock-pending lists pending unblock requests; Financial Manager sees unblock_status='pending_fm', Top Management sees 'pending_tm'.
+    - Blocks schema now includes unblock_* columns (unblock_status, unblock_requested_by/at, reason, fm/tm audit fields) created idempotently at startup.
+  - Client: Deal Detail unit action now calls:
+    - POST /api/blocks/request when the unit is AVAILABLE (“Request Unit Block”).
+    - POST /api/blocks/request-unblock when the unit is BLOCKED (“Request Unit Unblock”), sending only unitId and reason; the request then flows FM → TM as defined above.
+  - Client: Block Requests page now has a toggle for Financial Manager to switch between:
+    - Pending Unit Block Requests (existing /api/blocks/pending queue).
+    - Pending Unit Unblock Requests (new /api/blocks/unblock-pending view), with:
+      - FM actions: Approve Unblock (→ pending_tm) and Reject Unblock.
+      - TM actions: Approve Unblock (actually unblocks the unit) and Reject Unblock.
+  - Files: api/src/blockManagement.js, client/src/deals/DealDetail.jsx, client/src/deals/BlockRequests.jsx.
+- [2025-11-22 18:45] Sales Consultant Deal Detail buttons streamlined
+  - Client: On Deals → Deal Detail, renamed the “Edit in Calculator” action to “Edit Offer” to better match sales language.
+  - Client: On the Sales Consultant view, hid the “Submit for Approval” button (submission is handled elsewhere once offers meet standard criteria).
+  - Client: Removed the “Print Schedule” button from Deal Detail to avoid redundant or confusing exports.
+  - Client: When a unit is already BLOCKED, the consultant’s unit action now shows “Request Unit Unblock” instead of “Request Unit Block” while keeping the same backend request endpoint.
+  - Client: Restricted the “Generate Checks Sheet (.xlsx)” action on Deal Detail to Financial Admin only; consultants no longer see this button (checks-sheet generation remains available for FA via Deal Detail and the calculator exports).
+  - Files: client/src/deals/DealDetail.jsx.
 - [2025-11-22 12:20] CRM Admin Role & Inventory Workflow Refactor
   - Role: Introduced `crm_admin` role for managing unit inventory (creating drafts, requesting changes).
   - Workflow: Inventory drafts are now created by `crm_admin` and must be approved by `Top Management` (CEO, Chairman, Vice Chairman) to become AVAILABLE.
@@ -1051,6 +1075,9 @@ Planned enhancements
 - Override Timeline UI refinements
   - Improve visuals: larger circles, labels under nodes, responsive layout, and hover tooltips with timestamps and approver names.
   - Show the same override timeline on the Sales Manager Approvals page (implemented initial compact timeline badge).
+- TM override visibility on block/unblock workflows
+  - Surface a clear “TM Override (FM bypassed)” badge in block/unblock UI views (e.g., Current Blocks, Block Requests, and any block detail drawer) whenever tm_override=true or when TM approved unblock directly from pending_fm.
+  - Ensure this flag appears both in per-row summaries and in any detailed modal/panel so auditors can see when FM was bypassed.
 - Unit Lifecycle Timeline (future)
   - Add a similar timeline to track unit state across Blocked → Reserved → Contracted (and back if expired/unblocked).
   - Integrate with blocks table and reservation/contract events to display timestamps per transition.

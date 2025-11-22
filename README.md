@@ -121,6 +121,11 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-11-22 11:30] Restore FM Header & Blocked Units Visibility
+  - Client: Inventory list now includes BLOCKED units for Sales Managers and Consultants, displayed with a 'BLOCKED' badge and disabled 'Create Offer' button. This ensures visibility of unavailable inventory.
+  - Client: Restored the "Block Requests" navigation link in the global header for Financial Managers.
+  - Client: Added a "Block Requests" shortcut button on the Deals Dashboard for Sales Managers, Property Consultants, and Financial Managers for quick access.
+  - Files: client/src/deals/InventoryList.jsx, client/src/lib/BrandHeader.jsx, client/src/deals/Dashboard.jsx.
 - [2025-11-22 09:00] Blocking flow: allow blocks based on valid Deals (Draft/Pending)
   - API: Updated POST /api/blocks/request to fallback to checking for a valid Deal if no approved payment plan is found. This allows Consultants to block units immediately after creating a Deal (even if Draft), provided the plan evaluation decision is 'ACCEPT'.
   - Fix: Resolved an issue where `app.js` was importing an outdated backup file (`blockManagement.fixed.js`), preventing fixes from taking effect. Corrected import to `blockManagement.js`.

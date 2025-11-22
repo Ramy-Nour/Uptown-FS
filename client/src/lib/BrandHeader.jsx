@@ -136,25 +136,6 @@ export default function BrandHeader({ title, onLogout }) {
       case 'superadmin':
         return [
           { label: 'Users', href: '/admin/users' },
-          { label: 'Sales Team', href: '/admin/sales' },
-          { label: 'Contracts Team', href: '/admin/contracts-team' },
-          { label: 'Finance Team', href: '/admin/finance-team' },
-          { label: 'Commission Policies', href: '/admin/commission-policies' },
-          { label: 'Payment Thresholds', href: '/admin/payment-thresholds' }
-        ]
-      case 'admin':
-        return [
-          { label: 'Users', href: '/admin/users' },
-          { label: 'Sales Team', href: '/admin/sales' },
-          { label: 'My Inventory Requests', href: '/admin/inventory-change-history' },
-          { label: 'Standard Pricing', href: '/admin/standard-pricing' },
-          { label: 'My Proposals', href: '/deals/my-proposals' }
-        ]
-      case 'sales_manager':
-        return [
-          ...baseWithCalc,
-          queuesLink,
-          { label: 'Offer Progress', href: '/deals/offer-progress' },
           { label: 'Sales Team', href: '/admin/sales-team' },
           { label: 'Team Proposals', href: '/deals/team-proposals' },
           { label: 'Holds', href: '/admin/holds' },

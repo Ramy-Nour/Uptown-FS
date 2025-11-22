@@ -957,14 +957,25 @@ export default function DealDetail() {
                     const durationDays = Number(durationStr) || 7
                     const reason = window.prompt(isBlocked ? 'Reason for unblock request (optional):' : 'Reason for block (optional):', '') || ''
                     try {
-                      const resp = await fetchWithAuth(`${API_URL}/api/blocks/request`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ unitId: unitId, durationDays, reason })
-                      })
-                      const data = await resp.json()
-                      if (!resp.ok) notifyError(data?.error?.message || (isBlocked ? 'Failed to request unit unblock' : 'Failed to request unit block'))
-                      else notifySuccess(isBlocked ? 'Unblock request submitted for approval.' : 'Block request submitted for approval.')
+                      if (isBlocked) {
+                        const resp = await fetchWithAuth(`${API_URL}/api/blocks/request-unblock`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ unitId: unitId, reason })
+                        })
+                        const data = await resp.json()
+                        if (!resp.ok) notifyError(data?.error?.message || 'Failed to request unit unblock')
+                        else notifySuccess('Unblock request submitted. Waiting for Financial Manager review.')
+                      } else {
+                        const resp = await fetchWithAuth(`${API_URL}/api/blocks/request`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ unitId: unitId, durationDays, reason })
+                        })
+                        const data = await resp.json()
+                        if (!resp.ok) notifyError(data?.error?.message || 'Failed to request unit block')
+                        else notifySuccess('Block request submitted for approval.')
+                      }
                     } catch (err) {
                       notifyError(err, isBlocked ? 'Failed to request unit unblock' : 'Failed to request unit block')
                     }

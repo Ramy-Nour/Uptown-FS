@@ -14,6 +14,9 @@ export default function BlockRequests() {
   const [error, setError] = useState('')
   const [cancelling, setCancelling] = useState(new Set())
   const [acting, setActing] = useState(new Set())
+  const [showUnblock, setShowUnblock] = useState(false)
+  const [unblockRows, setUnblockRows] = useState([])
+  const [loadingUnblock, setLoadingUnblock] = useState(false)
 
   const user = (() => {
     try { return JSON.parse(localStorage.getItem('auth_user') || '{}') } catch { return {} }
@@ -37,7 +40,28 @@ export default function BlockRequests() {
     }
   }
 
+  async function loadUnblock() {
+    try {
+      setLoadingUnblock(true)
+      setError('')
+      const resp = await fetchWithAuth(`${API_URL}/api/blocks/unblock-pending`)
+      const data = await resp.json()
+      if (!resp.ok) throw new Error(data?.error?.message || 'Failed to load unblock requests')
+      setUnblockRows(data.requests || [])
+    } catch (e) {
+      setError(e.message || String(e))
+      notifyError(e, 'Failed to load unblock requests')
+    } finally {
+      setLoadingUnblock(false)
+    }
+  }
+
   useEffect(() => { load() }, [])
+  useEffect(() => {
+    if (showUnblock) {
+      loadUnblock()
+    }
+  }, [showUnblock])
 
   const canCancelRow = (r) => {
     if (role === 'sales_manager') return true
@@ -134,121 +158,278 @@ export default function BlockRequests() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-        <h2 style={{ marginTop: 0 }}>Pending Unit Block Requests</h2>
+        <h2 style={{ marginTop: 0 }}>
+          {showUnblock ? 'Pending Unit Unblock Requests' : 'Pending Unit Block Requests'}
+        </h2>
         <div style={{ display: 'flex', gap: 8 }}>
-          <LoadingButton onClick={load} loading={loading} style={btn}>Refresh</LoadingButton>
+          {canFM && (
+            <LoadingButton
+              onClick={() => setShowUnblock(s => !s)}
+              style={btn}
+            >
+              {showUnblock ? 'Show Block Requests' : 'Show Unblock Requests'}
+            </LoadingButton>
+          )}
+          <LoadingButton onClick={showUnblock ? loadUnblock : load} loading={showUnblock ? loadingUnblock : loading} style={btn}>
+            Refresh
+          </LoadingButton>
         </div>
       </div>
       {error ? <p style={{ color: '#e11d48' }}>{error}</p> : null}
       <div style={{ overflow: 'auto', border: '1px solid #e6eaf0', borderRadius: 12 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr>
-              <th style={th}>ID</th>
-              <th style={th}>Unit</th>
-              <th style={th}>Requested By</th>
-              <th style={th}>Duration</th>
-              <th style={th}>Reason</th>
-              <th style={th}>Requested</th>
-              <th style={th}>Override</th>
-              <th style={th}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
-              <tr><td style={td} colSpan={8}>Loading…</td></tr>
-            )}
-            {!loading && rows.map(r => {
-              const st = String(r.override_status || '').toLowerCase()
-              return (
+        {!showUnblock && (
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={th}>ID</th>
+                <th style={th}>Unit</th>
+                <th style={th}>Requested By</th>
+                <th style={th}>Duration</th>
+                <th style={th}>Reason</th>
+                <th style={th}>Requested</th>
+                <th style={th}>Override</th>
+                <th style={th}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading && (
+                <tr><td style={td} colSpan={8}>Loading…</td></tr>
+              )}
+              {!loading && rows.map(r => {
+                const st = String(r.override_status || '').toLowerCase()
+                return (
+                  <tr key={r.id}>
+                    <td style={td}>{r.id}</td>
+                    <td style={td}>{r.unit_code} — {r.unit_type}</td>
+                    <td style={td}>{r.requested_by_email}</td>
+                    <td style={td}>{r.duration_days}</td>
+                    <td style={td}>{r.reason || '-'}</td>
+                    <td style={td}>{r.created_at ? new Date(r.created_at).toLocaleString() : ''}</td>
+                    <td style={td}>{renderOverrideHints(r)}</td>
+                    <td style={{ ...td, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {/* Normal FM decision buttons */}
+                      {canFM && (
+                        <>
+                          <LoadingButton
+                            onClick={() => fmDecision(r.id, 'approve')}
+                            loading={acting.has(r.id)}
+                            style={{ ...btn, border: '1px solid #16a34a', color: '#16a34a' }}
+                            title="Approve block (requires financial ACCEPT or TM override approved)"
+                          >
+                            Approve
+                          </LoadingButton>
+                          <LoadingButton
+                            onClick={() => fmDecision(r.id, 'reject')}
+                            loading={acting.has(r.id)}
+                            style={{ ...btn, border: '1px solid #dc2626', color: '#dc2626' }}
+                          >
+                            Reject
+                          </LoadingButton>
+                        </>
+                      )}
+                      {/* Override chain buttons */}
+                      {isSM && st === 'pending_sm' && (
+                        <LoadingButton
+                          onClick={() => overrideAction(r.id, 'override-sm')}
+                          loading={acting.has(r.id)}
+                          style={{ ...btn, border: '1px solid #1e40af', color: '#1e40af' }}
+                          title="Approve override (Sales Manager) → moves to FM"
+                        >
+                          SM Approve Override
+                        </LoadingButton>
+                      )}
+                      {canFM && st === 'pending_fm' && (
+                        <LoadingButton
+                          onClick={() => overrideAction(r.id, 'override-fm')}
+                          loading={acting.has(r.id)}
+                          style={{ ...btn, border: '1px solid #1e40af', color: '#1e40af' }}
+                          title="Approve override (Financial Manager) → moves to TM"
+                        >
+                          FM Approve Override
+                        </LoadingButton>
+                      )}
+                      {isTM && (st === 'pending_tm' || st === 'pending_sm' || st === 'pending_fm') && (
+                        <LoadingButton
+                          onClick={() => overrideAction(r.id, 'override-tm')}
+                          loading={acting.has(r.id)}
+                          style={{ ...btn, border: '1px solid #1e40af', color: '#1e40af' }}
+                          title="TM can approve override directly (bypass recorded if SM/FM not approved)"
+                        >
+                          TM Approve Override
+                        </LoadingButton>
+                      )}
+                      {(isSM || canFM || isTM) && st && st !== 'approved' && st !== 'rejected' && (
+                        <LoadingButton
+                          onClick={() => overrideAction(r.id, 'override-reject')}
+                          loading={acting.has(r.id)}
+                          style={{ ...btn, border: '1px solid #991b1b', color: '#991b1b' }}
+                          title="Reject override"
+                        >
+                          Reject Override
+                        </LoadingButton>
+                      )}
+                      {canCancelRow(r) && (
+                        <LoadingButton
+                          onClick={() => cancelRequest(r.id)}
+                          loading={cancelling.has(r.id)}
+                          style={{ ...btn, border: '1px solid #9ca3af', color: '#374151' }}
+                        >
+                          Cancel
+                        </LoadingButton>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+              {!loading && rows.length === 0 && (
+                <tr><td style={td} colSpan={8}>No pending block requests.</td></tr>
+              )}
+            </tbody>
+          </table>
+        )}
+        {showUnblock && (
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={th}>ID</th>
+                <th style={th}>Unit</th>
+                <th style={th}>Requested By</th>
+                <th style={th}>Reason</th>
+                <th style={th}>Requested</th>
+                <th style={th}>Status</th>
+                <th style={th}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loadingUnblock && (
+                <tr><td style={td} colSpan={7}>Loading…</td></tr>
+              )}
+              {!loadingUnblock && unblockRows.map(r => (
                 <tr key={r.id}>
                   <td style={td}>{r.id}</td>
                   <td style={td}>{r.unit_code} — {r.unit_type}</td>
-                  <td style={td}>{r.requested_by_email}</td>
-                  <td style={td}>{r.duration_days}</td>
-                  <td style={td}>{r.reason || '-'}</td>
-                  <td style={td}>{r.created_at ? new Date(r.created_at).toLocaleString() : ''}</td>
-                  <td style={td}>{renderOverrideHints(r)}</td>
+                  <td style={td}>{r.requested_by_email || '-'}</td>
+                  <td style={td}>{r.unblock_reason || '-'}</td>
+                  <td style={td}>{r.unblock_requested_at ? new Date(r.unblock_requested_at).toLocaleString() : ''}</td>
+                  <td style={td}>{r.unblock_status || '-'}</td>
                   <td style={{ ...td, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    {/* Normal FM decision buttons */}
                     {canFM && (
                       <>
                         <LoadingButton
-                          onClick={() => fmDecision(r.id, 'approve')}
+                          onClick={async () => {
+                            try {
+                              setActing(s => new Set([...s, r.id]))
+                              const resp = await fetchWithAuth(`${API_URL}/api/blocks/${r.id}/unblock-fm-approve`, {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' }
+                              })
+                              const data = await resp.json().catch(() => ({}))
+                              if (!resp.ok) throw new Error(data?.error?.message || 'Failed to approve unblock')
+                              notifySuccess('Unblock request approved and forwarded to Top Management.')
+                              await loadUnblock()
+                            } catch (e) {
+                              notifyError(e, 'Unable to approve unblock request')
+                            } finally {
+                              setActing(s => { const n = new Set(s); n.delete(r.id); return n })
+                            }
+                          }}
                           loading={acting.has(r.id)}
-                          style={{ ...btn, border: '1px solid #16a34a', color: '#16a34a' }}
-                          title="Approve block (requires financial ACCEPT or TM override approved)"
+                          style={{ ...btn, border: '1px solid #1e40af', color: '#1e40af' }}
+                          title="Approve unblock and forward to Top Management"
                         >
-                          Approve
+                          FM Approve Unblock
                         </LoadingButton>
                         <LoadingButton
-                          onClick={() => fmDecision(r.id, 'reject')}
+                          onClick={async () => {
+                            try {
+                              const reason = window.prompt('Rejection reason (optional):', '') || ''
+                              setActing(s => new Set([...s, r.id]))
+                              const resp = await fetchWithAuth(`${API_URL}/api/blocks/${r.id}/unblock-reject`, {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ reason })
+                              })
+                              const data = await resp.json().catch(() => ({}))
+                              if (!resp.ok) throw new Error(data?.error?.message || 'Failed to reject unblock')
+                              notifySuccess('Unblock request rejected.')
+                              await loadUnblock()
+                            } catch (e) {
+                              notifyError(e, 'Unable to reject unblock request')
+                            } finally {
+                              setActing(s => { const n = new Set(s); n.delete(r.id); return n })
+                            }
+                          }}
                           loading={acting.has(r.id)}
-                          style={{ ...btn, border: '1px solid #dc2626', color: '#dc2626' }}
+                          style={{ ...btn, border: '1px solid #991b1b', color: '#991b1b' }}
+                          title="Reject unblock request"
                         >
-                          Reject
+                          Reject Unblock
                         </LoadingButton>
                       </>
                     )}
-                    {/* Override chain buttons */}
-                    {isSM && st === 'pending_sm' && (
-                      <LoadingButton
-                        onClick={() => overrideAction(r.id, 'override-sm')}
-                        loading={acting.has(r.id)}
-                        style={{ ...btn, border: '1px solid #1e40af', color: '#1e40af' }}
-                        title="Approve override (Sales Manager) → moves to FM"
-                      >
-                        SM Approve Override
-                      </LoadingButton>
-                    )}
-                    {canFM && st === 'pending_fm' && (
-                      <LoadingButton
-                        onClick={() => overrideAction(r.id, 'override-fm')}
-                        loading={acting.has(r.id)}
-                        style={{ ...btn, border: '1px solid #1e40af', color: '#1e40af' }}
-                        title="Approve override (Financial Manager) → moves to TM"
-                      >
-                        FM Approve Override
-                      </LoadingButton>
-                    )}
-                    {isTM && (st === 'pending_tm' || st === 'pending_sm' || st === 'pending_fm') && (
-                      <LoadingButton
-                        onClick={() => overrideAction(r.id, 'override-tm')}
-                        loading={acting.has(r.id)}
-                        style={{ ...btn, border: '1px solid #1e40af', color: '#1e40af' }}
-                        title="TM can approve override directly (bypass recorded if SM/FM not approved)"
-                      >
-                        TM Approve Override
-                      </LoadingButton>
-                    )}
-                    {(isSM || canFM || isTM) && st && st !== 'approved' && st !== 'rejected' && (
-                      <LoadingButton
-                        onClick={() => overrideAction(r.id, 'override-reject')}
-                        loading={acting.has(r.id)}
-                        style={{ ...btn, border: '1px solid #991b1b', color: '#991b1b' }}
-                        title="Reject override"
-                      >
-                        Reject Override
-                      </LoadingButton>
-                    )}
-                    {canCancelRow(r) && (
-                      <LoadingButton
-                        onClick={() => cancelRequest(r.id)}
-                        loading={cancelling.has(r.id)}
-                        style={{ ...btn, border: '1px solid #9ca3af', color: '#374151' }}
-                      >
-                        Cancel
-                      </LoadingButton>
+                    {isTM && (
+                      <>
+                        <LoadingButton
+                          onClick={async () => {
+                            try {
+                              setActing(s => new Set([...s, r.id]))
+                              const resp = await fetchWithAuth(`${API_URL}/api/blocks/${r.id}/unblock-tm-approve`, {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' }
+                              })
+                              const data = await resp.json().catch(() => ({}))
+                              if (!resp.ok) throw new Error(data?.error?.message || 'Failed to approve unblock')
+                              notifySuccess('Unblock request approved. Unit is now AVAILABLE.')
+                              await loadUnblock()
+                            } catch (e) {
+                              notifyError(e, 'Unable to approve unblock request')
+                            } finally {
+                              setActing(s => { const n = new Set(s); n.delete(r.id); return n })
+                            }
+                          }}
+                          loading={acting.has(r.id)}
+                          style={{ ...btn, border: '1px solid #1e40af', color: '#1e40af' }}
+                          title="Top Management approval (unit will be unblocked)"
+                        >
+                          TM Approve Unblock
+                        </LoadingButton>
+                        <LoadingButton
+                          onClick={async () => {
+                            try {
+                              const reason = window.prompt('Rejection reason (optional):', '') || ''
+                              setActing(s => new Set([...s, r.id]))
+                              const resp = await fetchWithAuth(`${API_URL}/api/blocks/${r.id}/unblock-reject`, {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ reason })
+                              })
+                              const data = await resp.json().catch(() => ({}))
+                              if (!resp.ok) throw new Error(data?.error?.message || 'Failed to reject unblock')
+                              notifySuccess('Unblock request rejected.')
+                              await loadUnblock()
+                            } catch (e) {
+                              notifyError(e, 'Unable to reject unblock request')
+                            } finally {
+                              setActing(s => { const n = new Set(s); n.delete(r.id); return n })
+                            }
+                          }}
+                          loading={acting.has(r.id)}
+                          style={{ ...btn, border: '1px solid #991b1b', color: '#991b1b' }}
+                          title="Reject unblock request"
+                        >
+                          Reject Unblock
+                        </LoadingButton>
+                      </>
                     )}
                   </td>
                 </tr>
-              )
-            })}
-            {!loading && rows.length === 0 && (
-              <tr><td style={td} colSpan={8}>No pending block requests.</td></tr>
-            )}
-          </tbody>
-        </table>
+              ))}
+              {!loadingUnblock && unblockRows.length === 0 && (
+                <tr><td style={td} colSpan={7}>No pending unblock requests.</td></tr>
+              )}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   )

@@ -121,6 +121,23 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-11-22 19:30] Unit Unblock workflow via FM → TM and Deal Detail button wiring
+  - API: Refactored api/src/blockManagement.js into a single, clean module and added an explicit unblock workflow:
+    - POST /api/blocks/request-unblock records an unblock request for an active approved block (no direct unit change).
+    - PATCH /api/blocks/:id/unblock-fm-approve lets Financial Manager approve the unblock and forward it to Top Management (unblock_status='pending_tm').
+    - PATCH /api/blocks/:id/unblock-tm-approve lets Top Management approve the unblock; the block is marked expired and the unit becomes AVAILABLE again.
+    - PATCH /api/blocks/:id/unblock-reject lets FM or TM reject the unblock request with an optional reason.
+    - GET /api/blocks/unblock-pending lists pending unblock requests; Financial Manager sees unblock_status='pending_fm', Top Management sees 'pending_tm'.
+    - Blocks schema now includes unblock_* columns (unblock_status, unblock_requested_by/at, reason, fm/tm audit fields) created idempotently at startup.
+  - Client: Deal Detail unit action now calls:
+    - POST /api/blocks/request when the unit is AVAILABLE (“Request Unit Block”).
+    - POST /api/blocks/request-unblock when the unit is BLOCKED (“Request Unit Unblock”), sending only unitId and reason; the request then flows FM → TM as defined above.
+  - Client: Block Requests page now has a toggle for Financial Manager to switch between:
+    - Pending Unit Block Requests (existing /api/blocks/pending queue).
+    - Pending Unit Unblock Requests (new /api/blocks/unblock-pending view), with:
+      - FM actions: Approve Unblock (→ pending_tm) and Reject Unblock.
+      - TM actions: Approve Unblock (actually unblocks the unit) and Reject Unblock.
+  - Files: api/src/blockManagement.js, client/src/deals/DealDetail.jsx, client/src/deals/BlockRequests.jsx.
 - [2025-11-22 18:45] Sales Consultant Deal Detail buttons streamlined
   - Client: On Deals → Deal Detail, renamed the “Edit in Calculator” action to “Edit Offer” to better match sales language.
   - Client: On the Sales Consultant view, hid the “Submit for Approval” button (submission is handled elsewhere once offers meet standard criteria).

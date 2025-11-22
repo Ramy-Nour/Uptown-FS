@@ -381,7 +381,83 @@ export default router
       let planId = approvedPlan.rows[0]?.id || null
 
       // Fallback: Check for a valid Deal (Draft or Pending) with ACCEPT decision
-      // This allows blocking immediately after creating a deal, even if no formal "payment_plan" row exists yet.
+      // TM approve unblock (actually unblocks unit)
+// TM can either:
+// - Approve a normal flow (unblock_status='pending_tm'), or
+// - Override and approve directly when unblock_status='pending_fm' (FM not yet approved).
+router.patch(
+  '/:id/unblock-tm-approve',
+  authMiddleware,
+  requireRole(['ceo', 'chairman', 'vice_chairman', 'top_management']),
+  async (req, res) => {
+    const blockId = Number(req.params.id)
+    if (!Number.isFinite(blockId)) return res.status(400).json({ error: { message: 'Invalid block id' } })
+    try {
+      await ensureBlocksSchema()
+      const bRes = await pool.query('SELECT * FROM blocks WHERE id = $1', [blockId])
+      if (bRes.rows.length === 0) return res.status(404).json({ error: { message: 'Block not found' } })
+      const row = bRes.rows[0]
+      if (row.status !== 'approved') return res.status(400).json({ error: { message: 'Only approved blocks can be unblocked' } })
+
+      const statusBefore = row.unblock_status || null
+      const normalFlow = statusBefore === 'pending_tm'
+      const overrideFlow = statusBefore === 'pending_fm'
+
+      if (!normalFlow && !overrideFlow) {
+        return res.status(400).json({ error: { message: 'Unblock request is not pending FM or TM for TM approval' } })
+      }
+
+      await pool.query(
+        `UPDATE blocks
+         SET unblock_status = 'approved',
+             unblock_tm_id = $1,
+             unblock_tm_at = NOW(),
+             status = 'expired',
+             blocked_until = NOW(),
+             updated_at = NOW()
+         WHERE id = $2`,
+        [req.user.id, blockId]
+      )
+      await pool.query(
+        `UPDATE units
+         SET available = TRUE,
+             unit_status = 'AVAILABLE',
+             updated_at = NOW()
+         WHERE id = $1`,
+        [row.unit_id]
+      )
+
+      // Notify requester and FM, including note when TM bypassed FM
+      try {
+        const baseMsgRequester = 'Top Management approved your unblock request.'
+        const baseMsgFM = 'Top Management approved unblock request and unit is now AVAILABLE.'
+        const suffix = overrideFlow ? ' (TM override: FM stage bypassed).' : ''
+
+        if (row.unblock_requested_by) {
+          await pool.query(
+            `INSERT INTO notifications (user_id, type, ref_table, ref_id, message)
+             VALUES ($1, 'unblock_request_approved', 'blocks', $2, $3)`,
+            [row.unblock_requested_by, blockId, baseMsgRequester + suffix]
+          )
+        }
+        await pool.query(
+          `INSERT INTO notifications (user_id, type, ref_table, ref_id, message)
+           SELECT u.id, 'unblock_request_approved', 'blocks', $1, $2
+           FROM users u
+           WHERE u.role = 'financial_manager' AND u.active = TRUE`,
+          [blockId, baseMsgFM + suffix]
+        )
+      } catch (_) {}
+
+      return res.json({ ok: true, unblock_status: 'approved', tm_override: overrideFlow })
+    } catch (error) {
+      console.error('Unblock TM approve error:', error)
+      return res.status(500).json({ error: { message: 'Internal error' } })
+    }
+  }
+)
+
+// Reject unblock (FM or TM)his allows blocking immediately after creating a deal, even if no formal "payment_plan" row exists yet.
       if (!hasValidPlan) {
         const validDeal = await pool.query(
           `

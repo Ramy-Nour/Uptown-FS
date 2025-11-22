@@ -37,6 +37,7 @@ import planningRoutes from './planningRoutes.js'
 import notificationsRoutes from './notificationsRoutes.js'
 import contractsRoutes from './contractsRoutes.js'
 import blockOverridesRoutes from './blockOverrides.js'
+import { authMiddleware } from './authRoutes.js'
 
 // NEW IMPORTS - Add these
 import roleManagementRoutes from './roleManagement.js'
@@ -165,7 +166,7 @@ async function getActivePolicyLimitPercent() {
  * - Placeholders in the .docx should use Autocrat-style delimiters: <<placeholder_name>>
  * - Service will also add "*_words" fields for numeric values in data using the requested language
  */
-app.post('/api/generate-document', validate(generateDocumentSchema), async (req, res) => {
+app.post('/api/generate-document', authMiddleware, validate(generateDocumentSchema), async (req, res) => {
   try {
     let { templateName, documentType, deal_id, data, language, currency } = req.body || {}
     const role = req.user?.role
@@ -213,7 +214,8 @@ app.post('/api/generate-document', validate(generateDocumentSchema), async (req,
         return bad(res, 403, `Forbidden: role ${role} cannot generate ${type}`)
       }
       // If a deal_id is provided, ensure the deal is approved before allowing generation
-      if (deal_id != null) {
+      // Note: Pricing Form (client offer) is allowed for draft deals so consultants can print offers.
+      if (deal_id != null && type !== 'pricing_form') {
         const id = Number(deal_id)
         if (!Number.isFinite(id) || id <= 0) {
           return bad(res, 400, 'deal_id must be a positive number')

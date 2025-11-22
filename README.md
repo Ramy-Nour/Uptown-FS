@@ -121,6 +121,13 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-11-22 18:45] Sales Consultant Deal Detail buttons streamlined
+  - Client: On Deals → Deal Detail, renamed the “Edit in Calculator” action to “Edit Offer” to better match sales language.
+  - Client: On the Sales Consultant view, hid the “Submit for Approval” button (submission is handled elsewhere once offers meet standard criteria).
+  - Client: Removed the “Print Schedule” button from Deal Detail to avoid redundant or confusing exports.
+  - Client: When a unit is already BLOCKED, the consultant’s unit action now shows “Request Unit Unblock” instead of “Request Unit Block” while keeping the same backend request endpoint.
+  - Client: Restricted the “Generate Checks Sheet (.xlsx)” action on Deal Detail to Financial Admin only; consultants no longer see this button (checks-sheet generation remains available for FA via Deal Detail and the calculator exports).
+  - Files: client/src/deals/DealDetail.jsx.
 - [2025-11-22 12:20] CRM Admin Role & Inventory Workflow Refactor
   - Role: Introduced `crm_admin` role for managing unit inventory (creating drafts, requesting changes).
   - Workflow: Inventory drafts are now created by `crm_admin` and must be approved by `Top Management` (CEO, Chairman, Vice Chairman) to become AVAILABLE.

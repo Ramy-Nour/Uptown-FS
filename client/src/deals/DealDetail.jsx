@@ -884,6 +884,27 @@ export default function DealDetail() {
             Submit for Approval
           </LoadingButton>
         )}
+        
+        {/* Sales Manager Approval Action */}
+        {(role === 'sales_manager' && deal.status === 'pending_approval') && (
+          <LoadingButton
+            onClick={async () => {
+              if (!window.confirm('Approve this deal?')) return
+              try {
+                const resp = await fetchWithAuth(`${API_URL}/api/deals/${id}/approve`, { method: 'POST' })
+                const data = await resp.json()
+                if (!resp.ok) notifyError(data?.error?.message || 'Approval failed')
+                else { notifySuccess('Deal approved.'); await load() }
+              } catch (err) {
+                notifyError(err, 'Approval failed')
+              }
+            }}
+            variant="primary"
+            style={{ background: '#10b981', borderColor: '#10b981' }}
+          >
+            Approve Deal
+          </LoadingButton>
+        )}
 
         {/* Request Override button for Property Consultant or Managers when evaluation is REJECT */}
         {evaluation?.decision === 'REJECT' && (role === 'property_consultant' || role === 'sales_manager' || role === 'financial_manager' || role === 'admin' || role === 'superadmin') && (
@@ -912,7 +933,7 @@ export default function DealDetail() {
           </LoadingButton>
         )}
         <LoadingButton onClick={printSchedule}>Print Schedule</LoadingButton>
-        {(role === 'property_consultant' && deal.status === 'approved') && (
+        {(role === 'property_consultant' && (deal.status === 'approved' || deal.status === 'draft')) && (
           <>
             <LoadingButton onClick={() => generateDocFromSaved('pricing_form')}>Print Offer (Pricing Form PDF)</LoadingButton>
             {/* Allow Request Unit Block only when plan accepted or override approved */}

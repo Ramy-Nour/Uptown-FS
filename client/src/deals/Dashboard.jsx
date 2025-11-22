@@ -33,6 +33,7 @@ export default function Dashboard() {
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
   const [deletingIds, setDeletingIds] = useState(new Set())
+  const user = JSON.parse(localStorage.getItem('auth_user') || '{}')
 
   async function load(p = page) {
     try {
@@ -392,6 +393,26 @@ export default function Dashboard() {
                   <td style={td}>{d.created_at ? new Date(d.created_at).toLocaleString() : ''}</td>
                   <td style={{ ...td, display: 'flex', gap: 8 }}>
                     <Link to={`/deals/${d.id}`} style={{ textDecoration: 'none', color: '#1f6feb' }}>View</Link>
+                    {(user?.role === 'sales_manager' && d.status === 'pending_approval') && (
+                      <LoadingButton
+                        onClick={async () => {
+                          if (!window.confirm(`Approve deal #${d.id}?`)) return
+                          try {
+                            const resp = await fetchWithAuth(`${API_URL}/api/deals/${d.id}/approve`, { method: 'POST' })
+                            if (!resp.ok) {
+                                const data = await resp.json()
+                                notifyError(data?.error?.message || 'Approval failed')
+                            } else {
+                                notifySuccess('Deal approved')
+                                load(page)
+                            }
+                          } catch (e) { notifyError(e, 'Approval failed') }
+                        }}
+                        style={{ ...btn, color: '#10b981', borderColor: '#10b981' }}
+                      >
+                        Approve
+                      </LoadingButton>
+                    )}
                     <LoadingButton
                       onClick={() => handleDelete(d)}
                       loading={deletingIds.has(d.id)}

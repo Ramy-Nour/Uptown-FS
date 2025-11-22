@@ -226,10 +226,16 @@ export default function CreateDeal() {
         setError('Select a unit from Inventory first.')
         return
       }
+      
+      // Auto-save as draft first if not already saved (we don't have a deal ID yet)
+      // But wait, CreateDeal doesn't have a deal ID in state until saved.
+      // We need to save it first.
+      
       const durationStr = window.prompt('Block duration in days (default 7):', '7')
       if (durationStr === null) return
       const durationDays = Number(durationStr) || 7
       const reason = window.prompt('Reason for block (optional):', '') || ''
+      
       // Derive decision from embedded calculator snapshot if available
       let decision = null
       try {
@@ -239,6 +245,29 @@ export default function CreateDeal() {
           decision = snap?.generatedPlan?.evaluation?.decision || snap?.evaluation?.decision || null
         }
       } catch {}
+
+      setLoading(true)
+      // 1. Save as Draft
+      const payload = await buildPayloadFromSnapshot()
+      // Validate minimal offer info
+      const snap = payload.details?.calculator
+      const v = validateOfferSnapshot(snap)
+      if (!v.ok) {
+        throw new Error(`Missing required fields: ${v.missing.join(', ')}`)
+      }
+      const saveResp = await fetchWithAuth(`${API_URL}/api/deals`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      const saveData = await saveResp.json()
+      if (!saveResp.ok) throw new Error(saveData?.error?.message || 'Failed to auto-save deal before blocking')
+      
+      // 2. Request Block using the new Deal ID (implicitly linked via user/unit, but we should probably pass deal_id if the API supported it, 
+      // but the API currently looks up by unit_id and user. 
+      // However, the FIX we implemented in blockManagement.js looks for a DEAL created by the user for this unit.
+      // So simply having the deal saved in the DB is enough for the check to pass.)
+      
       const resp = await fetchWithAuth(`${API_URL}/api/blocks/request`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -246,9 +275,15 @@ export default function CreateDeal() {
       })
       const data = await resp.json()
       if (!resp.ok) throw new Error(data?.error?.message || 'Failed to request unit block')
+      
       alert('Block request submitted for approval.')
+      // Navigate to the new deal
+      navigate(`/deals/${saveData.deal.id}`)
+      
     } catch (e) {
       setError(e.message || String(e))
+    } finally {
+      setLoading(false)
     }
   }
 

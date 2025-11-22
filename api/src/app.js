@@ -72,6 +72,8 @@ app.use('/api/auth', authRoutes)
 app.use('/api/deals', dealsRoutes)
 app.use('/api/units', unitsRoutes)
 app.use('/api/inventory', inventoryRoutes)
+app.use('/api/sales', salesPeopleRoutes)
+app.use('/api/commission-policies', commissionPoliciesRoutes)
 app.use('/api/standard-plan', standardPlanRoutes)
 app.use('/api/pricing', pricingRoutes) // Unit model pricing (FM/TM)
 app.use('/api/workflow', workflowRoutes) // Queues, approvals, teams

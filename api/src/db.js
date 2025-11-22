@@ -45,6 +45,7 @@ export async function initDb() {
       'property_consultant',
       'financial_admin',
       'financial_manager',
+      'crm_admin',
       'contract_person',
       'contract_manager',
       'chairman',
@@ -275,168 +276,16 @@ export async function initDb() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       UNIQUE (manager_user_id, member_user_id)
     );
-
-    -- Audit log for admin-initiated changes to users
-    CREATE TABLE IF NOT EXISTS user_audit_log (
-      id SERIAL PRIMARY KEY,
-      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      action TEXT NOT NULL,
-      changed_by INTEGER NOT NULL REFERENCES users(id) ON DELETE SET NULL,
-      details JSONB DEFAULT '{}'::jsonb,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    );
-
-    -- Trigger function
-    CREATE OR REPLACE FUNCTION trigger_set_timestamp()
-    RETURNS TRIGGER AS $$
-    BEGIN
-      NEW.updated_at = NOW();
-      RETURN NEW;
-    END;
-    $$ LANGUAGE plpgsql;
-
-    -- Create triggers if they don't already exist
-    DO $$
-    BEGIN
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_trigger WHERE tgname = 'set_timestamp_users'
-      ) THEN
-        CREATE TRIGGER set_timestamp_users
-        BEFORE UPDATE ON users
-        FOR EACH ROW
-        EXECUTE FUNCTION trigger_set_timestamp();
-      END IF;
-
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_trigger WHERE tgname = 'set_timestamp_deals'
-      ) THEN
-        CREATE TRIGGER set_timestamp_deals
-        BEFORE UPDATE ON deals
-        FOR EACH ROW
-        EXECUTE FUNCTION trigger_set_timestamp();
-      END IF;
-
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_trigger WHERE tgname = 'set_timestamp_units'
-      ) THEN
-        CREATE TRIGGER set_timestamp_units
-        BEFORE UPDATE ON units
-        FOR EACH ROW
-        EXECUTE FUNCTION trigger_set_timestamp();
-      END IF;
-
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_trigger WHERE tgname = 'set_timestamp_sales_people'
-      ) THEN
-        CREATE TRIGGER set_timestamp_sales_people
-        BEFORE UPDATE ON sales_people
-        FOR EACH ROW
-        EXECUTE FUNCTION trigger_set_timestamp();
-      END IF;
-
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_trigger WHERE tgname = 'set_timestamp_commission_policies'
-      ) THEN
-        CREATE TRIGGER set_timestamp_commission_policies
-        BEFORE UPDATE ON commission_policies
-        FOR EACH ROW
-        EXECUTE FUNCTION trigger_set_timestamp();
-      END IF;
-
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_trigger WHERE tgname = 'set_timestamp_deal_commissions'
-      ) THEN
-        CREATE TRIGGER set_timestamp_deal_commissions
-        BEFORE UPDATE ON deal_commissions
-        FOR EACH ROW
-        EXECUTE FUNCTION trigger_set_timestamp();
-      END IF;
-
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_trigger WHERE tgname = 'set_timestamp_customers'
-      ) THEN
-        CREATE TRIGGER set_timestamp_customers
-        BEFORE UPDATE ON customers
-        FOR EACH ROW
-        EXECUTE FUNCTION trigger_set_timestamp();
-      END IF;
-
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_trigger WHERE tgname = 'set_timestamp_offers'
-      ) THEN
-        CREATE TRIGGER set_timestamp_offers
-        BEFORE UPDATE ON offers
-        FOR EACH ROW
-        EXECUTE FUNCTION trigger_set_timestamp();
-      END IF;
-
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_trigger WHERE tgname = 'set_timestamp_blocks'
-      ) THEN
-        CREATE TRIGGER set_timestamp_blocks
-        BEFORE UPDATE ON blocks
-        FOR EACH ROW
-        EXECUTE FUNCTION trigger_set_timestamp();
-      END IF;
-
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_trigger WHERE tgname = 'set_timestamp_notifications'
-      ) THEN
-        CREATE TRIGGER set_timestamp_notifications
-        BEFORE UPDATE ON notifications
-        FOR EACH ROW
-        EXECUTE FUNCTION trigger_set_timestamp();
-      END IF;
-
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_trigger WHERE tgname = 'set_timestamp_approval_policies'
-      ) THEN
-        CREATE TRIGGER set_timestamp_approval_policies
-        BEFORE UPDATE ON approval_policies
-        FOR EACH ROW
-        EXECUTE FUNCTION trigger_set_timestamp();
-      END IF;
-
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_trigger WHERE tgname = 'set_timestamp_sales_team_members'
-      ) THEN
-        CREATE TRIGGER set_timestamp_sales_team_members
-        BEFORE UPDATE ON sales_team_members
-        FOR EACH ROW
-        EXECUTE FUNCTION trigger_set_timestamp();
-      END IF;
-
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_trigger WHERE tgname = 'set_timestamp_contracts_team_members'
-      ) THEN
-        CREATE TRIGGER set_timestamp_contracts_team_members
-        BEFORE UPDATE ON contracts_team_members
-        FOR EACH ROW
-        EXECUTE FUNCTION trigger_set_timestamp();
-      END IF;
-
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_trigger WHERE tgname = 'set_timestamp_finance_team_members'
-      ) THEN
-        CREATE TRIGGER set_timestamp_finance_team_members
-        BEFORE UPDATE ON finance_team_members
-        FOR EACH ROW
-        EXECUTE FUNCTION trigger_set_timestamp();
-      END IF;
-    END;
-    $$;
   `)
 
-  // Seed initial admin if table empty
-  const count = await pool.query('SELECT COUNT(*)::int AS c FROM users')
-  if ((count.rows[0]?.c || 0) === 0) {
-    const email = String(ADMIN_EMAIL || '').trim().toLowerCase()
-    const pass = String(ADMIN_PASSWORD || 'admin123456')
-    const hash = await bcrypt.hash(pass, 10)
+  // Seed default admin if not exists
+  const { rows } = await pool.query('SELECT * FROM users WHERE email = $1', [ADMIN_EMAIL])
+  if (rows.length === 0) {
+    const hash = await bcrypt.hash(ADMIN_PASSWORD, 10)
     await pool.query(
       'INSERT INTO users (email, password_hash, role) VALUES ($1, $2, $3)',
-      [email || 'admin@example.com', hash, 'admin']
+      [ADMIN_EMAIL, hash, 'admin']
     )
-    console.log(`Seeded initial admin user: ${email || 'admin@example.com'}`)
+    console.log(`Seeded admin user: ${ADMIN_EMAIL}`)
   }
 }

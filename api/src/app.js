@@ -41,7 +41,7 @@ import blockOverridesRoutes from './blockOverrides.js'
 // NEW IMPORTS - Add these
 import roleManagementRoutes from './roleManagement.js'
 import offerWorkflowRoutes from './offerWorkflow.js'
-import blockManagementRoutes from './blockManagement.fixed.js'
+import blockManagementRoutes from './blockManagement.js'
 import customerRoutes from './customerRoutes.js'
 import notificationService from './notificationService.js'
 import dashboardRoutes from './dashboardRoutes.js'

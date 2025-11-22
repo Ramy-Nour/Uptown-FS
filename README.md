@@ -121,6 +121,11 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-11-22 20:10] Consultant unblock prompt and Pricing Form permissions
+  - Client: When a Property Consultant requests “Request Unit Unblock” from Deal Detail, the UI no longer asks for a block duration. Only an optional reason is collected and sent to POST /api/blocks/request-unblock, matching the backend unblock workflow.
+  - API: Secured POST /api/generate-document with authMiddleware so req.user.role is always populated, preventing “Forbidden: role undefined cannot generate pricing_form” errors for authenticated users.
+  - API: Relaxed deal status enforcement for Pricing Form generation — documentType='pricing_form' can now be generated for draft deals (deal_id is allowed without requiring status='approved'), while Reservation Form and Contract still require approved deals and any needed override.
+  - Files: client/src/deals/DealDetail.jsx, api/src/app.js.
 - [2025-11-22 19:30] Unit Unblock workflow via FM → TM and Deal Detail button wiring
   - API: Refactored api/src/blockManagement.js into a single, clean module and added an explicit unblock workflow:
     - POST /api/blocks/request-unblock records an unblock request for an active approved block (no direct unit change).
@@ -128,7 +133,6 @@ Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track 
     - PATCH /api/blocks/:id/unblock-tm-approve lets Top Management approve the unblock; the block is marked expired and the unit becomes AVAILABLE again.
     - PATCH /api/blocks/:id/unblock-reject lets FM or TM reject the unblock request with an optional reason.
     - GET /api/blocks/unblock-pending lists pending unblock requests; Financial Manager sees unblock_status='pending_fm', Top Management sees 'pending_tm'.
-    - Blocks schema now includes unblock_* columns (unblock_status, unblock_requested_by/at, reason, fm/tm audit fields) created idempotently at startup.
   - Client: Deal Detail unit action now calls:
     - POST /api/blocks/request when the unit is AVAILABLE (“Request Unit Block”).
     - POST /api/blocks/request-unblock when the unit is BLOCKED (“Request Unit Unblock”), sending only unitId and reason; the request then flows FM → TM as defined above.

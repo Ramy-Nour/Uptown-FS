@@ -952,25 +952,32 @@ export default function DealDetail() {
               return (
                 <LoadingButton
                   onClick={async () => {
-                    const durationStr = window.prompt('Block duration in days (default 7):', '7')
-                    if (durationStr === null) return
-                    const durationDays = Number(durationStr) || 7
-                    const reason = window.prompt(isBlocked ? 'Reason for unblock request (optional):' : 'Reason for block (optional):', '') || ''
+                    const reason = window.prompt(isBlocked ? 'Reason for unblock request (optional):' : 'Block duration in days (default 7) and optional reason will be requested.', '')
+                    if (reason === null && !isBlocked) {
+                      // If user cancels at the first prompt for a new block, just exit
+                      return
+                    }
                     try {
                       if (isBlocked) {
+                        // Unblock requests do not require a duration; only send unitId and optional reason
                         const resp = await fetchWithAuth(`${API_URL}/api/blocks/request-unblock`, {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ unitId: unitId, reason })
+                          body: JSON.stringify({ unitId: unitId, reason: reason || '' })
                         })
                         const data = await resp.json()
                         if (!resp.ok) notifyError(data?.error?.message || 'Failed to request unit unblock')
                         else notifySuccess('Unblock request submitted. Waiting for Financial Manager review.')
                       } else {
+                        // For new blocks, ask for duration days after confirming intent
+                        const durationStr = window.prompt('Block duration in days (default 7):', '7')
+                        if (durationStr === null) return
+                        const durationDays = Number(durationStr) || 7
+                        const blockReason = reason || window.prompt('Reason for block (optional):', '') || ''
                         const resp = await fetchWithAuth(`${API_URL}/api/blocks/request`, {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ unitId: unitId, durationDays, reason })
+                          body: JSON.stringify({ unitId: unitId, durationDays, reason: blockReason })
                         })
                         const data = await resp.json()
                         if (!resp.ok) notifyError(data?.error?.message || 'Failed to request unit block')

@@ -121,9 +121,10 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
-- [2025-11-22 12:00] Document CRM sub-role for future inventory draft creation
-  - README: Recorded a future action item to introduce a CRM Admin sub-role responsible for creating inventory unit drafts (units linked to a Unit Model with approved standard pricing), instead of Financial Admin.
-  - README: Clarified that implementation will require backend role/route updates and frontend admin UI changes, but no code changes were made in this step.
+- [2025-11-22 12:00] CRM Admin vs Financial Admin responsibilities – future adjustments
+  - README: Documented two follow-up actions for the already-implemented CRM Admin inventory role:
+    - Adjust exactly which pages Financial Admin should still see (for example, whether they keep or lose specific admin pages).
+    - Add a small visual tag in the UI clearly separating “CRM Admin” vs “Financial Admin” responsibilities for training and onboarding.
 - [2025-11-22 11:30] Restore FM Header & Blocked Units Visibility
   - Client: Inventory list now includes BLOCKED units for Sales Managers and Consultants, displayed with a 'BLOCKED' badge and disabled 'Create Offer' button. This ensures visibility of unavailable inventory.
   - Client: Restored the "Block Requests" navigation link in the global header for Financial Managers.

@@ -121,6 +121,12 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-11-22 12:20] CRM Admin inventory role + Top Management draft approvals
+  - API: Added a new crm_admin role and granted it inventory-management capabilities previously held by Financial Admin (create/read/update unit drafts via /api/inventory/units, request changes on approved units, and view inventory change history). Financial Admin remains responsible for reservations, documents, and other finance workflows.
+  - API: Inventory draft approval endpoints now require Top Management roles (ceo/chairman/vice_chairman/top_management) instead of Financial Manager; new draft notifications go to Top Management.
+  - Client: Introduced CRM Admin navigation (Inventory + My Inventory Requests) and moved the Inventory Drafts approval page from the Financial Manager menu to the Top Management menu. Units Catalog now uses the CRM Admin draft flow and updated helper text.
+  - Client: Updated inventory-related empty‑state and help text to reference CRM Admin and Top Management (Deals → Inventory, Admin → Inventory Drafts, Admin → Inventory Changes).
+  - Files: api/src/authRoutes.js, api/src/inventoryRoutes.js, api/src/unitsRoutes.js, client/src/lib/BrandHeader.jsx, client/src/main.jsx, client/src/admin/Users.jsx, client/src/admin/Units.jsx, client/src/admin/InventoryDrafts.jsx, client/src/admin/InventoryChanges.jsx.jsx, client/src/admin/InventoryChangeHistory.jsx.jsx, client/src/deals/InventoryList.jsx.
 - [2025-11-22 11:30] Restore FM Header & Blocked Units Visibility
   - Client: Inventory list now includes BLOCKED units for Sales Managers and Consultants, displayed with a 'BLOCKED' badge and disabled 'Create Offer' button. This ensures visibility of unavailable inventory.
   - Client: Restored the "Block Requests" navigation link in the global header for Financial Managers.
@@ -577,7 +583,7 @@ Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track 
 - Added .devcontainer/devcontainer.json with forwardPorts and postStartCommand.
 - Vite HMR configured for Codespaces (wss + origin).
 - Docker Compose passes Codespaces env vars into client service.
-- Inventory deals page now shows a clear empty-state message for sales roles. It explains that units only appear after: (1) Financial Admin creates drafts linked to a Unit Model with approved standard pricing, and (2) Financial Manager approves the drafts to mark them AVAILABLE. This helps when inventory appears in Admin pages but not under Deals → Inventory.
+- Inventory deals page now shows a clear empty-state message for sales roles. It explains that units only appear after: (1) CRM Admin creates drafts linked to a Unit Model with approved standard pricing, and (2) Top Management approves the drafts to mark them AVAILABLE. This helps when inventory appears in Admin pages but not under Deals → Inventory.
 - Client Information enhanced: added Birth Date and moved the Egyptian ID scanner into the Client Information section (ClientIdScanner) so consultants can scan and auto-fill name, ID, address directly.
 - Create Deal page: “Unit Type” relabeled to “Unit Model” and now displays model_code — model_name when available.
 - Acceptance evaluation fix: PV rule now passes when Proposed PV ≤ Standard PV × tolerance (equality allowed). Previously it required ≥, which caused a false FAIL at 0 difference. Also added small epsilon to avoid float rounding issues.
@@ -796,7 +802,7 @@ API integration tests:
 This section describes how each primary page works, who can use it, and the key buttons and actions available. Use this as a quick help reference per role. Links and labels are given as they appear in the app.
 
 General notes
-- Roles: property_consultant, sales_manager, financial_admin, financial_manager, contract_person, admin/superadmin (admin pages).
+- Roles: property_consultant, sales_manager, financial_admin, crm_admin, financial_manager, contract_person, admin/superadmin (admin pages).
 - Date pickers accept calendar dates; if a date is optional and left empty, defaults are applied as documented (e.g., Maintenance Deposit defaults to the Handover date).
 - The app supports English and Arabic. Toggle “Language for Written Amounts” in Calculator to affect number-to-words output.
 
@@ -867,7 +873,7 @@ General notes
 
 6) Admin Pages (various)
 - Purpose: Configuration, pricing, approvals, thresholds.
-- Who: financial_admin, financial_manager, contract_person, admin/superadmin.
+- Who: financial_admin, crm_admin, financial_manager, contract_person, admin/superadmin.
 - Examples
   - Standard Pricing: configure per-model nominal components; approve to propagate to units (base price, area).
   - Standard Plan: configure annual rate, duration, frequency; becomes authoritative baseline.
@@ -903,10 +909,11 @@ Note: This section is a draft for stakeholder review. It distinguishes between C
 
 Actors
 - Financial Manager (FM)
-- Top Management (TM: CEO/Chairman/Vice Chairman)
+- Top Management (TM: CEO/Chairman/Vice Chairman/Top Management)
 - Property Consultant (PC)
 - Sales Manager (SM)
 - Financial Admin (FA)
+- CRM Admin (CRM)
 - Contract Admin (CA)
 - Contract Manager (CM)
 
@@ -938,10 +945,10 @@ Phase 1: Models, Standard Terms, and Inventory
 - Planned Enforcement: none
 
 4) Inventory (units)
-- Owner: FA creates drafts; FM approves to AVAILABLE
+- Owner: CRM Admin creates drafts; Top Management (TM) approves to AVAILABLE
 - Current Enforcement:
-  - FA: POST /api/inventory/units (requires approved model pricing) → unit_status='INVENTORY_DRAFT'
-  - FM: PATCH /api/inventory/units/:id/approve → unit_status='AVAILABLE'
+  - CRM Admin: POST /api/inventory/units (requires approved model pricing) → unit_status='INVENTORY_DRAFT'
+  - TM: PATCH /api/inventory/units/:id/approve → unit_status='AVAILABLE'
   - Sales roles only see AVAILABLE units in /api/inventory/units
 - Planned Enforcement: none
 
@@ -1019,7 +1026,7 @@ Key endpoints reference
 - Models: /api/inventory/unit-models, /api/inventory/unit-models/changes (approve by TM)
 - Standard Plan: /api/standard-plan (current), [Planned] approvals by TM
 - Standard Pricing: /api/workflow/standard-pricing (FM create) → approve by TM
-- Inventory Units: /api/inventory/units (FA create draft; FM approve to AVAILABLE)
+- Inventory Units: /api/inventory/units (CRM Admin create draft; TM approve to AVAILABLE)
 - Deals/Offers: /api/deals, /api/deals/:id/submit
 - Payment Plans: /api/workflow/payment-plans, /api/workflow/payment-plans/approved-for-unit
 - Blocks: /api/blocks/request, /api/blocks/:id/approve, /api/blocks/current

@@ -175,7 +175,7 @@ export default function InventoryChanges() {
             </tbody>
           </table>
         </div>
-        <p style={metaText}>Change requests are submitted by Financial Admin on approved units. Approving an update applies the proposed fields; approving a delete removes the unit.</p>
+        <p style={metaText}>Change requests are submitted by CRM Admin on approved units. Approving an update applies the proposed fields; approving a delete removes the unit.</p>
       </div>
       <PromptModal
         open={!!promptRejectId}

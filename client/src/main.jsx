@@ -57,25 +57,26 @@ function PrivateRoute({ children }) {
 }
 
 function HomeRedirect() {
-  const token = localStorage.getItem('auth_token')
-  const user = JSON.parse(localStorage.getItem('auth_user') || '{}')
-  if (!token) {
-    return <Navigate to="/login" replace />
-  }
-  const role = user?.role
-  // Role-based landing
-  if (role === 'superadmin') return <Navigate to="/admin/users" replace />
-  if (role === 'admin') return <Navigate to="/admin/users" replace />
-  if (role === 'property_consultant') return <Navigate to="/deals/create" replace />
-  if (role === 'sales_manager') return <Navigate to="/deals/queues" replace />
-  if (role === 'financial_manager') return <Navigate to="/admin/standard-pricing" replace />
-  if (role === 'financial_admin') return <Navigate to="/admin/standard-pricing" replace />
-  if (role === 'contract_manager') return <Navigate to="/admin/hold-approvals" replace />
-  if (role === 'ceo' || role === 'chairman' || role === 'vice_chairman' || role === 'top_management') {
-    return <Navigate to="/deals/queues" replace />
-  }
-  // default
-  return <Navigate to="/deals" replace />
+  const token = localStorage.getItem('auth_token')
+  const user = JSON.parse(localStorage.getItem('auth_user') || '{}')
+  if (!token) {
+    return <Navigate to="/login" replace />
+  }
+  const role = user?.role
+  // Role-based landing
+  if (role === 'superadmin') return <Navigate to="/admin/users" replace />
+  if (role === 'admin') return <Navigate to="/admin/users" replace />
+  if (role === 'property_consultant') return <Navigate to="/deals/create" replace />
+  if (role === 'sales_manager') return <Navigate to="/deals/queues" replace />
+  if (role === 'financial_manager') return <Navigate to="/admin/standard-pricing" replace />
+  if (role === 'crm_admin') return <Navigate to="/admin/inventory" replace />
+  if (role === 'financial_admin') return <Navigate to="/admin/standard-pricing" replace />
+  if (role === 'contract_manager') return <Navigate to="/admin/hold-approvals" replace />
+  if (role === 'ceo' || role === 'chairman' || role === 'vice_chairman' || role === 'top_management') {
+    return <Navigate to="/deals/queues" replace />
+  }
+  // default
+  return <Navigate to="/deals" replace />
 }
 
 createRoot(document.getElementById('root')).render(
@@ -163,7 +164,7 @@ createRoot(document.getElementById('root')).render(
           <Route
             path="/admin/inventory"
             element={
-              <RoleBasedRoute allowedRoles={['financial_admin', 'superadmin']}>
+              <RoleBasedRoute allowedRoles={['crm_admin', 'superadmin']}>
                 <Units />
               </RoleBasedRoute>
             }
@@ -171,7 +172,7 @@ createRoot(document.getElementById('root')).render(
           <Route
             path="/admin/inventory-change-history"
             element={
-              <RoleBasedRoute allowedRoles={['financial_admin']}>
+              <RoleBasedRoute allowedRoles={['financial_admin','crm_admin']}>
                 <InventoryChangeHistory />
               </RoleBasedRoute>
             }
@@ -179,7 +180,7 @@ createRoot(document.getElementById('root')).render(
           <Route
             path="/admin/inventory-drafts"
             element={
-              <RoleBasedRoute allowedRoles={['financial_manager']}>
+              <RoleBasedRoute allowedRoles={['ceo', 'chairman', 'vice_chairman', 'top_management']}>
                 <InventoryDrafts />
               </RoleBasedRoute>
             }

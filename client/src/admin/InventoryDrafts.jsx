@@ -107,7 +107,7 @@ export default function InventoryDrafts() {
     <div>
       <BrandHeader onLogout={handleLogout} />
       <div style={pageContainer}>
-        <h2 style={pageTitle}>Inventory Drafts Approval (Financial Manager)</h2>
+        <h2 style={pageTitle}>Inventory Drafts Approval (Top Management)</h2>
         {error ? <p style={errorText}>{error}</p> : null}
         <div style={tableWrap}>
           <table style={table}>
@@ -153,7 +153,7 @@ export default function InventoryDrafts() {
           </table>
         </div>
         <p style={metaText}>
-          Notes: Draft units are created by Financial Admin already linked to a Unit Model with approved standard pricing. Once approved, they become AVAILABLE.
+          Notes: Draft units are created by CRM Admin already linked to a Unit Model with approved standard pricing. Once approved by Top Management, they become AVAILABLE.
         </p>
       </div>
       <ConfirmModal

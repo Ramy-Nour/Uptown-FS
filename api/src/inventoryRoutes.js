@@ -39,7 +39,7 @@ async function createUnitModelChange(client, { action, model_id = null, payload 
 // --------------------
 // Unit Models (read list)
 // --------------------
-router.get('/unit-models', authMiddleware, requireRole(['financial_manager', 'financial_admin', 'ceo', 'chairman', 'vice_chairman']), async (req, res) => {
+router.get('/unit-models', authMiddleware, requireRole(['financial_manager', 'financial_admin', 'crm_admin', 'ceo', 'chairman', 'vice_chairman']), async (req, res) => {
   try {
     const { search, page = 1, pageSize = 20 } = req.query || {}
     const p = Math.max(1, Number(page) || 1)
@@ -404,7 +404,7 @@ router.patch('/unit-models/changes/:id/reject', authMiddleware, requireRole(['ce
 // --------------------
 
 // List unit types (broad read access for calculators)
-router.get('/types', authMiddleware, requireRole(['admin','superadmin','sales_manager','property_consultant','financial_manager','financial_admin','ceo','chairman','vice_chairman']), async (req, res) => {
+router.get('/types', authMiddleware, requireRole(['admin','superadmin','sales_manager','property_consultant','financial_manager','financial_admin','crm_admin','ceo','chairman','vice_chairman']), async (req, res) => {
   try {
     const r = await pool.query(`SELECT id, name, description, active FROM unit_types WHERE active=TRUE ORDER BY name ASC`)
     return ok(res, { unit_types: r.rows })
@@ -415,9 +415,9 @@ router.get('/types', authMiddleware, requireRole(['admin','superadmin','sales_ma
 })
 
 // List available units (with optional search/pagination/model filter).
-// - For sales/consultants, only show available units with an approved model link.
+// - For sales/consultants, only show available units ready for deals.
 // - For admin/financial roles, show all units including drafts.
-router.get('/units', authMiddleware, requireRole(['admin','superadmin','sales_manager','property_consultant','financial_manager','financial_admin','ceo','chairman','vice_chairman']), async (req, res) => {
+router.get('/units', authMiddleware, requireRole(['admin','superadmin','sales_manager','property_consultant','financial_manager','financial_admin','crm_admin','ceo','chairman','vice_chairman']), async (req, res) => {
   try {
     const { search } = req.query || {}
     const typeId = num(req.query.unit_type_id)
@@ -552,10 +552,10 @@ router.get('/units', authMiddleware, requireRole(['admin','superadmin','sales_ma
 })
 
 /**
- * Financial Manager: list inventory drafts awaiting approval
+ * Top Management: list inventory drafts awaiting approval
  * NOTE: must be defined BEFORE '/units/:id' to avoid route capture ('drafts' being treated as :id).
 */
-router.get('/units/drafts', authMiddleware, requireRole(['financial_manager']), async (req, res) => {
+router.get('/units/drafts', authMiddleware, requireRole(['ceo','chairman','vice_chairman','top_management']), async (req, res) => {
   try {
     const r = await pool.query(
       `SELECT u.*, ru.email AS created_by_email, m.model_name, m.model_code
@@ -576,7 +576,7 @@ router.get('/units/drafts', authMiddleware, requireRole(['financial_manager']), 
  * Fetch a single AVAILABLE unit by id with embedded model and approved standard pricing.
  * Access: consultants and above.
  */
-router.get('/units/:id', authMiddleware, requireRole(['admin','superadmin','sales_manager','property_consultant','financial_manager','financial_admin','ceo','chairman','vice_chairman']), async (req, res) => {
+router.get('/units/:id', authMiddleware, requireRole(['admin','superadmin','sales_manager','property_consultant','financial_manager','financial_admin','crm_admin','ceo','chairman','vice_chairman']), async (req, res) => {
   try {
     const id = num(req.params.id)
     if (!id) return bad(res, 400, 'Invalid id')
@@ -702,8 +702,8 @@ router.get('/units/:id', authMiddleware, requireRole(['admin','superadmin','sale
 })
 
 
-// Create inventory unit (Financial Admin) -> goes into FM approval queue as INVENTORY_DRAFT
-router.post('/units', authMiddleware, requireRole(['financial_admin']), async (req, res) => {
+// Create inventory unit (CRM Admin) -> goes into Top Management approval queue as INVENTORY_DRAFT
+router.post('/units', authMiddleware, requireRole(['crm_admin']), async (req, res) => {
   try {
     const { code, model_id } = req.body || {}
     if (!code || typeof code !== 'string') return bad(res, 400, 'code is required')
@@ -781,23 +781,24 @@ router.post('/units', authMiddleware, requireRole(['financial_admin']), async (r
       throw err
     }
 
-    // Notify all Financial Managers of a new draft unit awaiting approval
+    // Notify Top Management of a new draft unit awaiting approval
     await pool.query(
       `INSERT INTO notifications (user_id, type, ref_table, ref_id, message)
        SELECT u.id, 'inventory_unit_draft', 'units', $1, 'New inventory unit draft added. Please review and approve.'
-       FROM users u WHERE u.role='financial_manager' AND u.active=TRUE`,
+       FROM users u
+       WHERE u.role IN ('ceo','chairman','vice_chairman','top_management') AND u.active=TRUE`,
       [unit.id]
     )
 
-    return ok(res, { unit, message: 'Unit created as draft and linked to model. Awaiting Financial Manager approval.' })
+    return ok(res, { unit, message: 'Unit created as draft and linked to model. Awaiting Top Management approval.' })
   } catch (e) {
     console.error('POST /api/inventory/units error:', e)
     return bad(res, 500, 'Internal error')
   }
 })
 
-// FM: list inventory drafts awaiting approval
-router.get('/units/drafts', authMiddleware, requireRole(['financial_manager']), async (req, res) => {
+// Top Management: list inventory drafts awaiting approval
+router.get('/units/drafts', authMiddleware, requireRole(['ceo','chairman','vice_chairman','top_management']), async (req, res) => {
   try {
     const r = await pool.query(
       `SELECT u.*, ru.email AS created_by_email, m.model_name, m.model_code
@@ -814,8 +815,8 @@ router.get('/units/drafts', authMiddleware, requireRole(['financial_manager']), 
   }
 })
 
-// FM: approve inventory draft
-router.patch('/units/:id/approve', authMiddleware, requireRole(['financial_manager']), async (req, res) => {
+// Top Management: approve inventory draft
+router.patch('/units/:id/approve', authMiddleware, requireRole(['ceo','chairman','vice_chairman','top_management']), async (req, res) => {
   try {
     const id = num(req.params.id)
     if (!id) return bad(res, 400, 'Invalid id')
@@ -837,8 +838,8 @@ router.patch('/units/:id/approve', authMiddleware, requireRole(['financial_manag
   }
 })
 
-// FM: reject inventory draft (stores optional reason in meta)
-router.patch('/units/:id/reject', authMiddleware, requireRole(['financial_manager']), async (req, res) => {
+// Top Management: reject inventory draft (stores optional reason in meta)
+router.patch('/units/:id/reject', authMiddleware, requireRole(['ceo','chairman','vice_chairman','top_management']), async (req, res) => {
   try {
     const id = num(req.params.id)
     const { reason } = req.body || {}
@@ -1144,8 +1145,8 @@ router.get('/notifications', authMiddleware, requireRole(['financial_manager', '
 // Link unit to model workflow (FA -> FM approval)
 // --------------------
 
-// FA: request a link of a unit to a model (requires approved model pricing present)
-router.post('/units/:id/link-request', authMiddleware, requireRole(['financial_admin']), async (req, res) => {
+// FA/CRM Admin: request a link of a unit to a model (requires approved model pricing present)
+router.post('/units/:id/link-request', authMiddleware, requireRole(['financial_admin','crm_admin']), async (req, res) => {
   try {
     const unitId = num(req.params.id)
     const { model_id } = req.body || {}
@@ -1200,9 +1201,9 @@ router.post('/units/:id/link-request', authMiddleware, requireRole(['financial_a
 })
 
 // --------------------
-// Financial Admin: update a draft unit's metadata (code and inventory metadata only)
+// Inventory Admin (Financial/CRM): update a draft unit's metadata (code and inventory metadata only)
 // --------------------
-router.patch('/units/:id', authMiddleware, requireRole(['financial_admin']), async (req, res) => {
+router.patch('/units/:id', authMiddleware, requireRole(['financial_admin','crm_admin']), async (req, res) => {
   try {
     const id = Number(req.params.id)
     if (!Number.isFinite(id) || id <= 0) return bad(res, 400, 'Invalid id')
@@ -1247,9 +1248,9 @@ router.patch('/units/:id', authMiddleware, requireRole(['financial_admin']), asy
 })
 
 // --------------------
-// Financial Admin: request change (edit/delete) for APPROVED units
+// Inventory Admin (Financial/CRM): request change (edit/delete) for APPROVED units
 // --------------------
-router.post('/units/:id/change-request', authMiddleware, requireRole(['financial_admin']), async (req, res) => {
+router.post('/units/:id/change-request', authMiddleware, requireRole(['financial_admin','crm_admin']), async (req, res) => {
   try {
     const id = Number(req.params.id)
     if (!Number.isFinite(id) || id <= 0) return bad(res, 400, 'Invalid id')
@@ -1303,11 +1304,11 @@ router.post('/units/:id/change-request', authMiddleware, requireRole(['financial
 // --------------------
 // Financial Manager: list/approve/reject change requests
 // --------------------
-router.get('/units/changes', authMiddleware, requireRole(['financial_manager','financial_admin']), async (req, res) => {
+router.get('/units/changes', authMiddleware, requireRole(['financial_manager','financial_admin','crm_admin']), async (req, res) => {
   try {
     const { status = 'pending_approval', mine, unit_id } = req.query || {}
     const role = req.user?.role
-    const isFA = role === 'financial_admin'
+    const isInventoryAdmin = role === 'financial_admin' || role === 'crm_admin'
 
     const params = []
     let where = '1=1'
@@ -1321,16 +1322,16 @@ router.get('/units/changes', authMiddleware, requireRole(['financial_manager','f
     const unitIdNum = unit_id ? Number(unit_id) : null
     if (unitIdNum && Number.isFinite(unitIdNum) && unitIdNum > 0) {
       // Filter by a specific unit
-      where += ` AND c.unit_id=$${params.length + 1}`
+      where += ` AND c.unit_id=${params.length + 1}`
       params.push(unitIdNum)
-      // For FA: allow viewing all requests for this unit (audit purpose)
+      // For inventory admins: allow viewing all requests for this unit (audit purpose)
       // no requester filter applied when unit_id filter is used
-    } else if (isFA) {
-      // Without unit filter: FA can only view their own when mine=1
+    } else if (isInventoryAdmin) {
+      // Without unit filter: inventory admins can only view their own when mine=1
       if (String(mine) !== '1') {
-        return bad(res, 403, 'Financial Admin can only view their own change history (use mine=1) or provide unit_id')
+        return bad(res, 403, 'Inventory admins can only view their own change history (use mine=1) or provide unit_id')
       }
-      where += ` AND c.requested_by=$${params.length + 1}`
+      where += ` AND c.requested_by=${params.length + 1}`
       params.push(req.user.id)
     }
 

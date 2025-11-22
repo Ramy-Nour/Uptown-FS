@@ -166,7 +166,6 @@ export default function BrandHeader({ title, onLogout }) {
           { label: 'Block Requests', href: '/deals/block-requests' },
           { label: 'Current Blocks', href: '/deals/current-blocks' },
           { label: 'Reservations', href: '/deals/reservations-queue' },
-          { label: 'Inventory Drafts', href: '/admin/inventory-drafts' },
           { label: 'Inventory Changes', href: '/admin/inventory-changes' },
           { label: 'Rejected Requests', href: '/admin/rejected-pricings' },
           { label: 'Finance Team', href: '/admin/finance-team' },
@@ -179,10 +178,14 @@ export default function BrandHeader({ title, onLogout }) {
         return [
           ...baseWithCalc,
           { label: 'Current Blocks', href: '/deals/current-blocks' },
-          { label: 'Inventory', href: '/admin/inventory' },
-          { label: 'My Inventory Requests', href: '/admin/inventory-change-history' },
           { label: 'Standard Pricing', href: '/admin/standard-pricing' },
           { label: 'My Proposals', href: '/deals/my-proposals' }
+        ]
+      case 'crm_admin':
+        return [
+          ...baseWithCalc,
+          { label: 'Inventory', href: '/admin/inventory' },
+          { label: 'My Inventory Requests', href: '/admin/inventory-change-history' }
         ]
       case 'property_consultant':
         return [
@@ -210,6 +213,7 @@ export default function BrandHeader({ title, onLogout }) {
           ...baseWithoutCalc,
           { label: 'Unit Model Queue', href: '/deals/queues' },
           { label: 'Pricing Queue', href: '/admin/standard-pricing-approvals' },
+          { label: 'Inventory Drafts', href: '/admin/inventory-drafts' },
           { label: 'Payment Threshold Approvals', href: '/admin/payment-thresholds' },
           { label: 'Workflow Logs', href: '/admin/workflow-logs' },
           { label: 'Hold Approvals', href: '/admin/hold-approvals' }

@@ -119,69 +119,6 @@ export default function BrandHeader({ title, onLogout }) {
       }
     }
     check()
-    return () => {
-      ctrl.abort()
-      t && clearTimeout(t)
-    }
-  }, [])
-
-  const navForRole = (role) => {
-    // Base without calculator
-    const base = [{ label: 'Deals', href: '/deals' }]
-    // Base with calculator shortcut
-    const baseWithCalc = [{ label: 'Calculator', href: '/deals/create' }, ...base]
-    const baseWithoutCalc = base
-    const queuesLink = { label: `Queues${queueCount ? ` (${queueCount})` : ''}`, href: '/deals/queues' }
-    switch (role) {
-      case 'superadmin':
-        return [
-          { label: 'Users', href: '/admin/users' },
-          { label: 'Sales Team', href: '/admin/sales-team' },
-          { label: 'Team Proposals', href: '/deals/team-proposals' },
-          { label: 'Holds', href: '/admin/holds' },
-          { label: 'Workflow Logs', href: '/admin/workflow-logs' }
-        ]
-      case 'property_consultant':
-        return [
-          ...baseWithCalc,
-          { label: 'Offer Progress', href: '/deals/offer-progress' },
-          { label: `Plan Edits${planEditsCount ? ` (${planEditsCount})` : ''}`, href: '/deals/plan-edits' },
-          { label: 'My Proposals', href: '/deals/my-proposals' }
-        ]
-      case 'contract_person':
-        return [
-          ...baseWithoutCalc
-        ]
-      case 'contract_manager':
-        return [
-          ...baseWithoutCalc,
-          { label: 'Contracts Team', href: '/admin/contracts-team' },
-          { label: 'Workflow Logs', href: '/admin/workflow-logs' },
-          { label: 'Hold Approvals', href: '/admin/hold-approvals' }
-        ]
-      // --- THIS SECTION IS MODIFIED ---
-      case 'ceo':
-      case 'chairman':
-      case 'vice_chairman':
-      case 'top_management':
-        return [
-          ...baseWithoutCalc,
-          { label: 'Unit Model Queue', href: '/deals/queues' },
-          { label: 'Pricing Queue', href: '/admin/standard-pricing-approvals' },
-          { label: 'Payment Threshold Approvals', href: '/admin/payment-thresholds' },
-          { label: 'Workflow Logs', href: '/admin/workflow-logs' },
-          { label: 'Hold Approvals', href: '/admin/hold-approvals' }
-        ]
-      // --- END OF MODIFICATION ---
-      default:
-        return base
-    }
-  }
-
-  const shortcuts = navForRole(user?.role)
-  const pathname = useMemo(() => (typeof window !== 'undefined' ? window.location.pathname : ''), [])
-
-  const baseBtnStyle = {
     padding: '8px 12px',
     borderRadius: 999,
     border: '1px solid rgba(255,255,255,0.7)',

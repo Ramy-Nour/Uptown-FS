@@ -8,7 +8,6 @@ import { useLoader } from '../lib/loaderContext.jsx'
 import CalculatorApp from '../App.jsx'
 import * as XLSX from 'xlsx'
 import { generateClientOfferPdf } from '../lib/docExports.js'
-import { generateClientOfferPdf } from '../lib/docExports.js'
 
 const th = { textAlign: 'left', padding: 10, borderBottom: '1px solid #eef2f7', fontSize: 13, color: '#475569', background: '#f9fbfd' }
 const td = { padding: 10, borderBottom: '1px solid #f2f5fa', fontSize: 14 }

@@ -7,6 +7,8 @@ import ReservationFormModal from '../components/ReservationFormModal.jsx'
 import { useLoader } from '../lib/loaderContext.jsx'
 import CalculatorApp from '../App.jsx'
 import * as XLSX from 'xlsx'
+import { generateClientOfferPdf } from '../lib/docExports.js'
+import { generateClientOfferPdf } from '../lib/docExports.js'
 
 const th = { textAlign: 'left', padding: 10, borderBottom: '1px solid #eef2f7', fontSize: 13, color: '#475569', background: '#f9fbfd' }
 const td = { padding: 10, borderBottom: '1px solid #f2f5fa', fontSize: 14 }
@@ -934,13 +936,78 @@ export default function DealDetail() {
         )}
         {(role === 'property_consultant' && (deal.status === 'approved' || deal.status === 'draft')) && (
           <>
-            <LoadingButton onClick={() => generateDocFromSaved('pricing_form')}>Print Offer (Pricing Form PDF)</LoadingButton>
-            {/* Allow Request Unit Block only when plan accepted or override approved */}
+            {/* Export Client Offer (PDF) – same behavior as Calculator page */}
+            <LoadingButton
+              onClick={async () => {
+                try {
+                  const snap = deal?.details?.calculator
+                  const plan = snap?.generatedPlan
+                  const schedule = plan?.schedule || []
+                  if (!plan || !schedule.length) {
+                    notifyError('No saved payment schedule found. Use Edit Offer to generate and save a plan first.')
+                    return
+                  }
+                  const totals = plan.totals || {
+                    totalNominal: schedule.reduce((s, e) => s + (Number(e.amount) || 0), 0)
+                  }
+                  const ci = snap?.clientInfo || {}
+                  const numBuyersRaw = Number(ci.number_of_buyers)
+                  const numBuyers = Math.min(Math.max(numBuyersRaw || 1, 1), 4)
+                  const buyers = []
+                  for (let i = 1; i <= numBuyers; i++) {
+                    const sfx = i === 1 ? '' : `_${i}`
+                    buyers.push({
+                      buyer_name: ci[`buyer_name${sfx}`] || '',
+                      phone_primary: ci[`phone_primary${sfx}`] || '',
+                      phone_secondary: ci[`phone_secondary${sfx}`] || '',
+                      email: ci[`email${sfx}`] || ''
+                    })
+                  }
+                  const body = {
+                    language: snap?.language || 'en',
+                    currency: snap?.currency || 'EGP',
+                    buyers,
+                    schedule,
+                    totals,
+                    offer_date: snap?.inputs?.offerDate || new Date().toISOString().slice(0, 10),
+                    first_payment_date: snap?.inputs?.firstPaymentDate || snap?.inputs?.offerDate || new Date().toISOString().slice(0, 10),
+                    unit: {
+                      unit_code: snap?.unitInfo?.unit_code || '',
+                      unit_type: snap?.unitInfo?.unit_type || '',
+                      unit_id: Number(snap?.unitInfo?.unit_id) || null
+                    },
+                    unit_pricing_breakdown: {
+                      base: Number(snap?.unitPricingBreakdown?.base || 0),
+                      garden: Number(snap?.unitPricingBreakdown?.garden || 0),
+                      roof: Number(snap?.unitPricingBreakdown?.roof || 0),
+                      storage: Number(snap?.unitPricingBreakdown?.storage || 0),
+                      garage: Number(snap?.unitPricingBreakdown?.garage || 0),
+                      maintenance: Number(snap?.unitPricingBreakdown?.maintenance || 0),
+                      totalExclMaintenance: Number(snap?.unitPricingBreakdown?.totalExclMaintenance || 0)
+                    }
+                  }
+                  const { blob, filename } = await generateClientOfferPdf(body, API_URL)
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = filename
+                  document.body.appendChild(a); a.click(); document.body.removeChild(a)
+                  URL.revokeObjectURL(url)
+                  notifySuccess('Client Offer PDF exported successfully.')
+                } catch (e) {
+                  notifyError(e, 'Failed to export Client Offer PDF')
+                }
+              }}
+            >
+              Print Offer (Client Offer PDF)
+            </LoadingButton>
+            {/* Allow Request Unit Block / Unblock only when plan accepted or override approved */}
             {(() => {
               const snap = deal?.details?.calculator
               const acceptedBySystem = snap?.generatedPlan?.evaluation?.decision === 'ACCEPT'
               const overrideApproved = !!deal?.override_approved_at
               const unitStatus = (snap?.unitInfo?.unit_status || '').toUpperCase()
+              // Block/unblock should reflect the actual current unit status (BLOCKED vs AVAILABLE)
               const isBlocked = unitStatus === 'BLOCKED' || snap?.unitInfo?.available === false
               const canBlockOrUnblock = acceptedBySystem || overrideApproved
               const unitId = Number(snap?.unitInfo?.unit_id) || 0
@@ -952,32 +1019,28 @@ export default function DealDetail() {
               return (
                 <LoadingButton
                   onClick={async () => {
-                    const reason = window.prompt(isBlocked ? 'Reason for unblock request (optional):' : 'Block duration in days (default 7) and optional reason will be requested.', '')
-                    if (reason === null && !isBlocked) {
-                      // If user cancels at the first prompt for a new block, just exit
-                      return
-                    }
                     try {
                       if (isBlocked) {
-                        // Unblock requests do not require a duration; only send unitId and optional reason
+                        // Already blocked: send unblock request without duration
+                        const reason = window.prompt('Reason for unblock request (optional):', '') || ''
                         const resp = await fetchWithAuth(`${API_URL}/api/blocks/request-unblock`, {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ unitId: unitId, reason: reason || '' })
+                          body: JSON.stringify({ unitId, reason })
                         })
                         const data = await resp.json()
                         if (!resp.ok) notifyError(data?.error?.message || 'Failed to request unit unblock')
                         else notifySuccess('Unblock request submitted. Waiting for Financial Manager review.')
                       } else {
-                        // For new blocks, ask for duration days after confirming intent
+                        // Not blocked: request a new block with duration + optional reason
                         const durationStr = window.prompt('Block duration in days (default 7):', '7')
                         if (durationStr === null) return
                         const durationDays = Number(durationStr) || 7
-                        const blockReason = reason || window.prompt('Reason for block (optional):', '') || ''
+                        const reason = window.prompt('Reason for block (optional):', '') || ''
                         const resp = await fetchWithAuth(`${API_URL}/api/blocks/request`, {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ unitId: unitId, durationDays, reason: blockReason })
+                          body: JSON.stringify({ unitId, durationDays, reason })
                         })
                         const data = await resp.json()
                         if (!resp.ok) notifyError(data?.error?.message || 'Failed to request unit block')

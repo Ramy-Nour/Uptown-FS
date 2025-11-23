@@ -121,6 +121,9 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-11-23 00:15] Deal Detail offer export and unit block/unblock buttons
+  - Client: On Deal Detail for Property Consultants, the “Print Offer (Pricing Form PDF)” button now exports the same Client Offer PDF used on the main Calculator page (server-rendered /api/documents/client-offer), ensuring consistent output and avoiding confusion with internal Pricing Form templates.
+  - Client: The Deal Detail unit action button correctly toggles between “Request Unit Block” and “Request Unit Unblock” based on the saved unit_status/availability from the deal’s calculator snapshot, and sends unblock requests via POST /api/blocks/request-unblock without asking for a block duration.
 - [2025-11-22 20:10] Consultant unblock prompt and Pricing Form permissions
   - Client: When a Property Consultant requests “Request Unit Unblock” from Deal Detail, the UI no longer asks for a block duration. Only an optional reason is collected and sent to POST /api/blocks/request-unblock, matching the backend unblock workflow.
   - API: Secured POST /api/generate-document with authMiddleware so req.user.role is always populated, preventing “Forbidden: role undefined cannot generate pricing_form” errors for authenticated users.

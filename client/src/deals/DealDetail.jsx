@@ -1000,19 +1000,6 @@ export default function DealDetail() {
             >
               Print Offer (Client Offer PDF)
             </LoadingButton>
-            {/* Allow Request Unit Block / Unblock only when plan accepted or override approved */}
-            {(() => {
-              const snap = deal?.details?.calculator
-              const acceptedBySystem = snap?.generatedPlan?.evaluation?.decision === 'ACCEPT'
-              const overrideApproved = !!deal?.override_approved_at
-              const unitStatus = (snap?.unitInfo?.unit_status || '').toUpperCase()
-              // Block/unblock should reflect the actual current unit status (BLOCKED vs AVAILABLE)
-              const isBlocked = unitStatus === 'BLOCKED' || snap?.unitInfo?.available === false
-              const canBlockOrUnblock = acceptedBySystem || overrideApproved
-              const unitId = Number(snap?.unitInfo?.unit_id) || 0
-              if (!unitId) return null
-              const label = isBlocked ? 'Request Unit Unblock' : 'Request Unit Block'
-              const title = canBlockOrUnblock
                 ? (isBlocked ? 'Request to unblock this unit' : 'Request a block on this unit')
                 : 'Available after plan is ACCEPTED or override is approved'
               return (

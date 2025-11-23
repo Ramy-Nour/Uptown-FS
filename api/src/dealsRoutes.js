@@ -267,23 +267,6 @@ router.get('/:id', authMiddleware, async (req, res) => {
     const q = await pool.query(
       `SELECT 
          d.*,
-         cu.email as created_by_email,
-         COALESCE(mu.meta->>'name', mu.email) AS manager_review_by_name,
-         mu.role AS manager_review_by_role,
-         COALESCE(fu.meta->>'name', fu.email) AS fm_review_by_name,
-         fu.role AS fm_review_by_role,
-         COALESCE(tu.meta->>'name', tu.email) AS override_approved_by_name,
-         tu.role AS override_approved_by_role
-       FROM deals d
-       LEFT JOIN users cu ON cu.id = d.created_by
-       LEFT JOIN users mu ON mu.id = d.manager_review_by
-       LEFT JOIN users fu ON fu.id = d.fm_review_by
-       LEFT JOIN users tu ON tu.id = d.override_approved_by
-       WHERE d.id=$1`,
-      [id]
-    )
-    if (q.rows.length === 0) return res.status(404).json({ error: { message: 'Deal not found' } })
-    const deal = q.rows[0]
     const elevatedRoles = new Set(['admin', 'superadmin', 'sales_manager', 'financial_manager'])
     const isElevated = elevatedRoles.has(req.user?.role)
     if (!isElevated && deal.created_by !== req.user.id) {

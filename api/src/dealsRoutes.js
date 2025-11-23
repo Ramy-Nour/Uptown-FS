@@ -267,6 +267,26 @@ router.get('/:id', authMiddleware, async (req, res) => {
     const q = await pool.query(
       `SELECT 
          d.*,
+         cu.email as created_by_email,
+         COALESCE(mu.meta->>'name', mu.email) AS manager_review_by_name,
+         mu.role AS manager_review_by_role,
+         COALESCE(fu.meta->>'name', fu.email) AS fm_review_by_name,
+         fu.role AS fm_review_by_role,
+         COALESCE(tu.meta->>'name', tu.email) AS override_approved_by_name,
+         tu.role AS override_approved_by_role,
+         un.unit_status AS current_unit_status,
+         un.available AS current_unit_available
+       FROM deals d
+       LEFT JOIN users cu ON cu.id = d.created_by
+       LEFT JOIN users mu ON mu.id = d.manager_review_by
+       LEFT JOIN users fu ON fu.id = d.fm_review_by
+       LEFT JOIN users tu ON tu.id = d.override_approved_by
+       LEFT JOIN units un ON un.id = (d.details->'calculator'->'unitInfo'->>'unit_id')::int
+       WHERE d.id=$1`,
+      [id]
+    )
+    if (q.rows.length === 0) return res.status(404).json({ error: { message: 'Deal not found' } })
+    const deal = q.rows[0]
     const elevatedRoles = new Set(['admin', 'superadmin', 'sales_manager', 'financial_manager'])
     const isElevated = elevatedRoles.has(req.user?.role)
     if (!isElevated && deal.created_by !== req.user.id) {
@@ -652,9 +672,9 @@ router.post('/:id/request-override', authMiddleware, validate(overrideRequestSch
     const upd = await pool.query(
       `UPDATE deals
        SET needs_override=TRUE,
-           override_requested_by=$1,
-           override_requested_at=now(),
-           updated_at=now()
+       override_requested_by=$1,
+       override_requested_at=now(),
+       updated_at=now()
        WHERE id=$2 RETURNING *`,
       [req.user.id, id]
     )
@@ -689,8 +709,8 @@ router.post('/:id/override-sm-approve', authMiddleware, async (req, res) => {
     const upd = await pool.query(
       `UPDATE deals
        SET manager_review_by=$1,
-           manager_review_at=now(),
-           updated_at=now()
+       manager_review_at=now(),
+       updated_at=now()
        WHERE id=$2 RETURNING *`,
       [req.user.id, id]
     )
@@ -734,10 +754,10 @@ router.post('/:id/override-sm-reject', authMiddleware, async (req, res) => {
     const upd = await pool.query(
       `UPDATE deals
        SET needs_override=FALSE,
-           manager_review_by=$1,
-           manager_review_at=now(),
-           override_notes=$2,
-           updated_at=now()
+       manager_review_by=$1,
+       manager_review_at=now(),
+       override_notes=$2,
+       updated_at=now()
        WHERE id=$3 RETURNING *`,
       [req.user.id, notes, id]
     )
@@ -779,8 +799,8 @@ router.post('/:id/override-fm-approve', authMiddleware, async (req, res) => {
     const upd = await pool.query(
       `UPDATE deals
        SET fm_review_by=$1,
-           fm_review_at=now(),
-           updated_at=now()
+       fm_review_at=now(),
+       updated_at=now()
        WHERE id=$2 RETURNING *`,
       [req.user.id, id]
     )
@@ -835,10 +855,10 @@ router.post('/:id/override-fm-reject', authMiddleware, async (req, res) => {
     const upd = await pool.query(
       `UPDATE deals
        SET needs_override=FALSE,
-           fm_review_by=$1,
-           fm_review_at=now(),
-           override_notes=$2,
-           updated_at=now()
+       fm_review_by=$1,
+       fm_review_at=now(),
+       override_notes=$2,
+       updated_at=now()
        WHERE id=$3 RETURNING *`,
       [req.user.id, notes, id]
     )
@@ -885,9 +905,9 @@ router.post('/:id/override-approve', authMiddleware, validate(overrideApproveSch
     const upd = await pool.query(
       `UPDATE deals
        SET override_approved_by=$1,
-           override_approved_at=now(),
-           override_notes=$2,
-           updated_at=now()
+       override_approved_at=now(),
+       override_notes=$2,
+       updated_at=now()
        WHERE id=$3 RETURNING *`,
       [req.user.id, notes, id]
     )
@@ -934,8 +954,8 @@ router.post('/:id/override-reject', authMiddleware, validate(overrideApproveSche
     const upd = await pool.query(
       `UPDATE deals
        SET needs_override=FALSE,
-           override_notes=$1,
-           updated_at=now()
+       override_notes=$1,
+       updated_at=now()
        WHERE id=$2 RETURNING *`,
       [notes, id]
     )

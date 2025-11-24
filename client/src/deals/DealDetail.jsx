@@ -1001,23 +1001,37 @@ export default function DealDetail() {
               Print Offer (Client Offer PDF)
             </LoadingButton>
 
-            {/* Unit block / unblock action based on saved unit status and evaluation */}
+            {/* Unit block / unblock action based on latest unit status and evaluation */}
             {(() => {
               const snap = deal?.details?.calculator
-              const unitInfo = snap?.unitInfo || {}
-              const unitId = Number(unitInfo.unit_id) || null
-              const isBlocked = unitInfo.unit_status === 'BLOCKED' || unitInfo.available === false
-              const decision = evaluation?.decision || null
-              const overrideApproved = !!deal?.override_approved_at
-              const canBlockOrUnblock = !!unitId && (decision === 'ACCEPT' || overrideApproved)
-              const label = isBlocked ? 'Request Unit Unblock' : 'Request Unit Block'
-              const title = canBlockOrUnblock
-                ? (isBlocked ? 'Request to unblock this unit' : 'Request a block on this unit')
-                : 'Available after plan is ACCEPTED or override is approved (and unit is linked to this deal)'
+              const savedUnitInfo = snap?.unitInfo || {}
+              const unitId = Number(savedUnitInfo.unit_id) || null
 
               if (!unitId) {
                 return null
               }
+
+              // Prefer live unit status from DB (joined in dealsRoutes) over the snapshot,
+              // since the calculator snapshot may still show AVAILABLE after a block/unblock.
+              const liveStatus = deal?.current_unit_status
+              const liveAvailable = deal?.current_unit_available
+              const normalizedLiveStatus = typeof liveStatus === 'string' ? liveStatus.toUpperCase() : null
+
+              const snapshotBlocked = savedUnitInfo.unit_status === 'BLOCKED' || savedUnitInfo.available === false
+              const liveBlocked = normalizedLiveStatus === 'BLOCKED' || liveAvailable === false
+
+              const isBlocked = liveBlocked || snapshotBlocked
+
+              const decision = evaluation?.decision || null
+              const overrideApproved = !!deal?.override_approved_at
+
+              // Policy: allow block/unblock only when the original evaluation passed OR a TM override is approved.
+              const canBlockOrUnblock = !!unitId && (decision === 'ACCEPT' || overrideApproved)
+
+              const label = isBlocked ? 'Request Unit Unblock' : 'Request Unit Block'
+              const title = canBlockOrUnblock
+                ? (isBlocked ? 'Request to unblock this unit' : 'Request a block on this unit')
+                : 'Available after plan is ACCEPTED or override is approved (and unit is linked to this deal)'
 
               return (
                 <LoadingButton
@@ -1032,8 +1046,11 @@ export default function DealDetail() {
                           body: JSON.stringify({ unitId, reason })
                         })
                         const data = await resp.json()
-                        if (!resp.ok) notifyError(data?.error?.message || 'Failed to request unit unblock')
-                        else notifySuccess('Unblock request submitted. Waiting for Financial Manager review.')
+                        if (!resp.ok) {
+                          notifyError(data?.error?.message || 'Failed to request unit unblock')
+                        } else {
+                          notifySuccess('Unblock request submitted. Waiting for Financial Manager review.')
+                        }
                       } else {
                         // Not blocked: request a new block with duration + optional reason
                         const durationStr = window.prompt('Block duration in days (default 7):', '7')
@@ -1046,8 +1063,11 @@ export default function DealDetail() {
                           body: JSON.stringify({ unitId, durationDays, reason })
                         })
                         const data = await resp.json()
-                        if (!resp.ok) notifyError(data?.error?.message || 'Failed to request unit block')
-                        else notifySuccess('Block request submitted for approval.')
+                        if (!resp.ok) {
+                          notifyError(data?.error?.message || 'Failed to request unit block')
+                        } else {
+                          notifySuccess('Block request submitted for approval.')
+                        }
                       }
                     } catch (err) {
                       notifyError(err, isBlocked ? 'Failed to request unit unblock' : 'Failed to request unit block')

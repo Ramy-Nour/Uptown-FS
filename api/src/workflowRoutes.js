@@ -653,6 +653,53 @@ router.get(
   }
 )
 
+// Proposal listing helpers (must be defined before the :id route to avoid /my being treated as an id)
+router.get(
+  '/payment-plans/my',
+  authMiddleware,
+  requireRole(['property_consultant']),
+  async (req, res) => {
+    try {
+      const r = await pool.query(
+        `SELECT * FROM payment_plans WHERE created_by=$1 ORDER BY id DESC`,
+        [req.user.id]
+      )
+      return ok(res, { payment_plans: r.rows })
+    } catch (e) {
+      console.error('GET /api/workflow/payment-plans/my error:', e)
+      return bad(res, 500, 'Internal error')
+    }
+  }
+)
+
+router.get(
+  '/payment-plans/team',
+  authMiddleware,
+  requireRole(['sales_manager']),
+  async (req, res) => {
+    try {
+      // consultants assigned to this manager
+      const team = await pool.query(
+        `SELECT consultant_user_id AS uid
+         FROM sales_team_members
+         WHERE manager_user_id=$1 AND active=TRUE`,
+        [req.user.id]
+      )
+      const uids = team.rows.map(r => r.uid)
+      if (uids.length === 0) return ok(res, { payment_plans: [] })
+      const placeholders = uids.map((_, i) => `${i + 1}`).join(',')
+      const r = await pool.query(
+        `SELECT * FROM payment_plans WHERE created_by IN (${placeholders}) ORDER BY id DESC`,
+        uids
+      )
+      return ok(res, { payment_plans: r.rows })
+    } catch (e) {
+      console.error('GET /api/workflow/payment-plans/team error:', e)
+      return bad(res, 500, 'Internal error')
+    }
+  }
+)
+
 // Get a payment plan by id
 router.get(
   '/payment-plans/:id',

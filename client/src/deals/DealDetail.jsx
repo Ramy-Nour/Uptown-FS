@@ -1000,8 +1000,25 @@ export default function DealDetail() {
             >
               Print Offer (Client Offer PDF)
             </LoadingButton>
+
+            {/* Unit block / unblock action based on saved unit status and evaluation */}
+            {(() => {
+              const snap = deal?.details?.calculator
+              const unitInfo = snap?.unitInfo || {}
+              const unitId = Number(unitInfo.unit_id) || null
+              const isBlocked = unitInfo.unit_status === 'BLOCKED' || unitInfo.available === false
+              const decision = evaluation?.decision || null
+              const overrideApproved = !!deal?.override_approved_at
+              const canBlockOrUnblock = !!unitId && (decision === 'ACCEPT' || overrideApproved)
+              const label = isBlocked ? 'Request Unit Unblock' : 'Request Unit Block'
+              const title = canBlockOrUnblock
                 ? (isBlocked ? 'Request to unblock this unit' : 'Request a block on this unit')
-                : 'Available after plan is ACCEPTED or override is approved'
+                : 'Available after plan is ACCEPTED or override is approved (and unit is linked to this deal)'
+
+              if (!unitId) {
+                return null
+              }
+
               return (
                 <LoadingButton
                   onClick={async () => {

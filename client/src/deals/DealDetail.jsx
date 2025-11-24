@@ -935,7 +935,7 @@ export default function DealDetail() {
         )}
         {(role === 'property_consultant' && (deal.status === 'approved' || deal.status === 'draft')) && (
           <>
-            {/* Export Client Offer (PDF) – same behavior as Calculator page */}
+            {/* Export Client Offer (PDF) &#8211; same behavior as Calculator page */}
             <LoadingButton
               onClick={async () => {
                 try {
@@ -962,6 +962,11 @@ export default function DealDetail() {
                       email: ci[`email${sfx}`] || ''
                     })
                   }
+
+                  // Only include a breakdown when the snapshot actually has one.
+                  // For older deals without unitPricingBreakdown, omit the field so the
+                  // server can fall back to the latest approved unit_model_pricing.
+                  const snapBreakdown = snap?.unitPricingBreakdown
                   const body = {
                     language: snap?.language || 'en',
                     currency: snap?.currency || 'EGP',
@@ -974,17 +979,21 @@ export default function DealDetail() {
                       unit_code: snap?.unitInfo?.unit_code || '',
                       unit_type: snap?.unitInfo?.unit_type || '',
                       unit_id: Number(snap?.unitInfo?.unit_id) || null
-                    },
-                    unit_pricing_breakdown: {
-                      base: Number(snap?.unitPricingBreakdown?.base || 0),
-                      garden: Number(snap?.unitPricingBreakdown?.garden || 0),
-                      roof: Number(snap?.unitPricingBreakdown?.roof || 0),
-                      storage: Number(snap?.unitPricingBreakdown?.storage || 0),
-                      garage: Number(snap?.unitPricingBreakdown?.garage || 0),
-                      maintenance: Number(snap?.unitPricingBreakdown?.maintenance || 0),
-                      totalExclMaintenance: Number(snap?.unitPricingBreakdown?.totalExclMaintenance || 0)
                     }
                   }
+
+                  if (snapBreakdown) {
+                    body.unit_pricing_breakdown = {
+                      base: Number(snapBreakdown.base || 0),
+                      garden: Number(snapBreakdown.garden || 0),
+                      roof: Number(snapBreakdown.roof || 0),
+                      storage: Number(snapBreakdown.storage || 0),
+                      garage: Number(snapBreakdown.garage || 0),
+                      maintenance: Number(snapBreakdown.maintenance || 0),
+                      totalExclMaintenance: Number(snapBreakdown.totalExclMaintenance || 0)
+                    }
+                  }
+
                   const { blob, filename } = await generateClientOfferPdf(body, API_URL)
                   const url = URL.createObjectURL(blob)
                   const a = document.createElement('a')

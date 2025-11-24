@@ -268,6 +268,149 @@ router.post(
   }
 )
 
+// List pending unblock requests (FM / TM views)
+router.get('/unblock-pending', authMiddleware, async (req, res) => {
+  try {
+    await ensureBlocksSchema()
+
+    const role = req.user.role
+    if (role === 'admin' || role === 'superadmin' || role === 'property_consultant' || role === 'sales_manager') {
+      return res.status(403).json({ error: { message: 'Forbidden' } })
+    }
+
+    let statuses = []
+    if (role === 'financial_manager') {
+      statuses = ['pending_fm']
+    } else if (['ceo','chairman','vice_chairman','top_management'].includes(role)) {
+      // TM can see both pending_fm (for direct override) and pending_tm
+      statuses = ['pending_fm','pending_tm']
+    } else {
+      return res.status(403).json({ error: { message: 'Forbidden' } })
+    }
+
+    const r = await pool.query(
+      `
+      SELECT
+        b.id,
+        b.unit_id,
+        u.code AS unit_code,
+        u.unit_type,
+        b.unblock_status,
+        b.unblock_reason,
+        b.unblock_requested_at,
+        ru.email AS requested_by_email
+      FROM blocks b
+      JOIN units u ON u.id = b.unit_id
+      LEFT JOIN users ru ON ru.id = b.unblock_requested_by
+      WHERE b.status = 'approved'
+        AND b.unblock_status = ANY($1::text[])
+      ORDER BY b.unblock_requested_at DESC NULLS LAST, b.id DESC
+      `,
+      [statuses]
+    )
+
+    return res.json({ ok: true, requests: r.rows })
+  } catch (error) {
+    console.error('List unblock-pending error:', error)
+    return res.status(500).json({ error: { message: 'Internal error' } })
+  }
+})
+
+// FM approve unblock (moves to TM) – Financial Manager
+router.patch(
+  '/:id/unblock-fm-approve',
+  authMiddleware,
+  requireRole(['financial_manager']),
+  async (req, res) => {
+    const blockId = Number(req.params.id)
+    if (!Number.isFinite(blockId)) return res.status(400).json({ error: { message: 'Invalid block id' } })
+    try {
+      await ensureBlocksSchema()
+      const bRes = await pool.query('SELECT * FROM blocks WHERE id = $1', [blockId])
+      if (bRes.rows.length === 0) return res.status(404).json({ error: { message: 'Block not found' } })
+      const row = bRes.rows[0]
+      if (row.status !== 'approved') return res.status(400).json({ error: { message: 'Only approved blocks can be unblocked' } })
+      if (row.unblock_status !== 'pending_fm') {
+        return res.status(400).json({ error: { message: 'Unblock request is not pending FM approval' } })
+      }
+
+      await pool.query(
+        `UPDATE blocks
+         SET unblock_status = 'pending_tm',
+             unblock_fm_id = $1,
+             unblock_fm_at = NOW(),
+             updated_at = NOW()
+         WHERE id = $2`,
+        [req.user.id, blockId]
+      )
+
+      // Notify Top Management that an unblock request is pending their decision
+      try {
+        await pool.query(
+          `INSERT INTO notifications (user_id, type, ref_table, ref_id, message)
+           SELECT u.id, 'unblock_request_pending_tm', 'blocks', $1,
+                  'Unblock request approved by Financial Manager and pending TM decision.'
+           FROM users u
+           WHERE u.role IN ('ceo','chairman','vice_chairman','top_management') AND u.active = TRUE`,
+          [blockId]
+        )
+      } catch (_) {}
+
+      return res.json({ ok: true, unblock_status: 'pending_tm' })
+    } catch (error) {
+      console.error('Unblock FM approve error:', error)
+      return res.status(500).json({ error: { message: 'Internal error' } })
+    }
+  }
+)
+
+// FM/TM reject unblock request
+router.patch(
+  '/:id/unblock-reject',
+  authMiddleware,
+  requireRole(['financial_manager','ceo','chairman','vice_chairman','top_management']),
+  async (req, res) => {
+    const blockId = Number(req.params.id)
+    if (!Number.isFinite(blockId)) return res.status(400).json({ error: { message: 'Invalid block id' } })
+    const reason = (req.body && req.body.reason) || null
+    try {
+      await ensureBlocksSchema()
+      const bRes = await pool.query('SELECT * FROM blocks WHERE id = $1', [blockId])
+      if (bRes.rows.length === 0) return res.status(404).json({ error: { message: 'Block not found' } })
+      const row = bRes.rows[0]
+      if (row.status !== 'approved') return res.status(400).json({ error: { message: 'Only approved blocks can be unblocked' } })
+      if (!row.unblock_status || row.unblock_status === 'approved' || row.unblock_status === 'rejected') {
+        return res.status(400).json({ error: { message: 'No pending unblock request to reject' } })
+      }
+
+      await pool.query(
+        `UPDATE blocks
+         SET unblock_status = 'rejected',
+             updated_at = NOW()
+         WHERE id = $1`,
+        [blockId]
+      )
+
+      // Notify requester that unblock was rejected
+      try {
+        if (row.unblock_requested_by) {
+          await pool.query(
+            `INSERT INTO notifications (user_id, type, ref_table, ref_id, message)
+             VALUES ($1, 'unblock_request_rejected', 'blocks', $2,
+                     COALESCE($3, 'Unblock request was rejected.'))`,
+            [row.unblock_requested_by, blockId, reason]
+          )
+        }
+      } catch (_) {}
+
+      return res.json({ ok: true, unblock_status: 'rejected' })
+    } catch (error) {
+      console.error('Unblock reject error:', error)
+      return res.status(500).json({ error: { message: 'Internal error' } })
+    }
+  }
+)
+
 // TM approve unblock (actually unblocks unit)
 // TM can either:
 // - Approve a normal flow (unblock_status='pending_tm'), or

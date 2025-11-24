@@ -121,6 +121,9 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-11-24 10:40] Client Offer unit totals from Deal Detail and unblock-pending API wiring
+  - Client: Deal Detail only sends unit_pricing_breakdown to /api/documents/client-offer when a real unitPricingBreakdown exists on the saved calculator snapshot. Older deals without this field no longer send an all-zero breakdown, allowing the API’s fallback to unit_model_pricing to populate the unit totals box so Base and Total (incl. maintenance) show correct values instead of 0.00 in Client Offer PDFs.
+  - API: Added GET /api/blocks/unblock-pending plus PATCH /api/blocks/:id/unblock-fm-approve and PATCH /api/blocks/:id/unblock-reject in api/src/blockManagement.js. Financial Managers now see unblock requests in the “Pending Unit Unblock Requests” view and can approve (forward to TM) or reject them, and Top Management can still approve directly via /unblock-tm-approve. The endpoint now returns JSON instead of HTML 404, fixing the “Unexpected token '<', '<!DOCTYPE' is not valid JSON” error in the Financial Manager’s Unblock Requests tab.
 - [2025-11-23 00:15] Deal Detail offer export and unit block/unblock buttons
   - Client: On Deal Detail for Property Consultants, the “Print Offer (Pricing Form PDF)” button now exports the same Client Offer PDF used on the main Calculator page (server-rendered /api/documents/client-offer), ensuring consistent output and avoiding confusion with internal Pricing Form templates.
   - Client: The Deal Detail unit action button correctly toggles between “Request Unit Block” and “Request Unit Unblock” based on the saved unit_status/availability from the deal’s calculator snapshot, and sends unblock requests via POST /api/blocks/request-unblock without asking for a block duration.

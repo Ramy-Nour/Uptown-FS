@@ -345,8 +345,20 @@ export default function App(props) {
 
   // Persist on change (moved to hook)
   const snapshot = useMemo(() => ({
-    mode, language, currency, stdPlan, inputs, firstYearPayments, subsequentYears, clientInfo, unitInfo, contractInfo, customNotes, feeSchedule
-  }), [mode, language, currency, stdPlan, inputs, firstYearPayments, subsequentYears, clientInfo, unitInfo, contractInfo, customNotes, feeSchedule])
+    mode,
+    language,
+    currency,
+    stdPlan,
+    inputs,
+    firstYearPayments,
+    subsequentYears,
+    clientInfo,
+    unitInfo,
+    contractInfo,
+    customNotes,
+    feeSchedule,
+    unitPricingBreakdown
+  }), [mode, language, currency, stdPlan, inputs, firstYearPayments, subsequentYears, clientInfo, unitInfo, contractInfo, customNotes, feeSchedule, unitPricingBreakdown])
   usePersistCalculatorState(LS_KEY, snapshot)
 
   // Expose imperative APIs for embedding contexts (moved to hook)

@@ -122,21 +122,52 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
     const rtl = language === 'ar'
     const dir = rtl ? 'rtl' : 'ltr'
 
-    // Unit totals (optional) — prefer explicit breakdown from request for consistency with calculator
-    const upb = (unit_pricing_breakdown && typeof unit_pricing_breakdown === 'object')
-      ? {
-          base: Number(unit_pricing_breakdown.base || 0),
-          garden: Number(unit_pricing_breakdown.garden || 0),
-          roof: Number(unit_pricing_breakdown.roof || 0),
-          storage: Number(unit_pricing_breakdown.storage || 0),
-          garage: Number(unit_pricing_breakdown.garage || 0),
-          maintenance: Number(unit_pricing_breakdown.maintenance || 0),
+    // Unit totals (optional) — prefer explicit breakdown from request for consistency with calculator.
+    // If missing, fall back to latest approved unit-model pricing for the unit so the box is still populated
+    // for older deals that did not persist unit_pricing_breakdown.
+    let upb = null
+    if (unit_pricing_breakdown && typeof unit_pricing_breakdown === 'object') {
+      upb = {
+        base: Number(unit_pricing_breakdown.base || 0),
+        garden: Number(unit_pricing_breakdown.garden || 0),
+        roof: Number(unit_pricing_breakdown.roof || 0),
+        storage: Number(unit_pricing_breakdown.storage || 0),
+        garage: Number(unit_pricing_breakdown.garage || 0),
+        maintenance: Number(unit_pricing_breakdown.maintenance || 0)
+      }
+    } else if (unit && Number.isFinite(Number(unit.unit_id)) && Number(unit.unit_id) > 0) {
+      try {
+        const r = await pool.query(`
+          SELECT p.price, p.maintenance_price, p.garage_price, p.garden_price, p.roof_price, p.storage_price
+          FROM units u
+          JOIN unit_model_pricing p ON p.model_id = u.model_id
+          WHERE u.id=$1 AND p.status='approved'
+          ORDER BY p.id DESC
+          LIMIT 1
+        `, [Number(unit.unit_id)])
+        if (r.rows.length) {
+          const row = r.rows[0]
+          upb = {
+            base: Number(row.price || 0),
+            garden: Number(row.garden_price || 0),
+            roof: Number(row.roof_price || 0),
+            storage: Number(row.storage_price || 0),
+            garage: Number(row.garage_price || 0),
+            maintenance: Number(row.maintenance_price || 0)
+          }
         }
-      : null
+      } catch (_) {
+        // If lookup fails, keep upb as null and omit the box; PDF generation should still succeed.
+      }
+    }
     const totalExcl = upb
-      ? (Number(upb.base||0)+Number(upb.garden||0)+Number(upb.roof||0)+Number(upb.storage||0)+Number(upb.garage||0))
+      ? (Number(upb.base || 0) +
+         Number(upb.garden || 0) +
+         Number(upb.roof || 0) +
+         Number(upb.storage || 0) +
+         Number(upb.garage || 0))
       : null
-    const totalIncl = upb ? (Number(totalExcl||0) + Number(upb.maintenance||0)) : null
+    const totalIncl = upb ? (Number(totalExcl || 0) + Number(upb.maintenance || 0)) : null
 
     function arLabel(label) {
       if (!label) return ''

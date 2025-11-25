@@ -298,6 +298,8 @@ router.get('/unblock-pending', authMiddleware, async (req, res) => {
         b.unblock_status,
         b.unblock_reason,
         b.unblock_requested_at,
+        b.unblock_fm_id,
+        b.unblock_tm_id,
         ru.email AS requested_by_email
       FROM blocks b
       JOIN units u ON u.id = b.unit_id

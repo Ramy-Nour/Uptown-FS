@@ -9,20 +9,22 @@ const btn = { padding: '8px 10px', borderRadius: 8, border: '1px solid #d1d9e6',
 const badge = (bg, color) => ({ padding: '4px 8px', borderRadius: 999, fontSize: 12, background: bg, color })
 
 export default function BlockRequests() {
-  const [rows, setRows] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [cancelling, setCancelling] = useState(new Set())
-  const [acting, setActing] = useState(new Set())
-  const [showUnblock, setShowUnblock] = useState(false)
-  const [unblockRows, setUnblockRows] = useState([])
-  const [loadingUnblock, setLoadingUnblock] = useState(false)
-
   const user = (() => {
     try { return JSON.parse(localStorage.getItem('auth_user') || '{}') } catch { return {} }
   })()
   const role = user?.role
   const userId = user?.id
+
+  const [rows, setRows] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [cancelling, setCancelling] = useState(new Set())
+  const [acting, setActing] = useState(new Set())
+  const [showUnblock, setShowUnblock] = useState(
+    ['ceo', 'chairman', 'vice_chairman', 'top_management'].includes(role)
+  )
+  const [unblockRows, setUnblockRows] = useState([])
+  const [loadingUnblock, setLoadingUnblock] = useState(false)
 
   async function load() {
     try {

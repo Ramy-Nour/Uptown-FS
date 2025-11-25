@@ -123,11 +123,11 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
     const dir = rtl ? 'rtl' : 'ltr'
 
     // Unit totals (optional) — prefer explicit breakdown from request for consistency with calculator.
-    // If missing, fall back to latest approved unit-model pricing for the unit so the box is still populated
-    // for older deals that did not persist unit_pricing_breakdown.
+    // If missing (or clearly all zeros), fall back to latest approved unit-model pricing for the unit so
+    // the box is still populated for older deals that did not persist unit_pricing_breakdown correctly.
     let upb = null
     if (unit_pricing_breakdown && typeof unit_pricing_breakdown === 'object') {
-      upb = {
+      const candidate = {
         base: Number(unit_pricing_breakdown.base || 0),
         garden: Number(unit_pricing_breakdown.garden || 0),
         roof: Number(unit_pricing_breakdown.roof || 0),
@@ -135,7 +135,22 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
         garage: Number(unit_pricing_breakdown.garage || 0),
         maintenance: Number(unit_pricing_breakdown.maintenance || 0)
       }
-    } else if (unit && Number.isFinite(Number(unit.unit_id)) && Number(unit.unit_id) > 0) {
+      const allZero =
+        !candidate.base &&
+        !candidate.garden &&
+        !candidate.roof &&
+        !candidate.storage &&
+        !candidate.garage &&
+        !candidate.maintenance
+
+      // Treat an all-zero breakdown as "not provided" so that we can fall back to pricing
+      // instead of rendering 0.00 everywhere in the unit totals box.
+      if (!allZero) {
+        upb = candidate
+      }
+    }
+
+    if (!upb && unit && Number.isFinite(Number(unit.unit_id)) && Number(unit.unit_id) > 0) {
       try {
         const r = await pool.query(`
           SELECT p.price, p.maintenance_price, p.garage_price, p.garden_price, p.roof_price, p.storage_price

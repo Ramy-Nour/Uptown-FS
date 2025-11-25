@@ -381,7 +381,10 @@ export default function BlockRequests() {
                               })
                               const data = await resp.json().catch(() => ({}))
                               if (!resp.ok) throw new Error(data?.error?.message || 'Failed to approve unblock')
-                              notifySuccess('Unblock request approved. Unit is now AVAILABLE.')
+                              const overrideNote = data && data.tm_override
+                                ? ' (TM override: FM stage bypassed.)'
+                                : ''
+                              notifySuccess(`Unblock request approved by Top Management. Unit is now AVAILABLE.${overrideNote}`)
                               await loadUnblock()
                             } catch (e) {
                               notifyError(e, 'Unable to approve unblock request')
@@ -391,7 +394,7 @@ export default function BlockRequests() {
                           }}
                           loading={acting.has(r.id)}
                           style={{ ...btn, border: '1px solid #1e40af', color: '#1e40af' }}
-                          title="Top Management approval (unit will be unblocked)"
+                          title="Top Management approval (unit will be unblocked – TM can override FM by approving directly when pending FM)"
                         >
                           TM Approve Unblock
                         </LoadingButton>

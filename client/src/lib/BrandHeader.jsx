@@ -173,7 +173,7 @@ export default function BrandHeader({ title, onLogout }) {
           { label: 'Unit Models', href: '/admin/unit-models' },
           { label: 'Holds', href: '/admin/holds' },
           { label: 'Payment Thresholds', href: '/admin/payment-thresholds' },
-       ]
+        ]
       case 'financial_admin':
         return [
           ...baseWithCalc,
@@ -216,7 +216,8 @@ export default function BrandHeader({ title, onLogout }) {
           { label: 'Inventory Drafts', href: '/admin/inventory-drafts' },
           { label: 'Payment Threshold Approvals', href: '/admin/payment-thresholds' },
           { label: 'Workflow Logs', href: '/admin/workflow-logs' },
-          { label: 'Hold Approvals', href: '/admin/hold-approvals' }
+          { label: 'Hold Approvals', href: '/admin/hold-approvals' },
+          { label: 'Unblock Requests', href: '/deals/block-requests' }
         ]
       default:
         return base

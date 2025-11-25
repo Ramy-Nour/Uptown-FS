@@ -9,20 +9,22 @@ const btn = { padding: '8px 10px', borderRadius: 8, border: '1px solid #d1d9e6',
 const badge = (bg, color) => ({ padding: '4px 8px', borderRadius: 999, fontSize: 12, background: bg, color })
 
 export default function BlockRequests() {
-  const [rows, setRows] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [cancelling, setCancelling] = useState(new Set())
-  const [acting, setActing] = useState(new Set())
-  const [showUnblock, setShowUnblock] = useState(false)
-  const [unblockRows, setUnblockRows] = useState([])
-  const [loadingUnblock, setLoadingUnblock] = useState(false)
-
   const user = (() => {
     try { return JSON.parse(localStorage.getItem('auth_user') || '{}') } catch { return {} }
   })()
   const role = user?.role
   const userId = user?.id
+
+  const [rows, setRows] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [cancelling, setCancelling] = useState(new Set())
+  const [acting, setActing] = useState(new Set())
+  const [showUnblock, setShowUnblock] = useState(
+    ['ceo', 'chairman', 'vice_chairman', 'top_management'].includes(role)
+  )
+  const [unblockRows, setUnblockRows] = useState([])
+  const [loadingUnblock, setLoadingUnblock] = useState(false)
 
   async function load() {
     try {
@@ -297,6 +299,7 @@ export default function BlockRequests() {
                 <th style={th}>Reason</th>
                 <th style={th}>Requested</th>
                 <th style={th}>Status</th>
+                <th style={th}>Override Note</th>
                 <th style={th}>Actions</th>
               </tr>
             </thead>
@@ -304,15 +307,37 @@ export default function BlockRequests() {
               {loadingUnblock && (
                 <tr><td style={td} colSpan={7}>Loading…</td></tr>
               )}
-              {!loadingUnblock && unblockRows.map(r => (
-                <tr key={r.id}>
-                  <td style={td}>{r.id}</td>
-                  <td style={td}>{r.unit_code} — {r.unit_type}</td>
-                  <td style={td}>{r.requested_by_email || '-'}</td>
-                  <td style={td}>{r.unblock_reason || '-'}</td>
-                  <td style={td}>{r.unblock_requested_at ? new Date(r.unblock_requested_at).toLocaleString() : ''}</td>
-                  <td style={td}>{r.unblock_status || '-'}</td>
-                  <td style={{ ...td, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {!loadingUnblock && unblockRows.map(r => {
+                const status = String(r.unblock_status || '').toLowerCase()
+                const statusBadge = (() => {
+                  if (status === 'pending_fm') return <span style={badge('#fef9c3', '#854d0e')}>Pending FM</span>
+                  if (status === 'pending_tm') return <span style={badge('#eff6ff', '#1e40af')}>Pending TM</span>
+                  if (status === 'approved') return <span style={badge('#ecfdf5', '#065f46')}>Approved</span>
+                  if (status === 'rejected') return <span style={badge('#fef2f2', '#991b1b')}>Rejected</span>
+                  return <span style={badge('#f8fafc', '#334155')}>{r.unblock_status || '-'}</span>
+                })()
+                const overrideNote = (() => {
+                  // If TM can see this row and FM has not yet approved (no unblock_fm_id) while status is pending_fm,
+                  // any TM approval here will be recorded as an override.
+                  if (isTM && status === 'pending_fm' && !r.unblock_fm_id) {
+                    return <span style={badge('#fee2e2', '#b91c1c')}>TM override if approved (FM stage bypassed)</span>
+                  }
+                  // If FM has already approved (unblock_fm_id present) and status is pending_tm, TM decision is after FM.
+                  if (status === 'pending_tm' && r.unblock_fm_id) {
+                    return <span style={badge('#e0f2fe', '#075985')}>FM approved – awaiting TM decision</span>
+                  }
+                  return null
+                })()
+                return (
+                  <tr key={r.id}>
+                    <td style={td}>{r.id}</td>
+                    <td style={td}>{r.unit_code} — {r.unit_type}</td>
+                    <td style={td}>{r.requested_by_email || '-'}</td>
+                    <td style={td}>{r.unblock_reason || '-'}</td>
+                    <td style={td}>{r.unblock_requested_at ? new Date(r.unblock_requested_at).toLocaleString() : ''}</td>
+                    <td style={td}>{statusBadge}</td>
+                    <td style={td}>{overrideNote}</td>
+                    <td style={{ ...td, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     {canFM && (
                       <>
                         <LoadingButton
@@ -379,7 +404,10 @@ export default function BlockRequests() {
                               })
                               const data = await resp.json().catch(() => ({}))
                               if (!resp.ok) throw new Error(data?.error?.message || 'Failed to approve unblock')
-                              notifySuccess('Unblock request approved. Unit is now AVAILABLE.')
+                              const overrideNote = data && data.tm_override
+                                ? ' (TM override: FM stage bypassed.)'
+                                : ''
+                              notifySuccess(`Unblock request approved by Top Management. Unit is now AVAILABLE.${overrideNote}`)
                               await loadUnblock()
                             } catch (e) {
                               notifyError(e, 'Unable to approve unblock request')
@@ -389,7 +417,7 @@ export default function BlockRequests() {
                           }}
                           loading={acting.has(r.id)}
                           style={{ ...btn, border: '1px solid #1e40af', color: '#1e40af' }}
-                          title="Top Management approval (unit will be unblocked)"
+                          title="Top Management approval (unit will be unblocked – TM can override FM by approving directly when pending FM)"
                         >
                           TM Approve Unblock
                         </LoadingButton>
@@ -425,7 +453,7 @@ export default function BlockRequests() {
                 </tr>
               ))}
               {!loadingUnblock && unblockRows.length === 0 && (
-                <tr><td style={td} colSpan={7}>No pending unblock requests.</td></tr>
+                <tr><td style={td} colSpan={8}>No pending unblock requests.</td></tr>
               )}
             </tbody>
           </table>

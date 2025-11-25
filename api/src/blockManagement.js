@@ -298,6 +298,8 @@ router.get('/unblock-pending', authMiddleware, async (req, res) => {
         b.unblock_status,
         b.unblock_reason,
         b.unblock_requested_at,
+        b.unblock_fm_id,
+        b.unblock_tm_id,
         ru.email AS requested_by_email
       FROM blocks b
       JOIN units u ON u.id = b.unit_id
@@ -391,14 +393,24 @@ router.patch(
         [blockId]
       )
 
-      // Notify requester that unblock was rejected
+      // Notify requester that unblock was rejected, with a remark when TM overrides FM
       try {
         if (row.unblock_requested_by) {
+          const actorRole = (req.user && req.user.role) || ''
+          const fmApproved = !!row.unblock_fm_id
+          let baseMsg = 'Unblock request was rejected.'
+          if (actorRole === 'financial_manager') {
+            baseMsg = 'Unblock request was rejected by Financial Manager.'
+          } else if (['ceo','chairman','vice_chairman','top_management'].includes(actorRole)) {
+            baseMsg = fmApproved
+              ? 'Unblock request was rejected by Top Management after FM approval.'
+              : 'Unblock request was rejected by Top Management (FM stage bypassed).'
+          }
+          const finalMsg = reason ? `${baseMsg} Reason: ${reason}` : baseMsg
           await pool.query(
             `INSERT INTO notifications (user_id, type, ref_table, ref_id, message)
-             VALUES ($1, 'unblock_request_rejected', 'blocks', $2,
-                     COALESCE($3, 'Unblock request was rejected.'))`,
-            [row.unblock_requested_by, blockId, reason]
+             VALUES ($1, 'unblock_request_rejected', 'blocks', $2, $3)`,
+            [row.unblock_requested_by, blockId, finalMsg]
           )
         }
       } catch (_) {}

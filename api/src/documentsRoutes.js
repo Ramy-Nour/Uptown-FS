@@ -763,106 +763,101 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
             </div>
 
             <div class="mt-4">
-              <table class="rf-table">
-                <thead>
-                  <tr>
-                    <th class="${textAlignLeft}">${L('Item', 'البند')}</th>
-                    <th class="${textAlignRight}">${L('Amount', 'القيمة')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>${L('Base Price', 'السعر الأساسي')}</td>
-                    <td class="${textAlignRight}">
-                      ${Number(upb?.base || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
-                    </td>
-                  </tr>
-                  ${Number(upb?.garden||0)>0 ? `
-                    <tr>
-                      <td>${L('Garden', 'الحديقة')}</td>
-                      <td class="${textAlignRight}">
-                        ${Number(upb?.garden || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
-                      </td>
-                    </tr>` : ''}
-                  ${Number(upb?.roof||0)>0 ? `
-                    <tr>
-                      <td>${L('Roof', 'السطح')}</td>
-                      <td class="${textAlignRight}">
-                        ${Number(upb?.roof || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
-                      </td>
-                    </tr>` : ''}
-                  ${Number(upb?.storage||0)>0 ? `
-                    <tr>
-                      <td>${L('Storage', 'غرفة التخزين')}</td>
-                      <td class="${textAlignRight}">
-                        ${Number(upb?.storage || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
-                      </td>
-                    </tr>` : ''}
-                  ${Number(upb?.garage||0)>0 ? `
-                    <tr>
-                      <td>${L('Garage', 'الجراج')}</td>
-                      <td class="${textAlignRight}">
-                        ${Number(upb?.garage || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
-                      </td>
-                    </tr>` : ''}
-                  ${Number(upb?.maintenance||0)>0 ? `
-                    <tr>
-                      <td>${L('Maintenance Deposit', 'وديعة الصيانة')}</td>
-                      <td class="${textAlignRight}">
+              ${rtl ? `
+                &lt;div class="space-y-2 text-base leading-relaxed ${textAlignLeft}"&gt;
+                  &lt;p&gt;
+                    ثمن الوحدة شامل المساحة الإضافية والجراج وغرفة التخزين /
+                    ${Number(totalExcl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} جم
+                    (${priceWords} لاغير)
+                  &lt;/p&gt;
+                  &lt;p&gt;
+                    وديعة الصيانة /
+                    ${Number(upb?.maintenance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} جم
+                    (${maintenanceWords} لاغير)
+                  &lt;/p&gt;
+                  &lt;p&gt;
+                    إجمالي المطلوب سداده /
+                    ${Number(totalIncl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} جم
+                    (${totalWords} لاغير)
+                  &lt;/p&gt;
+                  &lt;p&gt;
+                    دفعة حجز مبدئي :
+                    ${Number(preliminaryPayment).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} جم
+                    (${prelimWords} لاغير)
+                    تم سدادها بتاريخ
+                    ${reservationDate}
+                  &lt;/p&gt;
+                  &lt;p&gt;
+                    دفعة المقدم:
+                    ${dpNetOfPrelim.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} جم
+                    (${dpNetWords} لاغير)
+                  &lt;/p&gt;
+                  &lt;p&gt;
+                    باقي المبلغ:
+                    ${Number(remainingAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} جم
+                    (${remainingWords} لاغير)
+                  &lt;/p&gt;
+                  &lt;p class="mt-2 text-sm italic text-gray-700"&gt;
+                    * يتم سداد باقي المبلغ طبقا لملحق السداد المرفق.
+                  &lt;/p&gt;
+                &lt;/div&gt;
+              ` : `
+                &lt;table class="rf-table"&gt;
+                  &lt;thead&gt;
+                    &lt;tr&gt;
+                      &lt;th class="${textAlignLeft}"&gt;${L('Item', 'البند')}&lt;/th&gt;
+                      &lt;th class="${textAlignRight}"&gt;${L('Amount', 'القيمة')}&lt;/th&gt;
+                    &lt;/tr&gt;
+                  &lt;/thead&gt;
+                  &lt;tbody&gt;
+                    &lt;tr&gt;
+                      &lt;td&gt;Base Price (excl. maintenance)&lt;/td&gt;
+                      &lt;td class="${textAlignRight}"&gt;
+                        ${Number(totalExcl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
+                        &lt;div class="text-xs text-gray-600 mt-1"&gt;${priceWords}&lt;/div&gt;
+                      &lt;/td&gt;
+                    &lt;/tr&gt;
+                    &lt;tr&gt;
+                      &lt;td&gt;Maintenance Deposit&lt;/td&gt;
+                      &lt;td class="${textAlignRight}"&gt;
                         ${Number(upb?.maintenance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
-                        <div class="text-xs text-gray-600 mt-1">${maintenanceWords}</div>
-                      </td>
-                    </tr>` : ''}
-                  <tr>
-                    <td class="font-semibold">
-                      ${L('Total (excl. maintenance)', 'الإجمالي (بدون وديعة الصيانة)')}
-                    </td>
-                    <td class="${textAlignRight} font-semibold">
-                      ${Number(totalExcl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
-                      <div class="text-xs text-gray-600 mt-1">${priceWords}</div>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td class="font-semibold">
-                      ${L('Total (incl. maintenance)', 'الإجمالي (شامل وديعة الصيانة)')}
-                    </td>
-                    <td class="${textAlignRight} font-semibold">
-                      ${Number(totalIncl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
-                      <div class="text-xs text-gray-600 mt-1">${totalWords}</div>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>
-                      ${L('Preliminary Reservation Payment', 'دفعة حجز مبدئية')}
-                    </td>
-                    <td class="${textAlignRight}">
-                      ${Number(preliminaryPayment).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
-                      <div class="text-xs text-gray-600 mt-1">${prelimWords}</div>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>
-                      ${L('Contract Down Payment (net of reservation)', 'إجمالي دفعة التعاقد بدون دفعة الحجز')}
-                    </td>
-                    <td class="${textAlignRight}">
-                      ${dpNetOfPrelim.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
-                      <div class="text-xs text-gray-600 mt-1">${dpNetWords}</div>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td class="font-semibold">
-                      ${L('Remaining Amount', 'باقي المبلغ')}
-                    </td>
-                    <td class="${textAlignRight} font-semibold">
-                      ${Number(remainingAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
-                      <div class="text-xs text-gray-600 mt-1">${remainingWords}</div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-              <p class="mt-2 text-sm italic text-gray-500 ${textAlignLeft}">
-                ${L('* The remaining amount will be paid according to the attached payment plan.', '* يتم سداد باقي المبلغ طبقا لملحق السداد المرفق.')}
-              </p>
+                        &lt;div class="text-xs text-gray-600 mt-1"&gt;${maintenanceWords}&lt;/div&gt;
+                      &lt;/td&gt;
+                    &lt;/tr&gt;
+                    &lt;tr&gt;
+                      &lt;td class="font-semibold"&gt;Total (incl. maintenance)&lt;/td&gt;
+                      &lt;td class="${textAlignRight} font-semibold"&gt;
+                        ${Number(totalIncl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
+                        &lt;div class="text-xs text-gray-600 mt-1"&gt;${totalWords}&lt;/div&gt;
+                      &lt;/td&gt;
+                    &lt;/tr&gt;
+                    &lt;tr&gt;
+                      &lt;td&gt;Preliminary Reservation Payment&lt;/td&gt;
+                      &lt;td class="${textAlignRight}"&gt;
+                        ${Number(preliminaryPayment).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
+                        &lt;div class="text-xs text-gray-600 mt-1"&gt;${prelimWords}&lt;/div&gt;
+                      &lt;/td&gt;
+                    &lt;/tr&gt;
+                    &lt;tr&gt;
+                      &lt;td&gt;Contract Down Payment (net of reservation)&lt;/td&gt;
+                      &lt;td class="${textAlignRight}"&gt;
+                        ${dpNetOfPrelim.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
+                        &lt;div class="text-xs text-gray-600 mt-1"&gt;${dpNetWords}&lt;/div&gt;
+                      &lt;/td&gt;
+                    &lt;/tr&gt;
+                    &lt;tr&gt;
+                      &lt;td class="font-semibold"&gt;Remaining Amount&lt;/td&gt;
+                      &lt;td class="${textAlignRight} font-semibold"&gt;
+                        ${Number(remainingAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
+                        &lt;div class="text-xs text-gray-600 mt-1"&gt;${remainingWords}&lt;/div&gt;
+                      &lt;/td&gt;
+                    &lt;/tr&gt;
+                  &lt;/tbody&gt;
+                &lt;/table&gt;
+                &lt;p class="mt-2 text-sm italic text-gray-500 ${textAlignLeft}"&gt;
+                  * The remaining amount will be paid according to the attached payment plan.
+                &lt;/p&gt;
+              `}
             </div>
           </section>
 

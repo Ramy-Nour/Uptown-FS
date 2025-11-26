@@ -534,8 +534,9 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
 
     // Pricing for the reservation form must come strictly from the deal snapshot
     // (calc.unitPricingBreakdown) so it reflects the agreed offer, not any later
-    // changes in unit_model_pricing. We still read unit.area from the live units
-    // table for informational purposes, but we do NOT override prices from there.
+    // changes in unit_model_pricing. We still read structural unit fields such as
+    // area, building number, block/sector, and zone from the live units table for
+    // informational purposes only; we do NOT override prices from there.
     let upb = calc?.unitPricingBreakdown || null
     let totalIncl = 0
     let currency = UIcurrency || calc?.currency || ''
@@ -543,14 +544,20 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
       unit_code: calc?.unitInfo?.unit_code || '',
       unit_type: calc?.unitInfo?.unit_type || '',
       unit_id: calc?.unitInfo?.unit_id || null,
-      unit_area: null
+      unit_area: null,
+      building_number: null,
+      block_sector: null,
+      zone: null
     }
     try {
       const unitId = Number(unit?.unit_id)
       if (Number.isFinite(unitId) && unitId > 0) {
         const r = await pool.query(`
           SELECT
-            u.area AS unit_area
+            u.area AS unit_area,
+            u.building_number,
+            u.block_sector,
+            u.zone
           FROM units u
           WHERE u.id=$1
           LIMIT 1
@@ -558,6 +565,9 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
         if (r.rows.length) {
           const row = r.rows[0]
           unit.unit_area = row.unit_area != null ? Number(row.unit_area) || null : null
+          unit.building_number = row.building_number != null ? String(row.building_number) : null
+          unit.block_sector = row.block_sector != null ? String(row.block_sector) : null
+          unit.zone = row.zone != null ? String(row.zone) : null
         }
       }
     } catch {}
@@ -747,18 +757,34 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
 
             <div class="space-y-3 text-lg leading-relaxed ${textAlignLeft}">
               <div>
+                <span class="font-bold">${L('Unit Type', 'نوع الوحدة')}:</span>
+                <span class="form-input-like px-2">
+                  ${L('Residential Apartment', 'شقة سكنية')} (${unit.unit_type || '-'})
+                </span>
+                <span class="ml-4">
+                  ${L('(Unit Area /', '(Unit Area /')} 
+                  <span class="form-input-like px-2">
+                    ${unit.unit_area != null ? Number(unit.unit_area).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' م²' : '-'}
+                  </span>
+                  )
+                </span>
+              </div>
+              <div>
                 <span class="font-bold">${L('Unit Code', 'كود الوحدة')}:</span>
                 <span class="form-input-like px-2">${unit.unit_code || '-'}</span>
               </div>
               <div>
-                <span class="font-bold">${L('Unit Type', 'نوع الوحدة')}:</span>
-                <span class="form-input-like px-2">${unit.unit_type || '-'}</span>
+                <span class="font-bold">${L('Building Number', 'مبنى رقم')}:</span>
+                <span class="form-input-like px-2">${unit.building_number || '-'}</span>
+                <span class="ml-4 font-bold">${L('Block/Sector', 'قطاع')}:</span>
+                <span class="form-input-like px-2">${unit.block_sector || '-'}</span>
+                <span class="ml-4 font-bold">${L('Zone', 'مجاورة')}:</span>
+                <span class="form-input-like px-2">${unit.zone || '-'}</span>
               </div>
-              <div>
-                <span class="font-bold">${L('Unit Area', 'مساحة الوحدة')}:</span>
-                <span class="form-input-like px-2">
-                  ${unit.unit_area != null ? Number(unit.unit_area).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' م²' : '-'}
-                </span>
+              <div class="text-sm text-gray-700 mt-1">
+                ${rtl
+                  ? 'بمشروع ابتاون ريزيدنس – حى ابتاون ٦ أكتوبر'
+                  : 'Uptown Residence Project – Uptown 6th of October District'}
               </div>
             </div>
 

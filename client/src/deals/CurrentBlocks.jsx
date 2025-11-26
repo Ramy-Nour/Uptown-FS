@@ -77,12 +77,12 @@ export default function CurrentBlocks() {
       }
       // Validate preliminary payment as a non-negative number
       const prelim = f.preliminaryPayment === '' || f.preliminaryPayment == null ? 0 : Number(f.preliminaryPayment)
-      if (!Number.isFinite(prelim) || prelim &lt; 0) {
+      if (!Number.isFinite(prelim) || prelim < 0) {
         alert('Preliminary Payment must be a non-negative number.')
         return
       }
-      setCreating(s =&gt; new Set([...s, id]))
-      const row = rows.find(r =&gt; r.id === id)
+      setCreating(s => new Set([...s, id]))
+      const row = rows.find(r => r.id === id)
       const details = {
         reservation_date: f.reservationDate || null,
         preliminary_payment: prelim,
@@ -94,14 +94,14 @@ export default function CurrentBlocks() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ payment_plan_id: paymentPlanId, details })
       })
-      const data = await resp.json().catch(() =&gt; ({}))
+      const data = await resp.json().catch(() => ({}))
       if (!resp.ok) throw new Error(data?.error?.message || 'Failed to create reservation form')
       alert(`Reservation Form #${data?.reservation_form?.id} created and sent for Financial Manager approval.`)
-      setForm(fm =&gt; ({ ...fm, [id]: { ...fm[id], reservationDate: '', preliminaryPayment: '', language: 'en' } }))
+      setForm(fm => ({ ...fm, [id]: { ...fm[id], reservationDate: '', preliminaryPayment: '', language: 'en' } }))
     } catch (e) {
       alert(e.message || String(e))
     } finally {
-      setCreating(s =&gt; { const n = new Set(s); n.delete(id); return n })
+      setCreating(s => { const n = new Set(s); n.delete(id); return n })
     }
   }
 
@@ -109,14 +109,14 @@ export default function CurrentBlocks() {
     try {
       const f = form[id] || {}
       const plans = f.plans || []
-      const plan = plans.find(p =&gt; p.id === f.selectedPlanId) || plans[0]
+      const plan = plans.find(p => p.id === f.selectedPlanId) || plans[0]
       const dealId = plan?.dealId
       if (!dealId) {
         alert('Unable to determine the related deal for this plan. Reservation PDF requires a deal_id.')
         return
       }
       const prelim = f.preliminaryPayment === '' || f.preliminaryPayment == null ? 0 : Number(f.preliminaryPayment)
-      if (!Number.isFinite(prelim) || prelim &lt; 0) {
+      if (!Number.isFinite(prelim) || prelim < 0) {
         alert('Preliminary Payment must be a non-negative number.')
         return
       }

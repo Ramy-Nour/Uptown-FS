@@ -588,7 +588,7 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
 
     const numBuyers = Math.min(Math.max(Number(calc?.clientInfo?.number_of_buyers) || 1, 1), 4)
     const buyers = []
-    for (let i = 1; i &lt;= numBuyers; i++) {
+    for (let i = 1; i <= numBuyers; i++) {
       const sfx = i === 1 ? '' : `_${i}`
       buyers.push({
         buyer_name: calc?.clientInfo?.[`buyer_name${sfx}`] || '',
@@ -608,41 +608,7 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
     const textAlignLeft = rtl ? 'text-right' : 'text-left'
     const textAlignRight = rtl ? 'text-left' : 'text-right'
 
-    // Build buyers HTML (up to 4 owners) using detailed blocks from saved Client Info (no FA editing)
-    const buyersHtml = buyers.length
-      ? buyers.map((b, idx) =&gt; `
-        &lt;div class="mb-3 text-base leading-relaxed"&gt;
-          &lt;div class="flex items-center mb-1"&gt;
-            &lt;span class="font-bold w-32 ml-2"&gt;${L('Buyer', 'العميل')} ${idx + 1}:&lt;/span&gt;
-            &lt;span class="flex-1 border-b border-dotted border-gray-500 pb-0.5"&gt;${b.buyer_name || '-'}&lt;/span&gt;
-          &lt;/div&gt;
-          &lt;div class="flex items-center mb-1"&gt;
-            &lt;span class="font-bold w-32 ml-2"&gt;${L('Nationality', 'الجنسية')}:&lt;/span&gt;
-            &lt;span class="flex-1 border-b border-dotted border-gray-500 pb-0.5"&gt;${b.nationality || '-'}&lt;/span&gt;
-          &lt;/div&gt;
-          &lt;div class="flex items-center mb-1"&gt;
-            &lt;span class="font-bold w-32 ml-2"&gt;${L('ID / Passport No.', 'الرقم القومي / جواز السفر')}:&lt;/span&gt;
-            &lt;span class="flex-1 border-b border-dotted border-gray-500 pb-0.5"&gt;${b.id_or_passport || '-'}&lt;/span&gt;
-          &lt;/div&gt;
-          &lt;div class="flex items-center mb-1"&gt;
-            &lt;span class="font-bold w-32 ml-2"&gt;${L('ID Issue Date', 'تاريخ الإصدار')}:&lt;/span&gt;
-            &lt;span class="flex-1 border-b border-dotted border-gray-500 pb-0.5"&gt;${b.id_issue_date || '-'}&lt;/span&gt;
-          &lt;/div&gt;
-          &lt;div class="flex items-center mb-1"&gt;
-            &lt;span class="font-bold w-32 ml-2"&gt;${L('Address', 'العنوان')}:&lt;/span&gt;
-            &lt;span class="flex-1 border-b border-dotted border-gray-500 pb-0.5"&gt;${b.address || '-'}&lt;/span&gt;
-          &lt;/div&gt;
-          &lt;div class="flex items-center mb-1"&gt;
-            &lt;span class="font-bold w-32 ml-2"&gt;${L('Phone', 'الهاتف')}:&lt;/span&gt;
-            &lt;span class="flex-1 border-b border-dotted border-gray-500 pb-0.5"&gt;${[b.phone_primary, b.phone_secondary].filter(Boolean).join(' / ') || '-'}&lt;/span&gt;
-          &lt;/div&gt;
-          &lt;div class="flex items-center"&gt;
-            &lt;span class="font-bold w-32 ml-2"&gt;${L('Email', 'البريد الإلكتروني')}:&lt;/span&gt;
-            &lt;span class="flex-1 border-b border-dotted border-gray-500 pb-0.5"&gt;${b.email || '-'}&lt;/span&gt;
-          &lt;/div&gt;
-        &lt;/div&gt;
-      `).join('')
-      : `&lt;div class="text-gray-500 text-sm"&gt;${L('No client data', 'لا توجد بيانات عملاء')}&lt;/div&gt;`uild buyers HTML (up to 4 owners) using compact blocks
+    // Build buyers HTML (up to 4 owners) using compact blocks
     const buyersHtml = buyers.length
       ? buyers.map((b, idx) => `
         <div class="flex items-center mb-2 text-base leading-relaxed">
@@ -790,99 +756,99 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
 
             <div class="mt-4">
               ${rtl ? `
-                &lt;div class="space-y-2 text-base leading-relaxed ${textAlignLeft}"&gt;
-                  &lt;p&gt;
+                <div class="space-y-2 text-base leading-relaxed ${textAlignLeft}">
+                  <p>
                     ثمن الوحدة شامل المساحة الإضافية والجراج وغرفة التخزين /
                     ${Number(totalExcl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} جم
                     (${priceWords} لاغير)
-                  &lt;/p&gt;
-                  &lt;p&gt;
+                  </p>
+                  <p>
                     وديعة الصيانة /
                     ${Number(upb?.maintenance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} جم
                     (${maintenanceWords} لاغير)
-                  &lt;/p&gt;
-                  &lt;p&gt;
+                  </p>
+                  <p>
                     إجمالي المطلوب سداده /
                     ${Number(totalIncl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} جم
                     (${totalWords} لاغير)
-                  &lt;/p&gt;
-                  &lt;p&gt;
+                  </p>
+                  <p>
                     دفعة حجز مبدئي :
                     ${Number(preliminaryPayment).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} جم
                     (${prelimWords} لاغير)
                     تم سدادها بتاريخ
                     ${reservationDate}
-                  &lt;/p&gt;
-                  &lt;p&gt;
+                  </p>
+                  <p>
                     دفعة المقدم:
                     ${dpNetOfPrelim.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} جم
                     (${dpNetWords} لاغير)
-                  &lt;/p&gt;
-                  &lt;p&gt;
+                  </p>
+                  <p>
                     باقي المبلغ:
                     ${Number(remainingAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} جم
                     (${remainingWords} لاغير)
-                  &lt;/p&gt;
-                  &lt;p class="mt-2 text-sm italic text-gray-700"&gt;
+                  </p>
+                  <p class="mt-2 text-sm italic text-gray-700">
                     * يتم سداد باقي المبلغ طبقا لملحق السداد المرفق.
-                  &lt;/p&gt;
-                &lt;/div&gt;
+                  </p>
+                </div>
               ` : `
-                &lt;table class="rf-table"&gt;
-                  &lt;thead&gt;
-                    &lt;tr&gt;
-                      &lt;th class="${textAlignLeft}"&gt;${L('Item', 'البند')}&lt;/th&gt;
-                      &lt;th class="${textAlignRight}"&gt;${L('Amount', 'القيمة')}&lt;/th&gt;
-                    &lt;/tr&gt;
-                  &lt;/thead&gt;
-                  &lt;tbody&gt;
-                    &lt;tr&gt;
-                      &lt;td&gt;Base Price (excl. maintenance)&lt;/td&gt;
-                      &lt;td class="${textAlignRight}"&gt;
+                <table class="rf-table">
+                  <thead>
+                    <tr>
+                      <th class="${textAlignLeft}">${L('Item', 'البند')}</th>
+                      <th class="${textAlignRight}">${L('Amount', 'القيمة')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>Base Price (excl. maintenance)</td>
+                      <td class="${textAlignRight}">
                         ${Number(totalExcl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
-                        &lt;div class="text-xs text-gray-600 mt-1"&gt;${priceWords}&lt;/div&gt;
-                      &lt;/td&gt;
-                    &lt;/tr&gt;
-                    &lt;tr&gt;
-                      &lt;td&gt;Maintenance Deposit&lt;/td&gt;
-                      &lt;td class="${textAlignRight}"&gt;
+                        <div class="text-xs text-gray-600 mt-1">${priceWords}</div>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>Maintenance Deposit</td>
+                      <td class="${textAlignRight}">
                         ${Number(upb?.maintenance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
-                        &lt;div class="text-xs text-gray-600 mt-1"&gt;${maintenanceWords}&lt;/div&gt;
-                      &lt;/td&gt;
-                    &lt;/tr&gt;
-                    &lt;tr&gt;
-                      &lt;td class="font-semibold"&gt;Total (incl. maintenance)&lt;/td&gt;
-                      &lt;td class="${textAlignRight} font-semibold"&gt;
+                        <div class="text-xs text-gray-600 mt-1">${maintenanceWords}</div>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td class="font-semibold">Total (incl. maintenance)</td>
+                      <td class="${textAlignRight} font-semibold">
                         ${Number(totalIncl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
-                        &lt;div class="text-xs text-gray-600 mt-1"&gt;${totalWords}&lt;/div&gt;
-                      &lt;/td&gt;
-                    &lt;/tr&gt;
-                    &lt;tr&gt;
-                      &lt;td&gt;Preliminary Reservation Payment&lt;/td&gt;
-                      &lt;td class="${textAlignRight}"&gt;
+                        <div class="text-xs text-gray-600 mt-1">${totalWords}</div>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>Preliminary Reservation Payment</td>
+                      <td class="${textAlignRight}">
                         ${Number(preliminaryPayment).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
-                        &lt;div class="text-xs text-gray-600 mt-1"&gt;${prelimWords}&lt;/div&gt;
-                      &lt;/td&gt;
-                    &lt;/tr&gt;
-                    &lt;tr&gt;
-                      &lt;td&gt;Contract Down Payment (net of reservation)&lt;/td&gt;
-                      &lt;td class="${textAlignRight}"&gt;
+                        <div class="text-xs text-gray-600 mt-1">${prelimWords}</div>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>Contract Down Payment (net of reservation)</td>
+                      <td class="${textAlignRight}">
                         ${dpNetOfPrelim.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
-                        &lt;div class="text-xs text-gray-600 mt-1"&gt;${dpNetWords}&lt;/div&gt;
-                      &lt;/td&gt;
-                    &lt;/tr&gt;
-                    &lt;tr&gt;
-                      &lt;td class="font-semibold"&gt;Remaining Amount&lt;/td&gt;
-                      &lt;td class="${textAlignRight} font-semibold"&gt;
+                        <div class="text-xs text-gray-600 mt-1">${dpNetWords}</div>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td class="font-semibold">Remaining Amount</td>
+                      <td class="${textAlignRight} font-semibold">
                         ${Number(remainingAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
-                        &lt;div class="text-xs text-gray-600 mt-1"&gt;${remainingWords}&lt;/div&gt;
-                      &lt;/td&gt;
-                    &lt;/tr&gt;
-                  &lt;/tbody&gt;
-                &lt;/table&gt;
-                &lt;p class="mt-2 text-sm italic text-gray-500 ${textAlignLeft}"&gt;
+                        <div class="text-xs text-gray-600 mt-1">${remainingWords}</div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+                <p class="mt-2 text-sm italic text-gray-500 ${textAlignLeft}">
                   * The remaining amount will be paid according to the attached payment plan.
-                &lt;/p&gt;
+                </p>
               `}
             </div>
           </section>
@@ -945,24 +911,26 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
     await page.setContent(html, { waitUntil: 'load' })
     const footerTemplate = `
       <div style="width:100%; font-size:10px; color:#6b7280; padding:6px 10px; font-family:'Noto Naskh Arabic','Amiri','DejaVu Sans',Arial, sans-serif; ${rtl ? 'direction:rtl; unicode-bidi:bidi-override; text-align:left;' : 'direction:ltr; text-align:right;'}">
-        ${L('Page', 'صفحة')} <span class="pageNumber"></span> ${L('of', 'من')} <span class="totalPages"></span>
+        ${rtl ? 'صفحة' : 'Page'} <span class="pageNumber"></span> ${rtl ? 'من' : 'of'} <span class="totalPages"></span>
       </div>`
     const headerTemplate = `
       <div style="width:100%; padding:12px 14px 8px; font-family:'Noto Naskh Arabic','Amiri','DejaVu Sans',Arial,sans-serif; ${rtl ? 'direction:rtl; unicode-bidi:bidi-override;' : 'direction:ltr;'}">
         <div style="display:flex; justify-content:space-between; align-items:flex-end;">
           <div style="${rtl ? 'text-align:left;' : 'text-align:left'}; color:#A97E34; font-weight:700; font-size:13px;">
-            ${L('Uptown 6 October Financial System', 'نظام شركة أبتاون 6 أكتوبر المالي')}
+            ${rtl ? 'نظام شركة أبتاون 6 أكتوبر المالي' : 'Uptown 6 October Financial System'}
           </div>
           <div style="${rtl ? 'text-align:right;' : 'text-align:right'}; font-size:10px; color:#6b7280;">
-            ${L('Generated', 'تم الإنشاء')}: ${todayTs}
+            ${rtl ? 'تم الإنشاء' : 'Generated'}: ${todayTs}
           </div>
         </div>
         <div style="text-align:center; font-weight:800; font-size:20px; color:#111827; margin-top:6px;">
-          ${L('Reservation Form', 'نموذج الحجز')}
+          ${title}
         </div>
         <div style="font-size:11px; color:#374151; margin-top:4px; ${rtl ? 'text-align:right;' : 'text-align:left;'}">
-          <span style="font-weight:700;">${L('Reservation Date', 'تاريخ الحجز')}:</span> ${fmtDate(reservationDate)}
-          &nbsp;&nbsp;<span style="font-weight:700;">${L('Unit', 'الوحدة')}:</span> ${unit?.unit_code || ''} — ${unit?.unit_type || ''}
+          <span style="font-weight:700;">${tOfferDate}:</span> ${fmtDate(offer_date || '')}
+          &nbsp;&nbsp;<span style="font-weight:700;">${tFirstPayment}:</span> ${fmtDate(first_payment_date || '')}<br/>
+          <span style="font-weight:700;">${tUnit}:</span> ${unit?.unit_code || ''} — ${unit?.unit_type || ''}<br/>
+          <span style="font-weight:700;">${tConsultant}:</span> ${consultant?.email || ''}
         </div>
       </div>`
     const pdfBuffer = await page.pdf({

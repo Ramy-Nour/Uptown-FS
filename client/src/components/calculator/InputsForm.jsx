@@ -42,6 +42,7 @@ export default function InputsForm({
   const input = (err) => styles.input ? styles.input(err) : { padding: '10px 12px', borderRadius: 10, border: '1px solid #dfe5ee', outline: 'none', width: '100%', fontSize: 14, background: '#fbfdff' }
   const select = (err) => styles.select ? styles.select(err) : { padding: '10px 12px', borderRadius: 10, border: '1px solid #dfe5ee', outline: 'none', width: '100%', fontSize: 14, background: '#fbfdff' }
   const todayStr = new Date().toISOString().slice(0, 10)
+  const isStandardMode = mode === 'standardMode'
 
   // Apply document direction whenever language changes
   useEffect(() => {
@@ -171,7 +172,13 @@ export default function InputsForm({
 
         <div>
           <label style={styles.label}>{t('installment_frequency', language)}</label>
-          <select value={inputs.installmentFrequency} onChange={e => setInputs(s => ({ ...s, installmentFrequency: e.target.value }))} style={select(errors.installmentFrequency)}>
+          <select
+            value={isStandardMode ? 'quarterly' : inputs.installmentFrequency}
+            onChange={e => !isStandardMode && setInputs(s => ({ ...s, installmentFrequency: e.target.value }))}
+            style={select(errors.installmentFrequency)}
+            disabled={isStandardMode}
+            title={isStandardMode ? (isRTL(language) ? 'الوضع القياسي يستخدم ربع سنوي ثابتاً' : 'Standard Mode uses fixed quarterly installments') : undefined}
+          >
             <option value="monthly">{t('monthly', language)}</option>
             <option value="quarterly">{t('quarterly', language)}</option>
             <option value="bi-annually">{t('bi_annually', language)}</option>
@@ -231,13 +238,22 @@ export default function InputsForm({
 
         <div>
           <label style={styles.label}>{t('sales_discount', language)}</label>
-          <input type="number" value={inputs.salesDiscountPercent} onChange={e => setInputs(s => ({ ...s, salesDiscountPercent: e.target.value }))} style={input()} />
+          <input
+            type="number"
+            value={inputs.salesDiscountPercent}
+            onChange={e => setInputs(s => ({ ...s, salesDiscountPercent: e.target.value }))}
+            style={input()}
+          />
           {DiscountHint && <DiscountHint role={undefined} value={inputs.salesDiscountPercent} />}
         </div>
 
         <div>
           <label style={styles.label}>{t('dp_type', language)}</label>
-          {['calculateForTargetPV','customYearlyThenEqual_targetPV'].includes(mode) ? (
+          {isStandardMode ? (
+            <select value="percentage" disabled style={select(errors.dpType)}>
+              <option value="percentage">{t('percentage', language)} (fixed)</option>
+            </select>
+          ) : ['calculateForTargetPV','customYearlyThenEqual_targetPV'].includes(mode) ? (
             <select value="amount" disabled style={select(errors.dpType)}>
               <option value="amount">{t('amount', language)} (fixed)</option>
             </select>
@@ -248,7 +264,7 @@ export default function InputsForm({
             </select>
           )}
           {errors.dpType && <small style={styles.error}>{errors.dpType}</small>}
-          {['calculateForTargetPV','customYearlyThenEqual_targetPV'].includes(mode) && (
+          {['calculateForTargetPV','customYearlyThenEqual_targetPV'].includes(mode) && !isStandardMode && (
             <small style={{ ...styles.metaText, display: 'block', marginTop: 6 }}>
               {isRTL(language)
                 ? 'تم تعطيل الدفعة المقدمة كنسبة مئوية في أوضاع مطابقة القيمة الحالية لتجنب الحلقة عند حل السعر من القيمة الحالية. الرجاء استخدام قيمة ثابتة.'
@@ -258,11 +274,26 @@ export default function InputsForm({
         </div>
         <div>
           <label style={styles.label}>
-            {['calculateForTargetPV','customYearlyThenEqual_targetPV'].includes(mode)
-              ? `${t('down_payment_value', language)} (amount)`
-              : t('down_payment_value', language)}
+            {isStandardMode
+              ? `${t('down_payment_value', language)} (20%)`
+              : ['calculateForTargetPV','customYearlyThenEqual_targetPV'].includes(mode)
+                ? `${t('down_payment_value', language)} (amount)`
+                : t('down_payment_value', language)}
           </label>
-          {inputs.dpType === 'percentage' && !['calculateForTargetPV','customYearlyThenEqual_targetPV'].includes(mode) ? (
+          {isStandardMode ? (
+            <div style={{ position: 'relative' }}>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                value={20}
+                disabled
+                style={{ ...input(errors.downPaymentValue), paddingRight: 36 }}
+              />
+              <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#6b7280', fontWeight: 600 }}>%</span>
+            </div>
+          ) : inputs.dpType === 'percentage' && !['calculateForTargetPV','customYearlyThenEqual_targetPV'].includes(mode) ? (
             <div style={{ position: 'relative' }}>
               <input
                 type="number"
@@ -292,18 +323,39 @@ export default function InputsForm({
 
         <div>
           <label style={styles.label}>{t('plan_duration_years', language)}</label>
-          <input type="number" value={inputs.planDurationYears} onChange={e => setInputs(s => ({ ...s, planDurationYears: e.target.value }))} style={input(errors.planDurationYears)} />
+          <input
+            type="number"
+            value={isStandardMode ? 6 : inputs.planDurationYears}
+            onChange={e => !isStandardMode && setInputs(s => ({ ...s, planDurationYears: e.target.value }))}
+            style={input(errors.planDurationYears)}
+            disabled={isStandardMode}
+            title={isStandardMode ? (isRTL(language) ? 'مدة الخطة ثابتة ٦ سنوات في الوضع القياسي' : 'Plan duration is fixed to 6 years in Standard Mode') : undefined}
+          />
           {errors.planDurationYears && <small style={styles.error}>{errors.planDurationYears}</small>}
         </div>
 
         <div>
           <label style={styles.label}>{t('handover_year', language)}</label>
-          <input type="number" value={inputs.handoverYear} onChange={e => setInputs(s => ({ ...s, handoverYear: e.target.value }))} style={input(errors.handoverYear)} />
+          <input
+            type="number"
+            value={isStandardMode ? 3 : inputs.handoverYear}
+            onChange={e => !isStandardMode && setInputs(s => ({ ...s, handoverYear: e.target.value }))}
+            style={input(errors.handoverYear)}
+            disabled={isStandardMode}
+            title={isStandardMode ? (isRTL(language) ? 'سنة التسليم ثابتة عند السنة الثالثة في الوضع القياسي' : 'Handover year is fixed to Year 3 in Standard Mode') : undefined}
+          />
           {errors.handoverYear && <small style={styles.error}>{errors.handoverYear}</small>}
         </div>
         <div>
           <label style={styles.label}>{t('additional_handover_payment', language)}</label>
-          <input type="number" value={inputs.additionalHandoverPayment} onChange={e => setInputs(s => ({ ...s, additionalHandoverPayment: e.target.value }))} style={input(errors.additionalHandoverPayment)} />
+          <input
+            type="number"
+            value={isStandardMode ? 0 : inputs.additionalHandoverPayment}
+            onChange={e => !isStandardMode && setInputs(s => ({ ...s, additionalHandoverPayment: e.target.value }))}
+            style={input(errors.additionalHandoverPayment)}
+            disabled={isStandardMode}
+            title={isStandardMode ? (isRTL(language) ? 'لا توجد دفعة إضافية عند التسليم في الوضع القياسي' : 'No additional handover lump sum in Standard Mode') : undefined}
+          />
           {errors.additionalHandoverPayment && <small style={styles.error}>{errors.additionalHandoverPayment}</small>}
         </div>
 
@@ -320,6 +372,8 @@ export default function InputsForm({
                 onChange={e => setFeeSchedule(s => ({ ...s, maintenancePaymentAmount: e.target.value }))}
                 style={input()}
                 placeholder={isRTL(language) ? 'مثال: 50000' : 'e.g., 50000'}
+                disabled={isStandardMode}
+                title={isStandardMode ? (isRTL(language) ? 'قيمة وديعة الصيانة مأخوذة من التسعير القياسي ولا يمكن تعديلها في الوضع القياسي.' : 'Maintenance Deposit amount comes from Standard Pricing and cannot be edited in Standard Mode.') : undefined}
               />
               <small style={styles.metaText}>
                 {isRTL(language)
@@ -346,12 +400,18 @@ export default function InputsForm({
 
         <div style={styles.blockFull}>
           <label style={{ ...styles.label, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-            <input type="checkbox" checked={inputs.splitFirstYearPayments} onChange={e => setInputs(s => ({ ...s, splitFirstYearPayments: e.target.checked }))} />
+            <input
+              type="checkbox"
+              checked={isStandardMode ? false : inputs.splitFirstYearPayments}
+              onChange={e => !isStandardMode && setInputs(s => ({ ...s, splitFirstYearPayments: e.target.checked }))}
+              disabled={isStandardMode}
+              title={isStandardMode ? (isRTL(language) ? 'هيكل السنوات الأولى ثابت في الوضع القياسي ولا يمكن تقسيمه.' : 'First year payments are fixed in Standard Mode and cannot be split.') : undefined}
+            />
             {t('split_first_year', language)}
           </label>
         </div>
 
-        {inputs.splitFirstYearPayments && (
+        {!isStandardMode && inputs.splitFirstYearPayments && (
           <FirstYearPayments
             styles={styles}
             language={language}
@@ -361,6 +421,18 @@ export default function InputsForm({
             updateFirstYearPayment={updateFirstYearPayment}
             removeFirstYearPayment={removeFirstYearPayment}
           />
+        )}
+
+        {!isStandardMode && (
+          <SubsequentYears
+            styles={styles}
+            subsequentYears={subsequentYears}
+            errors={errors}
+            addSubsequentYear={addSubsequentYear}
+            updateSubsequentYear={updateSubsequentYear}
+            removeSubsequentYear={removeSubsequentYear}
+          />
+        )}
         )}
 
         <SubsequentYears

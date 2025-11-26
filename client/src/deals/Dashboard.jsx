@@ -296,6 +296,12 @@ export default function Dashboard() {
         </div>
       </div>
 
+      <p style={{ marginTop: 4, marginBottom: 8, fontSize: 12, color: '#64748b' }}>
+        Note: <strong>Deal Status</strong> shows the approval state of the offer itself (draft, pending_approval, approved, rejected).
+        <br />
+        <strong>Unit Availability</strong> shows the live status of the underlying unit (AVAILABLE, BLOCKED, etc.) from Inventory.
+      </p>
+
       {approverBanner.show && (
         <div style={{ margin: '8px 0 12px', padding: '10px 12px', borderRadius: 8, background: '#fff7ed', border: '1px solid #fed7aa', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>

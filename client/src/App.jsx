@@ -43,7 +43,7 @@ export default function App(props) {
   const [errors, setErrors] = useState({})
 
   // Custom form state
-  const [mode, setMode] = useState('evaluateCustomPrice')
+  const [mode, setMode] = useState('standardMode')
   const [language, setLanguage] = useState('en')
   const [currency, setCurrency] = useState('EGP')
   const [stdPlan, setStdPlan] = useState({
@@ -54,13 +54,13 @@ export default function App(props) {
   const [inputs, setInputs] = useState({
     // Default: no sales discount in any mode
     salesDiscountPercent: 0,
-    // Default: Down Payment in percent (20%) across modes
+    // Default: Down Payment in percent (20%) across modes (locked in Standard Mode)
     dpType: 'percentage',
     downPaymentValue: 20,
-    planDurationYears: 5,
-    installmentFrequency: 'monthly',
+    planDurationYears: 6,
+    installmentFrequency: 'quarterly',
     additionalHandoverPayment: 0,
-    handoverYear: 2,
+    handoverYear: 3,
     splitFirstYearPayments: false,
     offerDate: new Date().toISOString().slice(0, 10),
     firstPaymentDate: new Date().toISOString().slice(0, 10)
@@ -76,7 +76,19 @@ export default function App(props) {
   // DP is still expressed as a percentage, convert it once to an amount based on the current
   // Standard Total Price, then lock the type to 'amount'.
   useEffect(() => {
-    if (mode === 'calculateForTargetPV' || mode === 'customYearlyThenEqual_targetPV') {
+    if (mode === 'standardMode') {
+      // Lock DP to 20% percentage in Standard Mode
+      setInputs(s => ({
+        ...s,
+        dpType: 'percentage',
+        downPaymentValue: 20,
+        planDurationYears: 6,
+        installmentFrequency: 'quarterly',
+        handoverYear: 3,
+        additionalHandoverPayment: 0,
+        splitFirstYearPayments: false
+      }))
+    } else if (mode === 'calculateForTargetPV' || mode === 'customYearlyThenEqual_targetPV') {
       setInputs(s => {
         if (s.dpType === 'amount') return s
         const dpPct = Number(s.downPaymentValue || 20)
@@ -89,7 +101,7 @@ export default function App(props) {
         }
       })
     } else {
-      // In non target-PV modes, default to 20% DP expressed as percentage if nothing set
+      // In non target-PV, non-standard modes, default to 20% DP expressed as percentage if nothing set
       setInputs(s => ({
         ...s,
         dpType: s.dpType || 'percentage',

@@ -17,14 +17,18 @@ function InfoRow({ label, value }) {
  * - onCreateOffer: (unit) => void
  */
 export function UnitCard({ unit, mode = 'compact', onCreateOffer }) {
+  const isBlocked = String(unit.unit_status || '').toUpperCase() === 'BLOCKED'
+
   const box = {
+    position: 'relative',
     border: '1px solid #e6eaf0',
     borderRadius: 12,
     padding: 12,
     display: 'flex',
     flexDirection: 'column',
     gap: 8,
-    background: '#fff'
+    background: '#fff',
+    overflow: 'hidden'
   }
   const header = {
     display: 'flex',
@@ -43,8 +47,42 @@ export function UnitCard({ unit, mode = 'compact', onCreateOffer }) {
   const roofLabel = unit.roof_available ? `Yes (${Number(unit.roof_area || 0).toLocaleString()} m²)` : 'No'
   const totalExclMaint = Number(unit.total_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })
 
+  const statusLabel = unit.unit_status || ''
+  const statusUpper = statusLabel.toString().toUpperCase()
+  const isAvailable = statusUpper === 'AVAILABLE'
+
   return (
     <div style={box}>
+      {isBlocked && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            pointerEvents: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: 0.08
+          }}
+        >
+          <div
+            style={{
+              padding: '6px 40px',
+              borderRadius: 999,
+              border: '2px solid #dc2626',
+              color: '#dc2626',
+              fontWeight: 800,
+              letterSpacing: 4,
+              fontSize: 26,
+              transform: 'rotate(-18deg)',
+              textTransform: 'uppercase',
+              background: 'transparent'
+            }}
+          >
+            Blocked
+          </div>
+        </div>
+      )}
       <div style={header}>
         <div>
           <div style={title}>{unit.code}</div>
@@ -76,9 +114,20 @@ export function UnitCard({ unit, mode = 'compact', onCreateOffer }) {
       )}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={sub}>Status: {unit.unit_status}</span>
+        <span style={sub}>Status: {statusLabel || '-'}</span>
         {typeof onCreateOffer === 'function' ? (
-          <button style={btn} onClick={() => onCreateOffer(unit)}>Create Offer</button>
+          <button
+            style={{
+              ...btn,
+              ...(isBlocked ? { opacity: 0.6, cursor: 'not-allowed', borderColor: '#fecaca', color: '#b91c1c' } : {})
+            }}
+            onClick={() => {
+              if (isBlocked) return
+              onCreateOffer(unit)
+            }}
+          >
+            {isAvailable ? 'Create Offer' : 'Create Offer'}
+          </button>
         ) : null}
       </div>
     </div>

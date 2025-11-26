@@ -121,6 +121,8 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-11-26 15:25] Inventory cards — visual BLOCKED watermark for blocked units
+  - Client: Inventory grid cards now show a large red “BLOCKED” watermark over any unit whose unit_status is BLOCKED, while keeping the details readable. The “Create Offer” button on blocked cards is visually dimmed and non-clickable, matching the existing behavior that prevents offer creation for blocked units. AVAILABLE units retain the normal white card with no watermark.
 - [2025-11-26 15:10] All Deals table — Unit Availability column and auto-approval wiring
   - Client: Deals → All Deals table now has a separate “Deal Status” column (draft / pending_approval / approved / rejected) and a “Unit Availability” column that surfaces the live unit status from Inventory via current_unit_status/current_unit_available. This makes the list view match the hint text and clearly separates deal lifecycle from the underlying unit state (AVAILABLE, BLOCKED, etc.).
   - API: Hardened the auto-approval lookup in PATCH /api/blocks/:id/approve so that when a Financial Manager approves a normal block (financial_decision='ACCEPT' and no override approval), the server reliably finds the most recent matching deal by unit_id (trimming string unit_id values) and sets its status to approved, logging an auto_approved_on_block entry in deal_history. This fixes cases where blocked units did not automatically flip the related deal to approved despite meeting the criteria.

@@ -175,12 +175,17 @@ router.get('/', authMiddleware, async (req, res) => {
     params.push(pageSize)
     params.push(offset)
     const listSql = `
-      SELECT d.*, u.email as created_by_email
+      SELECT
+        d.*,
+        u.email as created_by_email,
+        un.unit_status AS current_unit_status,
+        un.available AS current_unit_available
       FROM deals d
       LEFT JOIN users u ON u.id = d.created_by
+      LEFT JOIN units un ON un.id = (d.details->'calculator'->'unitInfo'->>'unit_id')::int
       ${whereSql}
       ORDER BY ${sortCol} ${dir}
-      LIMIT $${params.length - 1} OFFSET $${params.length}
+      LIMIT ${params.length - 1} OFFSET ${params.length}
     `
     const rows = await pool.query(listSql, params)
 

@@ -190,6 +190,32 @@ export default function DealDetail() {
 
   const autoApprovedOnBlock = history.some(h => h.action === 'auto_approved_on_block')
 
+  // Shared badge colors (aligned with Dashboard/Inventory lists)
+  const palette = {
+    green: '#16a34a',
+    blue: '#2563eb',
+    red: '#dc2626',
+    gray: '#64748b'
+  }
+
+  const dealStatusLabel = deal?.status || ''
+  const dealStatusUpper = dealStatusLabel.toString().toUpperCase()
+  let dealStatusColor = palette.gray
+  if (dealStatusUpper === 'APPROVED') dealStatusColor = palette.green
+  else if (dealStatusUpper === 'PENDING_APPROVAL') dealStatusColor = palette.blue
+  else if (dealStatusUpper === 'REJECTED') dealStatusColor = palette.red
+
+  const unitStatusUpper = unitAvailabilityLabel.toString().toUpperCase()
+  let unitStatusColor = palette.gray
+  if (unitStatusUpper === 'AVAILABLE') unitStatusColor = palette.green
+  else if (unitStatusUpper === 'BLOCKED') unitStatusColor = palette.red
+  else if (unitStatusUpper && unitStatusUpper !== 'UNKNOWN') unitStatusColor = palette.blue
+
+  const overrideUpper = overrideLabel.toString().toUpperCase()
+  let overrideColor = palette.gray
+  if (overrideUpper.indexOf('APPROVED') !== -1) overrideColor = palette.green
+  else if (overrideUpper.indexOf('PENDING') !== -1) overrideColor = palette.blue
+
   async function generateDocFromSaved(documentType) {
     try {
       const snap = deal?.details?.calculator
@@ -428,15 +454,55 @@ export default function DealDetail() {
           >
             <div>
               <div style={{ fontSize: 12, textTransform: 'uppercase', color: '#6b7280' }}>Deal Status</div>
-              <div style={{ fontWeight: 600 }}>{deal.status}</div>
+              <div>
+                <span
+                  style={{
+                    padding: '2px 10px',
+                    borderRadius: 999,
+                    fontSize: 12,
+                    background: '#f8fafc',
+                    color: dealStatusColor,
+                    textTransform: 'none'
+                  }}
+                >
+                  {dealStatusLabel}
+                </span>
+              </div>
             </div>
             <div>
               <div style={{ fontSize: 12, textTransform: 'uppercase', color: '#6b7280' }}>Override</div>
-              <div style={{ fontWeight: 600 }}>{overrideLabel}</div>
+              <div>
+                <span
+                  style={{
+                    padding: '2px 10px',
+                    borderRadius: 999,
+                    fontSize: 12,
+                    background: '#f8fafc',
+                    color: overrideColor,
+                    textTransform: 'none'
+                  }}
+                >
+                  {overrideLabel}
+                </span>
+              </div>
             </div>
             <div>
               <div style={{ fontSize: 12, textTransform: 'uppercase', color: '#6b7280' }}>Unit Availability</div>
-              <div style={{ fontWeight: 600 }}>{unitAvailabilityLabel}</div>
+              <div>
+                <span
+                  style={{
+                    padding: '2px 10px',
+                    borderRadius: 999,
+                    fontSize: 12,
+                    background: '#f8fafc',
+                    color: unitStatusColor,
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.3
+                  }}
+                >
+                  {unitAvailabilityLabel}
+                </span>
+              </div>
             </div>
           </div>
           {autoApprovedOnBlock && (

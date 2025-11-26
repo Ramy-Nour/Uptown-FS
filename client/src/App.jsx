@@ -52,9 +52,11 @@ export default function App(props) {
     calculatedPV: 850000
   })
   const [inputs, setInputs] = useState({
-    salesDiscountPercent: 1.5,
-    dpType: 'amount',
-    downPaymentValue: 100000,
+    // Default: no sales discount in any mode
+    salesDiscountPercent: 0,
+    // Default: Down Payment in percent (20%) across modes
+    dpType: 'percentage',
+    downPaymentValue: 20,
     planDurationYears: 5,
     installmentFrequency: 'monthly',
     additionalHandoverPayment: 0,
@@ -69,18 +71,33 @@ export default function App(props) {
     applyDocumentDirection(language)
   }, [language])
 
-  // When switching into PV-target modes, convert DP% to a fixed amount once.
-  // This avoids the pitfall where a user had 20% and it becomes the literal amount "20"
-  // leading to an unrealistically low solved total.
+  // When switching into PV-target modes (2 and 4), Down Payment must be an absolute value (amount),
+  // not a percentage. For other modes we default to 20% DP. When entering a target-PV mode and the
+  // DP is still expressed as a percentage, convert it once to an amount based on the current
+  // Standard Total Price, then lock the type to 'amount'.
   useEffect(() => {
     if (mode === 'calculateForTargetPV' || mode === 'customYearlyThenEqual_targetPV') {
       setInputs(s => {
         if (s.dpType === 'amount') return s
-        const dpPct = Number(s.downPaymentValue) || 0
+        const dpPct = Number(s.downPaymentValue || 20)
         const base = Number(stdPlan.totalPrice) || 0
         const dpAmt = base > 0 ? (base * dpPct) / 100 : 0
-        return { ...s, dpType: 'amount', downPaymentValue: Number(dpAmt.toFixed(2)) }
+        return {
+          ...s,
+          dpType: 'amount',
+          downPaymentValue: Number(dpAmt.toFixed(2))
+        }
       })
+    } else {
+      // In non target-PV modes, default to 20% DP expressed as percentage if nothing set
+      setInputs(s => ({
+        ...s,
+        dpType: s.dpType || 'percentage',
+        downPaymentValue:
+          (s.dpType === 'percentage' && (s.downPaymentValue == null || s.downPaymentValue === 0))
+            ? 20
+            : s.downPaymentValue
+      }))
     }
   }, [mode, stdPlan.totalPrice])
 

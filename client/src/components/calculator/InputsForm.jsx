@@ -99,6 +99,7 @@ export default function InputsForm({
         <div>
           <label style={styles.label}>{t('mode', language)}</label>
           <select value={mode} onChange={e => setMode(e.target.value)} style={select()}>
+            <option value="standardMode">{isRTL(language) ? 'الوضع القياسي (خطة افتراضية)' : 'Standard Mode (Default Plan)'}</option>
             <option value="evaluateCustomPrice">{isRTL(language) ? 'سعر قياسي بعد الخصم (مقارنة بالقياسي)' : 'Discounted Standard Price (Compare to Standard)'}</option>
             <option value="calculateForTargetPV">{isRTL(language) ? 'سعر مستهدف: مطابقة القيمة الحالية القياسية' : 'Target Price: Match Standard PV'}</option>
             <option value="customYearlyThenEqual_useStdPrice">{isRTL(language) ? 'هيكل مخصص باستخدام السعر القياسي' : 'Custom Structure using Standard Price'}</option>
@@ -106,49 +107,59 @@ export default function InputsForm({
           </select>
           {(() => {
             const info = {
+              standardMode: {
+                en: {
+                  name: 'Standard Mode (Default Plan)',
+                  desc: 'Uses the approved Standard Price with a fixed structure: 20% Down Payment (percentage), 6 years quarterly; Years 1–3 pay 15% per year (3.75% per quarter) and the remaining 35% is spread equally over Years 4–6. Handover is fixed at Year 3. Discount is allowed (up to 2% for consultants) but any non-zero discount will always require an override.'
+                },
+                ar: {
+                  name: 'الوضع القياسي (الخطة الافتراضية)',
+                  desc: 'يستخدم السعر القياسي المعتمد مع هيكل ثابت: ٢٠٪ دفعة مقدمة (كنسبة مئوية)، مدة ٦ سنوات بواقع ربع سنوي؛ السنوات ١–٣ تسدد ١٥٪ سنوياً (٣٫٧٥٪ لكل ربع سنة) والباقي ٣٥٪ يوزع بالتساوي على السنوات ٤–٦. سنة التسليم ثابتة عند السنة الثالثة. يُسمح بالخصم (حتى ٢٪ للمستشار) ولكن أي خصم أكبر من صفر يتطلب دائماً طلب استثناء (Override).'
+                }
+              },
               evaluateCustomPrice: {
                 en: {
                   name: 'Discounted Standard Price (Compare to Standard)',
-                  desc: 'Applies Sales Discount to the Standard Price, computes the plan (including your DP and structure), then compares the resulting schedule against acceptance thresholds.'
+                  desc: 'Applies Sales Discount to the Standard Price, computes the plan (including your Down Payment and structure), then compares the resulting schedule against acceptance thresholds. Default Down Payment is 20% as a percentage, but you can switch between percentage and amount.'
                 },
                 ar: {
                   name: 'سعر قياسي بعد الخصم (مقارنة بالقياسي)',
-                  desc: 'يطبق خصم المبيعات على السعر القياسي ويُكوّن الخطة (بما في ذلك الدفعة المقدمة وهيكل السداد) ثم يقارن الجدول بحدود القبول.'
+                  desc: 'يطبق خصم المبيعات على السعر القياسي ويُكوّن الخطة (بما في ذلك الدفعة المقدمة وهيكل السداد) ثم يقارن الجدول بحدود القبول. الدفعة المقدمة الافتراضية ٢٠٪ كنسبة مئوية، ويمكنك التبديل بين النسبة والقيمة.'
                 }
               },
               calculateForTargetPV: {
                 en: {
                   name: 'Target Price: Match Standard PV',
-                  desc: 'Solves for installments so that Present Value equals the Standard PV using your chosen structure (including your DP). Then the schedule is evaluated against acceptance thresholds.'
+                  desc: 'Solves for installments so that Present Value equals the Standard PV using your chosen structure. In this mode the Down Payment must be an absolute amount (not a percentage); any percentage entered previously is converted once to a value based on the Standard Price.'
                 },
                 ar: {
                   name: 'سعر مستهدف: مطابقة القيمة الحالية القياسية',
-                  desc: 'يحسب الأقساط بحيث تساوي القيمة الحالية القيمة القياسية باستخدام الهيكل الذي تختاره (بما في ذلك الدفعة المقدمة)، ثم يتم تقييم الجدول مقابل حدود القبول.'
+                  desc: 'يحسب الأقساط بحيث تساوي القيمة الحالية القيمة القياسية باستخدام الهيكل الذي تختاره. في هذا الوضع يجب أن تكون الدفعة المقدمة قيمة ثابتة (وليس نسبة مئوية)، ويتم تحويل أي نسبة أدخلت سابقاً مرة واحدة إلى قيمة مبنية على السعر القياسي.'
                 }
               },
               customYearlyThenEqual_useStdPrice: {
                 en: {
                   name: 'Custom Structure using Standard Price',
-                  desc: 'Keeps the Standard Price but lets you define split First Year and subsequent years; the remainder is equal installments. The result is compared to acceptance thresholds.'
+                  desc: 'Keeps the Standard Price but lets you define split First Year and subsequent years; the remainder is equal installments. Default Down Payment is 20% as a percentage, but you can choose either percentage or amount.'
                 },
                 ar: {
                   name: 'هيكل مخصص باستخدام السعر القياسي',
-                  desc: 'يُبقي على السعر القياسي مع تمكينك من تقسيم السنة الأولى وتحديد السنوات اللاحقة؛ ويتم توزيع الباقي كأقساط متساوية. ثم تُقارن النتيجة بحدود القبول.'
+                  desc: 'يُبقي على السعر القياسي مع تمكينك من تقسيم السنة الأولى وتحديد السنوات اللاحقة؛ ويتم توزيع الباقي كأقساط متساوية. الدفعة المقدمة الافتراضية ٢٠٪ كنسبة مئوية، ويمكنك اختيار النسبة أو القيمة.'
                 }
               },
               customYearlyThenEqual_targetPV: {
                 en: {
                   name: 'Custom Structure targeting Standard PV',
-                  desc: 'Define split First Year and subsequent years; the remainder is equal installments. Solves so that Present Value equals the Standard PV, then evaluates the schedule against acceptance thresholds.'
+                  desc: 'Define split First Year and subsequent years; the remainder is equal installments. In this mode the Down Payment must be an absolute amount (not a percentage); any previous percentage is converted once to a value based on the Standard Price when you switch into this mode.'
                 },
                 ar: {
                   name: 'هيكل مخصص بهدف مطابقة القيمة الحالية القياسية',
-                  desc: 'حدد تقسيم السنة الأولى والسنوات اللاحقة؛ ويتم توزيع الباقي كأقساط متساوية. يحسب بحيث تساوي القيمة الحالية القيمة القياسية ثم يقيم الجدول مقابل حدود القبول.'
+                  desc: 'حدد تقسيم السنة الأولى والسنوات اللاحقة؛ ويتم توزيع الباقي كأقساط متساوية. في هذا الوضع يجب أن تكون الدفعة المقدمة قيمة ثابتة (وليس نسبة مئوية)، ويتم تحويل أي نسبة سابقة مرة واحدة إلى قيمة مبنية على السعر القياسي عند الانتقال إلى هذا الوضع.'
                 }
               }
             }
             const l = isRTL(language) ? 'ar' : 'en'
-            const m = info[mode] || info.evaluateCustomPrice
+            const m = info[mode] || info.standardMode
             return (
               <div style={{ marginTop: 8, background: '#fbfaf7', border: '1px dashed #ead9bd', borderRadius: 8, padding: 10 }}>
                 <div style={{ fontWeight: 700, marginBottom: 4 }}>{m[l].name}</div>

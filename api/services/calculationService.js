@@ -13,7 +13,8 @@ export const CalculationModes = Object.freeze({
   EvaluateCustomPrice: 'evaluateCustomPrice',
   CalculateForTargetPV: 'calculateForTargetPV',
   CustomYearlyThenEqual_TargetPV: 'customYearlyThenEqual_targetPV',
-  CustomYearlyThenEqual_UseStdPrice: 'customYearlyThenEqual_useStdPrice'
+  CustomYearlyThenEqual_UseStdPrice: 'customYearlyThenEqual_useStdPrice',
+  StandardMode: 'standardMode'
 });
 
 /**
@@ -183,6 +184,47 @@ export function evaluateCustomPrice(stdPlan, inputs) {
   const netTotalPrice = stdPrice * (1 - salesDiscountPct / 100);
 
   return commonDistributeForNominalTotal(netTotalPrice, stdPlan, inputs);
+}
+
+/**
+ * Standard Mode:
+ * - Uses Standard Price as baseline.
+ * - Allows sales discount (up to policy limits), applied to the Standard Price.
+ * - Enforces a fixed structure:
+ *    - Down Payment: 20% (of the discounted nominal price).
+ *    - Plan Duration: 6 years.
+ *    - Frequency: quarterly.
+ *    - First 3 years: each year takes 15% of the (discounted) total as custom yearly blocks,
+ *      scheduled quarterly (3.75% per quarter).
+ *    - Remaining 35% is distributed as equal installments over the next 3 years (12 quarters),
+ *      ~2.917% per quarter.
+ *    - Handover year forced to 3; no additional handover lump sum.
+ *    - Maintenance/garage handling is done at the plan-generation layer.
+ */
+export function standardMode(stdPlan, inputs) {
+  const stdPrice = Number(stdPlan?.totalPrice) || 0;
+  const salesDiscountPct = Number(inputs?.salesDiscountPercent) || 0;
+  const netTotalPrice = stdPrice * (1 - salesDiscountPct / 100);
+
+  // Enforce the Standard Mode structure regardless of incoming inputs
+  const forcedInputs = {
+    ...inputs,
+    dpType: 'percentage',
+    downPaymentValue: 20,
+    planDurationYears: 6,
+    installmentFrequency: Frequencies.Quarterly,
+    additionalHandoverPayment: 0,
+    handoverYear: 3,
+    splitFirstYearPayments: false,
+    firstYearPayments: [],
+    subsequentYears: [
+      { totalNominal: netTotalPrice * 0.15, frequency: Frequencies.Quarterly },
+      { totalNominal: netTotalPrice * 0.15, frequency: Frequencies.Quarterly },
+      { totalNominal: netTotalPrice * 0.15, frequency: Frequencies.Quarterly }
+    ]
+  };
+
+  return commonDistributeForNominalTotal(netTotalPrice, stdPlan, forcedInputs);
 }
 
 /**
@@ -472,6 +514,8 @@ export function calculateByMode(mode, stdPlan, inputs) {
       return customYearlyThenEqualUseStdPrice(stdPlan, inputs);
     case CalculationModes.CustomYearlyThenEqual_TargetPV:
       return customYearlyThenEqualTargetPV(stdPlan, inputs);
+    case CalculationModes.StandardMode:
+      return standardMode(stdPlan, inputs);
     default:
       throw new Error(`Unknown calculation mode: ${mode}`);
   }

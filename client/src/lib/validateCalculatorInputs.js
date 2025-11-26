@@ -14,7 +14,19 @@ export function validateCalculatorInputs(payload, inputs, firstYearPayments, sub
     e.planDurationYears = 'Must be integer >= 1'
   }
   if (inp.dpType && !['amount', 'percentage'].includes(inp.dpType)) e.dpType = 'Invalid'
-  if (!isFiniteNumber(inp.downPaymentValue) || inp.downPaymentValue < 0) e.downPaymentValue = 'Must be non-negative number'
+  if (!isFiniteNumber(inp.downPaymentValue) || inp.downPaymentValue < 0) {
+    e.downPaymentValue = 'Must be non-negative number'
+  } else {
+    if (inp.dpType === 'percentage' && inp.downPaymentValue > 100) {
+      e.downPaymentValue = 'Cannot exceed 100%'
+    }
+    if (inp.dpType === 'amount' && isFiniteNumber(payload?.stdPlan?.totalPrice)) {
+      const total = Number(payload.stdPlan.totalPrice)
+      if (total > 0 && inp.downPaymentValue > total) {
+        e.downPaymentValue = 'Cannot exceed 100% of total price'
+      }
+    }
+  }
   if (!Number.isInteger(inp.handoverYear) || inp.handoverYear <= 0) e.handoverYear = 'Must be integer >= 1'
   if (!isFiniteNumber(inp.additionalHandoverPayment) || inp.additionalHandoverPayment < 0) e.additionalHandoverPayment = 'Must be non-negative number'
 

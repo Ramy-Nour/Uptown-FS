@@ -643,6 +643,29 @@ router.post('/generate-plan', authMiddleware, validate(generatePlanSchema), asyn
       effectiveStdPlan = stdPlan
     }
 
+    // When mode is StandardMode, enforce the canonical Standard Mode structure here so that
+    // the generated schedule and acceptance evaluation use the same pattern as the engine.
+    if (mode === CalculationModes.StandardMode) {
+      const stdPrice = Number(effectiveStdPlan?.totalPrice) || 0
+      const salesDiscountPct = Number(effInputs.salesDiscountPercent) || 0
+      const netTotalPrice = stdPrice * (1 - salesDiscountPct / 100)
+
+      effInputs.dpType = 'percentage'
+      effInputs.downPaymentValue = 20
+      effInputs.planDurationYears = 6
+      effInputs.installmentFrequency = Frequencies.Quarterly
+      effInputs.additionalHandoverPayment = 0
+      effInputs.handoverYear = 3
+      effInputs.splitFirstYearPayments = false
+      effInputs.firstYearPayments = []
+
+      effInputs.subsequentYears = [
+        { totalNominal: netTotalPrice * 0.15, frequency: Frequencies.Quarterly },
+        { totalNominal: netTotalPrice * 0.15, frequency: Frequencies.Quarterly },
+        { totalNominal: netTotalPrice * 0.15, frequency: Frequencies.Quarterly }
+      ]
+    }
+
     const inputErrors = validateInputs(effInputs)
     if (inputErrors.length > 0) {
       return bad(res, 422, 'Invalid inputs', inputErrors)

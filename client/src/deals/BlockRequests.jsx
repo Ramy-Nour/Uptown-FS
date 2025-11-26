@@ -451,7 +451,8 @@ export default function BlockRequests() {
                     )}
                   </td>
                 </tr>
-              ))}
+                )
+              })}
               {!loadingUnblock && unblockRows.length === 0 && (
                 <tr><td style={td} colSpan={8}>No pending unblock requests.</td></tr>
               )}

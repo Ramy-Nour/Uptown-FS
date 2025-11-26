@@ -1426,6 +1426,7 @@ router.get('/progress', authMiddleware, requireRole(['property_consultant','sale
     const whereParts = ["b.status IN ('approved','expired','pending')"]
     let joinTeam = ''
     if (role === 'property_consultant') {
+      // Use proper parameter placeholders for bind values
       whereParts.push(`b.requested_by = ${params.length + 1}`)
       params.push(req.user.id)
     } else if (role === 'sales_manager') {

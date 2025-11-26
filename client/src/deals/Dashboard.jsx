@@ -404,6 +404,32 @@ export default function Dashboard() {
               else if (dealStatus === 'rejected') dealStatusColor = '#dc2626';
 
               let unitAvailabilityColor = '#64748b';
+              const upperAvail = (unitAvailability || '').toString().toUpperCase();
+              if (upperAvail === 'AVAILABLE') unitAvailabilityColor = '#16a34a';
+              else if (upperAvail === 'BLOCKED') unitAvailabilityColor = '#dc2626';
+              else if (upperAvail && upperAvail !== '-') unitAvailabilityColor = '#2563eb';
+
+              return (
+                <tr key={d.id}>
+                  <td style={td}>{d.id}</td>
+                  <td style={td}>{d.title}</td>
+                  <td style={{ ...td, textAlign: 'right' }}>{Number(d.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                  <td style={td}>
+                    <span style={{ padding: '2px 8px', borderRadius: 999, fontSize: 12, background: '#f1f5f9', color: dealStatusColor, textTransform: 'none' }}>
+                      {dealStatus}
+                    </span>
+                  </td>
+                  <td style={td}>
+                    <span style={{ padding: '2px 8px', borderRadius: 999, fontSize: 12, background: '#f8fafc', color: unitAvailabilityColor, textTransform: 'uppercase', letterSpacing: 0.3 }}>
+                      {unitAvailability}
+                    </span>
+                  </td>
+                  <td style={td}>{d.unit_type || '-'}</td>
+                  <td style={td}>{d.created_by_email || '-'}</td>
+                  <td style={td}>{offerDate}</td>
+                  <td style={td}>{firstPaymentDate}</td>
+                  <td style={td}>{d.created_at ? new Date(d.created_at).toLocaleString() : ''}</td>
+                  <td style={{ ...td, display: 'flex', gap: 8 }}>
                     <Link to={`/deals/${d.id}`} style={{ textDecoration: 'none', color: '#1f6feb' }}>View</Link>
                     {(user?.role === 'sales_manager' && d.status === 'pending_approval') && (
                       <LoadingButton

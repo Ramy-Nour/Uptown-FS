@@ -538,13 +538,21 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
     let unit = {
       unit_code: calc?.unitInfo?.unit_code || '',
       unit_type: calc?.unitInfo?.unit_type || '',
-      unit_id: calc?.unitInfo?.unit_id || null
+      unit_id: calc?.unitInfo?.unit_id || null,
+      unit_area: null
     }
     try {
       const unitId = Number(unit?.unit_id)
       if (Number.isFinite(unitId) && unitId > 0) {
         const r = await pool.query(`
-          SELECT p.price, p.maintenance_price, p.garage_price, p.garden_price, p.roof_price, p.storage_price
+          SELECT
+            u.area AS unit_area,
+            p.price,
+            p.maintenance_price,
+            p.garage_price,
+            p.garden_price,
+            p.roof_price,
+            p.storage_price
           FROM units u
           JOIN unit_model_pricing p ON p.model_id = u.model_id
           WHERE u.id=$1 AND p.status='approved'
@@ -553,6 +561,7 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
         `, [unitId])
         if (r.rows.length) {
           const row = r.rows[0]
+          unit.unit_area = row.unit_area != null ? Number(row.unit_area) || null : null
           upb = {
             base: Number((upb && upb.base) ?? row.price) || 0,
             garden: Number((upb && upb.garden) ?? row.garden_price) || 0,
@@ -571,10 +580,15 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
 
     const numBuyers = Math.min(Math.max(Number(calc?.clientInfo?.number_of_buyers) || 1, 1), 4)
     const buyers = []
-    for (let i = 1; i <= numBuyers; i++) {
+    for (let i = 1; i &lt;= numBuyers; i++) {
       const sfx = i === 1 ? '' : `_${i}`
       buyers.push({
         buyer_name: calc?.clientInfo?.[`buyer_name${sfx}`] || '',
+        nationality: calc?.clientInfo?.[`nationality${sfx}`] || '',
+        id_or_passport: calc?.clientInfo?.[`id_or_passport${sfx}`] || '',
+        id_issue_date: calc?.clientInfo?.[`id_issue_date${sfx}`] || '',
+        birth_date: calc?.clientInfo?.[`birth_date${sfx}`] || '',
+        address: calc?.clientInfo?.[`address${sfx}`] || '',
         phone_primary: calc?.clientInfo?.[`phone_primary${sfx}`] || '',
         phone_secondary: calc?.clientInfo?.[`phone_secondary${sfx}`] || '',
         email: calc?.clientInfo?.[`email${sfx}`] || ''
@@ -586,7 +600,41 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
     const textAlignLeft = rtl ? 'text-right' : 'text-left'
     const textAlignRight = rtl ? 'text-left' : 'text-right'
 
-    // Build buyers HTML (up to 4 owners) using compact blocks
+    // Build buyers HTML (up to 4 owners) using detailed blocks from saved Client Info (no FA editing)
+    const buyersHtml = buyers.length
+      ? buyers.map((b, idx) =&gt; `
+        &lt;div class="mb-3 text-base leading-relaxed"&gt;
+          &lt;div class="flex items-center mb-1"&gt;
+            &lt;span class="font-bold w-32 ml-2"&gt;${L('Buyer', 'العميل')} ${idx + 1}:&lt;/span&gt;
+            &lt;span class="flex-1 border-b border-dotted border-gray-500 pb-0.5"&gt;${b.buyer_name || '-'}&lt;/span&gt;
+          &lt;/div&gt;
+          &lt;div class="flex items-center mb-1"&gt;
+            &lt;span class="font-bold w-32 ml-2"&gt;${L('Nationality', 'الجنسية')}:&lt;/span&gt;
+            &lt;span class="flex-1 border-b border-dotted border-gray-500 pb-0.5"&gt;${b.nationality || '-'}&lt;/span&gt;
+          &lt;/div&gt;
+          &lt;div class="flex items-center mb-1"&gt;
+            &lt;span class="font-bold w-32 ml-2"&gt;${L('ID / Passport No.', 'الرقم القومي / جواز السفر')}:&lt;/span&gt;
+            &lt;span class="flex-1 border-b border-dotted border-gray-500 pb-0.5"&gt;${b.id_or_passport || '-'}&lt;/span&gt;
+          &lt;/div&gt;
+          &lt;div class="flex items-center mb-1"&gt;
+            &lt;span class="font-bold w-32 ml-2"&gt;${L('ID Issue Date', 'تاريخ الإصدار')}:&lt;/span&gt;
+            &lt;span class="flex-1 border-b border-dotted border-gray-500 pb-0.5"&gt;${b.id_issue_date || '-'}&lt;/span&gt;
+          &lt;/div&gt;
+          &lt;div class="flex items-center mb-1"&gt;
+            &lt;span class="font-bold w-32 ml-2"&gt;${L('Address', 'العنوان')}:&lt;/span&gt;
+            &lt;span class="flex-1 border-b border-dotted border-gray-500 pb-0.5"&gt;${b.address || '-'}&lt;/span&gt;
+          &lt;/div&gt;
+          &lt;div class="flex items-center mb-1"&gt;
+            &lt;span class="font-bold w-32 ml-2"&gt;${L('Phone', 'الهاتف')}:&lt;/span&gt;
+            &lt;span class="flex-1 border-b border-dotted border-gray-500 pb-0.5"&gt;${[b.phone_primary, b.phone_secondary].filter(Boolean).join(' / ') || '-'}&lt;/span&gt;
+          &lt;/div&gt;
+          &lt;div class="flex items-center"&gt;
+            &lt;span class="font-bold w-32 ml-2"&gt;${L('Email', 'البريد الإلكتروني')}:&lt;/span&gt;
+            &lt;span class="flex-1 border-b border-dotted border-gray-500 pb-0.5"&gt;${b.email || '-'}&lt;/span&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+      `).join('')
+      : `&lt;div class="text-gray-500 text-sm"&gt;${L('No client data', 'لا توجد بيانات عملاء')}&lt;/div&gt;`uild buyers HTML (up to 4 owners) using compact blocks
     const buyersHtml = buyers.length
       ? buyers.map((b, idx) => `
         <div class="flex items-center mb-2 text-base leading-relaxed">
@@ -707,6 +755,12 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
               <div>
                 <span class="font-bold">${L('Unit Type', 'نوع الوحدة')}:</span>
                 <span class="form-input-like px-2">${unit.unit_type || '-'}</span>
+              </div>
+              <div>
+                <span class="font-bold">${L('Unit Area', 'مساحة الوحدة')}:</span>
+                <span class="form-input-like px-2">
+                  ${unit.unit_area != null ? Number(unit.unit_area).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' م²' : '-'}
+                </span>
               </div>
             </div>
 

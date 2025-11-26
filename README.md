@@ -121,6 +121,9 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-11-25 12:10] Top Management access to Block Requests page wired + documented
+  - Client: The “Unblock Requests” shortcut in the BrandHeader for Top Management roles (ceo, chairman, vice_chairman, top_management) now routes to /deals/block-requests and the route itself allows those roles. Previously, TM could see the header button but the RequireRole guard on /deals/block-requests only allowed sales_manager, property_consultant, and financial_manager, so TM landed on the generic Deals page instead of the Block Requests screen.
+  - Client: This keeps the existing behavior where Top Management lands on the “Pending Unit Unblock Requests” view by default while ensuring the shortcut actually opens the correct page for TM accounts.
 - [2025-11-25 12:00] Top Management unblock overrides visibility + shortcuts
   - Client: BrandHeader now includes an “Unblock Requests” shortcut button in the header for Top Management roles (ceo, chairman, vice_chairman, top_management). This links directly to the Block Requests page so TM can review unblock requests without navigating through other menus.
   - Client: On the Block Requests page, Top Management now lands on the “Pending Unit Unblock Requests” view by default (showUnblock=true for TM). FM still sees Pending Unit Block Requests first, ensuring the FM → TM chain remains intact while making TM’s unblock queue easier to reach.

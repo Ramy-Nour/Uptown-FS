@@ -51,6 +51,14 @@ export default function UnitDetailsTable({ units, loading = false, onCreateOffer
             const roofLabel = u.roof_available ? `Yes (${Number(u.roof_area || 0).toLocaleString()} m²)` : 'No'
             const garageLabel = (Number(u.garage_area || 0) > 0) ? `Yes (${Number(u.garage_area || 0).toLocaleString()} m²)` : 'No'
             const modelLabel = u.model_code ? `${u.model_code} — ${u.model_name || ''}`.trim() : (u.model_name || '')
+            const statusLabel = u.unit_status || ''
+            const statusUpper = statusLabel.toString().toUpperCase()
+            const isBlocked = statusUpper === 'BLOCKED'
+            const isAvailable = statusUpper === 'AVAILABLE'
+            let statusColor = '#64748b'
+            if (isAvailable) statusColor = '#16a34a'
+            else if (isBlocked) statusColor = '#dc2626'
+            else if (statusUpper) statusColor = '#2563eb'
             return (
               <tr key={u.id}>
                 <td style={td}>{u.id}</td>
@@ -71,10 +79,37 @@ export default function UnitDetailsTable({ units, loading = false, onCreateOffer
                 {isExpanded && <td style={{ ...td, textAlign: 'right' }}>{Number(u.maintenance_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>}
                 <td style={{ ...td, textAlign: 'right' }}>{Number(u.total_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                 <td style={td}>{u.currency || 'EGP'}</td>
-                <td style={td}>{u.unit_status}</td>
+                <td style={td}>
+                  <span
+                    style={{
+                      padding: '2px 10px',
+                      borderRadius: 999,
+                      fontSize: 12,
+                      background: '#f8fafc',
+                      color: statusColor,
+                      textTransform: 'uppercase',
+                      letterSpacing: 0.3
+                    }}
+                  >
+                    {statusLabel || '-'}
+                  </span>
+                </td>
                 <td style={td}>
                   {typeof onCreateOffer === 'function' ? (
-                    <button style={btn} onClick={() => onCreateOffer(u)}>Create Offer</button>
+                    <button
+                      style={{
+                        ...btn,
+                        ...(isBlocked
+                          ? { opacity: 0.6, cursor: 'not-allowed', borderColor: '#fecaca', color: '#b91c1c' }
+                          : {})
+                      }}
+                      onClick={() => {
+                        if (isBlocked) return
+                        onCreateOffer(u)
+                      }}
+                    >
+                      Create Offer
+                    </button>
                   ) : null}
                 </td>
               </tr>

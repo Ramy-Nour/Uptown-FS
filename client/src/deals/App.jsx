@@ -51,7 +51,17 @@ export default function DealsApp() {
           <Route
             path="block-requests"
             element={
-              <RequireRole allowed={['sales_manager','property_consultant','financial_manager']}>
+              <RequireRole
+                allowed={[
+                  'sales_manager',
+                  'property_consultant',
+                  'financial_manager',
+                  'ceo',
+                  'chairman',
+                  'vice_chairman',
+                  'top_management'
+                ]}
+              >
                 <BlockRequests />
               </RequireRole>
             }

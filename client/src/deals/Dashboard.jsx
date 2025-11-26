@@ -366,7 +366,8 @@ export default function Dashboard() {
               <th style={th}>ID</th>
               <th style={th}>Title</th>
               <th style={th}>Amount</th>
-              <th style={th}>Status</th>
+              <th style={th}>Deal Status</th>
+              <th style={th}>Unit Availability</th>
               <th style={th}>Unit Type</th>
               <th style={th}>Creator</th>
               <th style={th}>Offer Date</th>
@@ -379,19 +380,22 @@ export default function Dashboard() {
             {loading && (
               <>
                 {Array.from({ length: pageSize }).map((_, i) => (
-                  <SkeletonRow key={i} widths={['sm','lg','sm','sm','lg','lg','sm','sm','sm','sm']} tdStyle={td} />
+                  <SkeletonRow key={i} widths={['sm','lg','sm','sm','sm','lg','lg','sm','sm','sm','sm']} tdStyle={td} />
                 ))}
               </>
             )}
             {!loading && deals.map(d => {
               const offerDate = d?.details?.calculator?.inputs?.offerDate || '';
               const firstPaymentDate = d?.details?.calculator?.inputs?.firstPaymentDate || offerDate || '';
+              const unitStatusRaw = d?.details?.calculator?.unitInfo?.unit_status || d?.details?.calculator?.unitInfo?.availability || '';
+              const unitAvailability = unitStatusRaw || '-';
               return (
                 <tr key={d.id}>
                   <td style={td}>{d.id}</td>
                   <td style={td}>{d.title}</td>
                   <td style={{ ...td, textAlign: 'right' }}>{Number(d.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                   <td style={td}>{d.status}</td>
+                  <td style={td}>{unitAvailability}</td>
                   <td style={td}>{d.unit_type || '-'}</td>
                   <td style={td}>{d.created_by_email || '-'}</td>
                   <td style={td}>{offerDate}</td>

@@ -172,8 +172,8 @@ router.get('/', authMiddleware, async (req, res) => {
     const countRes = await pool.query(countSql, params)
     const total = countRes.rows[0]?.c || 0
 
-    params.push(pageSize)
-    params.push(offset)
+    const limitIdx = params.push(pageSize)
+    const offsetIdx = params.push(offset)
     const listSql = `
       SELECT
         d.*,
@@ -185,7 +185,7 @@ router.get('/', authMiddleware, async (req, res) => {
       LEFT JOIN units un ON un.id = (d.details->'calculator'->'unitInfo'->>'unit_id')::int
       ${whereSql}
       ORDER BY ${sortCol} ${dir}
-      LIMIT ${params.length - 1} OFFSET ${params.length}
+      LIMIT ${limitIdx} OFFSET ${offsetIdx}
     `
     const rows = await pool.query(listSql, params)
 

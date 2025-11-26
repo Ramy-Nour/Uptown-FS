@@ -121,6 +121,264 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-11-26 21:30] Reservation Form PDF aligned with multi-owner legal template and deal snapshot data
+  - API: Enhanced /api/documents/reservation-form in api/src/documentsRoutes.js so that all client and unit details rendered in the Reservation Form PDF are pulled directly from the deal’s saved calculator snapshot (no manual entry by Financial Admin beyond reservation date and preliminary payment). The RF now shows, per buyer (up to 4): name, nationality, ID/passport, ID issue date, address, phones, and email, matching the multi-owner legal template structure.
+  - API: Adjusted the Reservation Form pricing source so that unit totals (base, garden, roof, storage, garage, maintenance, totals) come strictly from calc.unitPricingBreakdown stored in the deal snapshot, not from the latest unit_model_pricing rows. This ensures the RF reflects the agreed offer values even if standard pricing changes later. We still read units.area to display “مساحة الوحدة” alongside unit_code and unit_type, but no price fields are taken from live pricing tables.
+  - API: Added amount-in-words rendering for key RF monetary fields (unit total excluding/including maintenance, maintenance deposit, preliminary reservation payment, contract down payment net of reservation, and remaining amount) using convertToWords in the selected RF language. Each numeric value now shows its Arabic/English written form directly under the number, in line with the legal template placeholders like “ثمن كتابتا”، “إجمالي الثمن كتابتا”، “دفعة حجز كتابتا”، و“باقي الثمن كتابتا”.
+- [2025-11-26 21:45] Reservation Form unit metadata (building/block/zone) and Arabic legal-text alignment
+  - API: Extended the Reservation Form generator to hydrate structural unit metadata (area, building_number, block_sector, zone) from the units table and render them in the Arabic header lines as: “نوع الوحدة / شقة سكنية (<<نوع الوحدة>>) (مساحة الوحدة / <<مساحة الوحدة>> م2)” and “كود الوحدة (<<كود الوحدة>>) رقم المبنى (<<مبنى رقم>>) رقم البلوك (<<قطاع>>) رقم المجاورة (<<مجاورة>>) بمشروع ابتاون ريزيدنس – حى ابتاون ٦ أكتوبر”. These fields are read-only from the DB and never re-typed by the Financial Admin.
+  - API: Reworked the Arabic RF financial section to follow the exact legal wording provided: “ثمن الوحدة شامل المساحة الإضافية والجراج وغرفة التخزين/ <<ثمن بالأرقام>> جم (<<ثمن كتابتا>> لاغير)”, “وديعة الصيانة/ <<مصاريف الصيانة بالأرقام>> جم (<<مصاريف الصيانة كتابتا>> لاغير)”, “إجمالي المطلوب سداده/ <<إجمالي الثمن بالأرقام>> جم (<<إجمالي الثمن كتابتا>> لاغير)”, “دفعة حجز مبدئي : <<دفعة حجز بالأرقام>> جم (<<دفعة حجز كتابتا>> لاغير) تم سدادها بتاريخ <<تاريخ سداد دفعة الحجز>>”, “دفعة المقدم: <<إجمالي دفعة التعاقد بدون دفعة الحجز بالارقام>> جم (<<إجمالي دفعة التعاقد بدون دفعة الحجز كتابتا>> لاغير)”, و“باقي المبلغ :<<باقي الثمن بالأرقام>> جم (<<باقي الثمن كتابتا>> لاغير) يتم سداد باقي المبلغ طبقا لملحق السداد المرفق”، with all placeholders computed from the deal snapshot and preliminary payment.
+  - API: Implemented the policy that the preliminary reservation payment is deducted from the contractual down payment when presenting “دفعة المقدم” in the RF: the RF shows “إجمالي دفعة التعاقد بدون دفعة الحجز” as (downPaymentAmount − preliminaryPayment), never re-typed by FA. This ensures, for example, that when the plan down payment is 20% and the preliminary payment is 50,000 EGP, the RF’s “دفعة المقدم” is exactly “20% − 50,000” in both numbers and words.
+- [2025-11-26 21:10] Reservation approval moves unit from BLOCKED to RESERVED
+  - API: Updated Financial Manager approval for reservation forms in api/src/workflowRoutes.js so that when a reservation_form is approved (PATCH /api/workflow/reservation-forms/:id/approve), the related unit is resolved from the reservation/payment plan snapshot and its unit_status is set to 'RESERVED' with available=FALSE. This aligns the workflow with the policy that a unit remains BLOCKED while the reservation is initiated by Financial Admin but only becomes RESERVED after Financial Manager approval.
+- [2025-11-26 20:25] API Parameter Mismatch — syntax correction and Customer Routes fixes
+  - API: Corrected the syntax in `api/src/dealsRoutes.js` where the previous fix for `LIMIT`/`OFFSET` placeholders was missing the `# Uptown-FS — Full Stack Financial System
+
+This repository contains a Dockerized full‑stack app for Uptown’s financial workflows:
+
+- Client: React + Vite (client/)
+- API: Node.js + Express (api/)
+- Database: PostgreSQL 16 (containerized)
+- Orchestration: Docker Compose (docker-compose.yml)
+- Dev environment: GitHub Codespaces with auto‑forwarded ports (.devcontainer/)
+
+The README is the living source of truth. Every significant change must be reflected here. See “AI/Agent Contribution Rules” below.
+
+---
+
+## Quick Start (local machine)
+
+Prerequisites: Docker Desktop.
+
+1) Create your environment file
+- Copy .env.example to .env and adjust if needed
+  - ADMIN_EMAIL / ADMIN_PASSWORD (for initial seed)
+  - DB_PASSWORD (already set to apppass for dev)
+
+2) Start the stack
+- docker compose up -d --build
+
+3) Access locally
+- Client: http://localhost:5173
+- API Health: http://localhost:3000/api/health
+- API Message: http://localhost:3000/api/message
+
+Stop everything:
+- docker compose down
+Note: Do NOT use docker compose down -v unless you want to wipe the database volume.
+
+---
+
+## Quick Start (GitHub Codespaces)
+
+This repo is configured for Codespaces.
+
+- Auto‑forwarded ports: 3001 (API), 5173 (Client)
+- Auto‑start stack: docker compose up -d runs on container start (postStartCommand)
+
+First run in a Codespace:
+1) Rebuild the container so devcontainer settings take effect
+- F1 → “Codespaces: Rebuild Container”
+2) The stack will start automatically (postStartCommand).
+3) Open the Ports panel and click:
+- 5173 → Client
+- 3001 → API
+
+Notes:
+- We expose the API container’s port 3000 to the host port 3001 to avoid conflicts (compose uses 3001:3000).
+- The client is configured for Codespaces HMR and uses the forwarded hosts, not localhost.
+- If you open a public port URL, GitHub may show a one‑time safety warning; click “Continue.”
+
+Health checks:
+- curl -sS https://<codespace>-3001.app.github.dev/api/health
+- Client should hot‑reload without ws://localhost references.
+
+---
+
+## Ports and Environment
+
+- API container listens on 0.0.0.0:3000.
+- Host forwards to:
+  - 3001 → API (container:3000)
+  - 5173 → Client (container:5173)
+- Vite config (client/vite.config.js) detects Codespaces and:
+  - Sets HMR over wss to the forwarded 5173 host
+  - Sets origin to the public 5173 host
+  - Sets VITE_API_URL to the public 3001 host
+- docker-compose.yml passes CODESPACE_NAME and GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN to client so the config can compute public URLs.
+
+---
+
+## Current Features and Status
+
+1) Calculation Service and API
+- Endpoint: POST /api/calculate
+- Modes include:
+  - evaluateCustomPrice
+  - calculateForTargetPV
+  - customYearlyThenEqual_useStdPrice
+  - customYearlyThenEqual_targetPV
+- Returns totals, PV, and metadata to drive the UI.
+
+2) Generator and Documents
+- Endpoint: POST /api/generate-plan
+- Document generation endpoint scaffolded: POST /api/generate-document
+- Client can export schedule to CSV/XLSX and generate a checks sheet XLSX.
+
+3) Inventory/Units (stubs for integration)
+- Basic endpoints scaffolded; UI has type and unit pickers with server calls.
+
+4) OCR Module (scaffold)
+- OCR upload endpoint design (tesseract primary; Google Cloud Vision optional via GCV_API_KEY) documented for future enablement.
+
+5) Auth and Roles (client side)
+- Role-aware UI sections (e.g., thresholds, contract sections).
+- Client persists session/role in localStorage.
+
+6) Codespaces Integration
+- Devcontainer auto‑forwards 3001/5173 and auto‑starts the stack.
+- Vite HMR configured to work behind Codespaces.
+
+## Configuration Requirements
+
+For calculations to work correctly, the following must be configured:
+
+- Per-Pricing Financial Settings are required for unit/model flows:
+  - std_financial_rate_percent: numeric percent (annual), must be > 0
+  - plan_duration_years: integer ≥ 1
+  - installment_frequency: one of { monthly, quarterly, biannually, annually } (normalized to 'bi-annually' internally)
+  - The calculator and plan generation will not fall back to Active Standard Plan when a unit/model is selected; per-pricing terms must exist and be approved.
+
+If no active Standard Plan exists or its values are invalid, the server will attempt to use the Financial Manager’s stored “Calculated PV” for the selected unit/model. If that is not present, the API returns 422 with a clear message.
+
+---
+
+ prefix (e.g., `LIMIT ${limitIdx}` vs `LIMIT ${limitIdx}`), which still caused parameter mismatch errors.
+  - API: Proactively fixed identical missing-`# Uptown-FS — Full Stack Financial System
+
+This repository contains a Dockerized full‑stack app for Uptown’s financial workflows:
+
+- Client: React + Vite (client/)
+- API: Node.js + Express (api/)
+- Database: PostgreSQL 16 (containerized)
+- Orchestration: Docker Compose (docker-compose.yml)
+- Dev environment: GitHub Codespaces with auto‑forwarded ports (.devcontainer/)
+
+The README is the living source of truth. Every significant change must be reflected here. See “AI/Agent Contribution Rules” below.
+
+---
+
+## Quick Start (local machine)
+
+Prerequisites: Docker Desktop.
+
+1) Create your environment file
+- Copy .env.example to .env and adjust if needed
+  - ADMIN_EMAIL / ADMIN_PASSWORD (for initial seed)
+  - DB_PASSWORD (already set to apppass for dev)
+
+2) Start the stack
+- docker compose up -d --build
+
+3) Access locally
+- Client: http://localhost:5173
+- API Health: http://localhost:3000/api/health
+- API Message: http://localhost:3000/api/message
+
+Stop everything:
+- docker compose down
+Note: Do NOT use docker compose down -v unless you want to wipe the database volume.
+
+---
+
+## Quick Start (GitHub Codespaces)
+
+This repo is configured for Codespaces.
+
+- Auto‑forwarded ports: 3001 (API), 5173 (Client)
+- Auto‑start stack: docker compose up -d runs on container start (postStartCommand)
+
+First run in a Codespace:
+1) Rebuild the container so devcontainer settings take effect
+- F1 → “Codespaces: Rebuild Container”
+2) The stack will start automatically (postStartCommand).
+3) Open the Ports panel and click:
+- 5173 → Client
+- 3001 → API
+
+Notes:
+- We expose the API container’s port 3000 to the host port 3001 to avoid conflicts (compose uses 3001:3000).
+- The client is configured for Codespaces HMR and uses the forwarded hosts, not localhost.
+- If you open a public port URL, GitHub may show a one‑time safety warning; click “Continue.”
+
+Health checks:
+- curl -sS https://<codespace>-3001.app.github.dev/api/health
+- Client should hot‑reload without ws://localhost references.
+
+---
+
+## Ports and Environment
+
+- API container listens on 0.0.0.0:3000.
+- Host forwards to:
+  - 3001 → API (container:3000)
+  - 5173 → Client (container:5173)
+- Vite config (client/vite.config.js) detects Codespaces and:
+  - Sets HMR over wss to the forwarded 5173 host
+  - Sets origin to the public 5173 host
+  - Sets VITE_API_URL to the public 3001 host
+- docker-compose.yml passes CODESPACE_NAME and GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN to client so the config can compute public URLs.
+
+---
+
+## Current Features and Status
+
+1) Calculation Service and API
+- Endpoint: POST /api/calculate
+- Modes include:
+  - evaluateCustomPrice
+  - calculateForTargetPV
+  - customYearlyThenEqual_useStdPrice
+  - customYearlyThenEqual_targetPV
+- Returns totals, PV, and metadata to drive the UI.
+
+2) Generator and Documents
+- Endpoint: POST /api/generate-plan
+- Document generation endpoint scaffolded: POST /api/generate-document
+- Client can export schedule to CSV/XLSX and generate a checks sheet XLSX.
+
+3) Inventory/Units (stubs for integration)
+- Basic endpoints scaffolded; UI has type and unit pickers with server calls.
+
+4) OCR Module (scaffold)
+- OCR upload endpoint design (tesseract primary; Google Cloud Vision optional via GCV_API_KEY) documented for future enablement.
+
+5) Auth and Roles (client side)
+- Role-aware UI sections (e.g., thresholds, contract sections).
+- Client persists session/role in localStorage.
+
+6) Codespaces Integration
+- Devcontainer auto‑forwards 3001/5173 and auto‑starts the stack.
+- Vite HMR configured to work behind Codespaces.
+
+## Configuration Requirements
+
+For calculations to work correctly, the following must be configured:
+
+- Per-Pricing Financial Settings are required for unit/model flows:
+  - std_financial_rate_percent: numeric percent (annual), must be > 0
+  - plan_duration_years: integer ≥ 1
+  - installment_frequency: one of { monthly, quarterly, biannually, annually } (normalized to 'bi-annually' internally)
+  - The calculator and plan generation will not fall back to Active Standard Plan when a unit/model is selected; per-pricing terms must exist and be approved.
+
+If no active Standard Plan exists or its values are invalid, the server will attempt to use the Financial Manager’s stored “Calculated PV” for the selected unit/model. If that is not present, the API returns 422 with a clear message.
+
+---
+
+ issues in `api/src/customerRoutes.js` across search filters, pagination, and update queries to prevent similar crashes and SQL injection vulnerabilities.
+- [2025-11-26 16:05] All Deals listing — fix SQL parameter mismatch causing internal error
+  - API: Corrected the GET /api/deals listing query in api/src/dealsRoutes.js so that LIMIT/OFFSET use their own bound placeholders instead of reusing the filter parameters array length directly. Previously, the prepared statement expected only the WHERE-clause parameters while the code supplied three parameters (filters + limit + offset), triggering “bind message supplies 3 parameters, but prepared statement \\\"\\\" requires 1” and showing “Internal error” on the consultant’s All Deals page. The listing now executes without parameter count errors across all filter combinations.ent Fixes and Changes
+Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
 - [2025-11-26 20:25] API Parameter Mismatch — syntax correction and Customer Routes fixes
   - API: Corrected the syntax in `api/src/dealsRoutes.js` where the previous fix for `LIMIT`/`OFFSET` placeholders was missing the `$` prefix (e.g., `LIMIT ${limitIdx}` vs `LIMIT $${limitIdx}`), which still caused parameter mismatch errors.
   - API: Proactively fixed identical missing-`$` issues in `api/src/customerRoutes.js` across search filters, pagination, and update queries to prevent similar crashes and SQL injection vulnerabilities.

@@ -387,8 +387,16 @@ export default function Dashboard() {
             {!loading && deals.map(d => {
               const offerDate = d?.details?.calculator?.inputs?.offerDate || '';
               const firstPaymentDate = d?.details?.calculator?.inputs?.firstPaymentDate || offerDate || '';
-              const unitStatusRaw = d?.details?.calculator?.unitInfo?.unit_status || d?.details?.calculator?.unitInfo?.availability || '';
-              const unitAvailability = unitStatusRaw || '-';
+              const liveUnitStatus = d?.current_unit_status || '';
+              const liveAvailable = typeof d?.current_unit_available === 'boolean' ? d.current_unit_available : null;
+              let unitAvailability = '-';
+              if (liveUnitStatus) {
+                unitAvailability = liveUnitStatus;
+              } else if (liveAvailable === true) {
+                unitAvailability = 'AVAILABLE';
+              } else if (liveAvailable === false) {
+                unitAvailability = 'UNAVAILABLE';
+              }
               return (
                 <tr key={d.id}>
                   <td style={td}>{d.id}</td>

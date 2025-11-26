@@ -566,6 +566,16 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
     totalIncl = totalExcl + (Number(upb?.maintenance||0))
     const remainingAmount = Math.max(0, Number(totalIncl) - Number(preliminaryPayment) - Number(downPayment))
 
+    // Amount-in-words helpers (respect RF language and currency)
+    const langForWords = language
+    const priceWords = convertToWords(totalExcl, langForWords, { currency })
+    const maintenanceWords = convertToWords(Number(upb?.maintenance||0), langForWords, { currency })
+    const totalWords = convertToWords(totalIncl, langForWords, { currency })
+    const prelimWords = convertToWords(preliminaryPayment, langForWords, { currency })
+    const dpNetOfPrelim = Math.max(0, Number(downPayment) - Number(preliminaryPayment))
+    const dpNetWords = convertToWords(dpNetOfPrelim, langForWords, { currency })
+    const remainingWords = convertToWords(remainingAmount, langForWords, { currency })
+
     const numBuyers = Math.min(Math.max(Number(calc?.clientInfo?.number_of_buyers) || 1, 1), 4)
     const buyers = []
     for (let i = 1; i &lt;= numBuyers; i++) {
@@ -800,6 +810,7 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
                       <td>${L('Maintenance Deposit', 'وديعة الصيانة')}</td>
                       <td class="${textAlignRight}">
                         ${Number(upb?.maintenance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
+                        <div class="text-xs text-gray-600 mt-1">${maintenanceWords}</div>
                       </td>
                     </tr>` : ''}
                   <tr>
@@ -808,6 +819,7 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
                     </td>
                     <td class="${textAlignRight} font-semibold">
                       ${Number(totalExcl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
+                      <div class="text-xs text-gray-600 mt-1">${priceWords}</div>
                     </td>
                   </tr>
                   <tr>
@@ -816,6 +828,7 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
                     </td>
                     <td class="${textAlignRight} font-semibold">
                       ${Number(totalIncl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
+                      <div class="text-xs text-gray-600 mt-1">${totalWords}</div>
                     </td>
                   </tr>
                   <tr>
@@ -824,22 +837,25 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
                     </td>
                     <td class="${textAlignRight}">
                       ${Number(preliminaryPayment).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
+                      <div class="text-xs text-gray-600 mt-1">${prelimWords}</div>
                     </td>
                   </tr>
                   <tr>
                     <td>
-                      ${L('Contract Down Payment', 'دفعة التعاقد')}
+                      ${L('Contract Down Payment (net of reservation)', 'إجمالي دفعة التعاقد بدون دفعة الحجز')}
                     </td>
                     <td class="${textAlignRight}">
-                      ${Number(downPayment).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
+                      ${dpNetOfPrelim.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
+                      <div class="text-xs text-gray-600 mt-1">${dpNetWords}</div>
                     </td>
                   </tr>
                   <tr>
                     <td class="font-semibold">
-                      ${L('Remaining Amount', 'المبلغ المتبقي')}
+                      ${L('Remaining Amount', 'باقي المبلغ')}
                     </td>
                     <td class="${textAlignRight} font-semibold">
                       ${Number(remainingAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
+                      <div class="text-xs text-gray-600 mt-1">${remainingWords}</div>
                     </td>
                   </tr>
                 </tbody>

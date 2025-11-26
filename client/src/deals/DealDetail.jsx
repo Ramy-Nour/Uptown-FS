@@ -158,8 +158,8 @@ export default function DealDetail() {
     }
   }, [editCalc, deal])
 
-  if (error) return &lt;p style={{ color: '#e11d48' }}>{error}&lt;/p>
-  if (!deal) return &lt;p>Loading…&lt;/p>
+  if (error) return <p style={{ color: '#e11d48' }}>{error}</p>
+  if (!deal) return <p>Loading…</p>
 
   const schedule = deal?.details?.calculator?.generatedPlan?.schedule || []
   const totals = deal?.details?.calculator?.generatedPlan?.totals || null
@@ -188,7 +188,7 @@ export default function DealDetail() {
     overrideLabel = 'Pending (SM/FM/TM)'
   }
 
-  const autoApprovedOnBlock = history.some(h =&gt; h.action === 'auto_approved_on_block')
+  const autoApprovedOnBlock = history.some(h => h.action === 'auto_approved_on_block')
 
   async function generateDocFromSaved(documentType) {
     try {
@@ -409,12 +409,12 @@ export default function DealDetail() {
       </div>
 
       {!editCalc ? (
-        &lt;div style={{ marginBottom: 16 }}>
-          &lt;p>&lt;strong>Title:&lt;/strong> {deal.title}&lt;/p>
-          &lt;p>&lt;strong>Amount:&lt;/strong> {Number(deal.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}&lt;/p>
+        <div style={{ marginBottom: 16 }}>
+          <p><strong>Title:</strong> {deal.title}</p>
+          <p><strong>Amount:</strong> {Number(deal.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
 
           {/* Compact status/override/unit summary */}
-          &lt;div
+          <div
             style={{
               margin: '6px 0 10px 0',
               padding: '10px 12px',
@@ -426,35 +426,25 @@ export default function DealDetail() {
               gap: 16
             }}
           >
-            &lt;div>
-              &lt;div style={{ fontSize: 12, textTransform: 'uppercase', color: '#6b7280' }}>Deal Status&lt;/div>
-              &lt;div style={{ fontWeight: 600 }}>{deal.status}&lt;/div>
-            &lt;/div>
-            &lt;div>
-              &lt;div style={{ fontSize: 12, textTransform: 'uppercase', color: '#6b7280' }}>Override&lt;/div>
-              &lt;div style={{ fontWeight: 600 }}>{overrideLabel}&lt;/div>
-            &lt;/div>
-            &lt;div>
-              &lt;div style={{ fontSize: 12, textTransform: 'uppercase', color: '#6b7280' }}>Unit Availability&lt;/div>
-              &lt;div style={{ fontWeight: 600 }}>{unitAvailabilityLabel}&lt;/div>
-            &lt;/div>
-          &lt;/div>
+            <div>
+              <div style={{ fontSize: 12, textTransform: 'uppercase', color: '#6b7280' }}>Deal Status</div>
+              <div style={{ fontWeight: 600 }}>{deal.status}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 12, textTransform: 'uppercase', color: '#6b7280' }}>Override</div>
+              <div style={{ fontWeight: 600 }}>{overrideLabel}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 12, textTransform: 'uppercase', color: '#6b7280' }}>Unit Availability</div>
+              <div style={{ fontWeight: 600 }}>{unitAvailabilityLabel}</div>
+            </div>
+          </div>
           {autoApprovedOnBlock && (
-            &lt;div style={{ margin: '-4px 0 10px 0', fontSize: 12, color: '#6b7280' }}>
-              Note: This deal was automatically marked as &quot;approved&quot; when the Financial Manager approved the unit block (normal criteria path, no override).
-            &lt;/div>
+            <div style={{ margin: '-4px 0 10px 0', fontSize: 12, color: '#6b7280' }}>
+              Note: This deal was automatically marked as "approved" when the Financial Manager approved the unit block (normal criteria path, no override).
+            </div>
           )}
 
-          &lt;p>&lt;strong>Unit Type:&lt;/strong> {deal.unit_type || '-'}&lt;/p>
-          {/* Dates summary near header */}
-          &lt;div style={{ margin: '6px 0 10px 0', padding: '8px 10px', borderRadius: 8, background: '#fbfaf7', border: '1px solid #ead9bd', display: 'inline-flex', gap: 16, flexWrap: 'wrap' }}>
-            &lt;div>&lt;strong>Offer Date:&lt;/strong> {(deal?.details?.calculator?.inputs?.offerDate) || new Date().toISOString().slice(0, 10)}&lt;/div>
-            &lt;div>&lt;strong>First Payment Date:&lt;/strong> {(deal?.details?.calculator?.inputs?.firstPaymentDate) || (deal?.details?.calculator?.inputs?.offerDate) || new Date().toISOString().slice(0, 10)}&lt;/div>
-          &lt;/div>ditCalc ? (
-        <div style={{ marginBottom: 16 }}>
-          <p><strong>Title:</strong> {deal.title}</p>
-          <p><strong>Amount:</strong> {Number(deal.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
-          <p><strong>Status:</strong> {deal.status}</p>
           <p><strong>Unit Type:</strong> {deal.unit_type || '-'}</p>
           {/* Dates summary near header */}
           <div style={{ margin: '6px 0 10px 0', padding: '8px 10px', borderRadius: 8, background: '#fbfaf7', border: '1px solid #ead9bd', display: 'inline-flex', gap: 16, flexWrap: 'wrap' }}>

@@ -71,20 +71,35 @@ export default function App(props) {
     applyDocumentDirection(language)
   }, [language])
 
-  // When switching into PV-target modes, we previously auto-converted DP% to a fixed amount.
-  // Now we keep DP as percentage by default (20%) across modes, and rely on the backend's
-  // target-PV solver to treat the DP amount correctly. We therefore remove the automatic
-  // DP type switch here to avoid surprising the user.
+  // When switching into PV-target modes (2 and 4), Down Payment must be an absolute value (amount),
+  // not a percentage. For other modes we default to 20% DP. When entering a target-PV mode and the
+  // DP is still expressed as a percentage, convert it once to an amount based on the current
+  // Standard Total Price, then lock the type to 'amount'.
   useEffect(() => {
     if (mode === 'calculateForTargetPV' || mode === 'customYearlyThenEqual_targetPV') {
+      setInputs(s => {
+        if (s.dpType === 'amount') return s
+        const dpPct = Number(s.downPaymentValue || 20)
+        const base = Number(stdPlan.totalPrice) || 0
+        const dpAmt = base > 0 ? (base * dpPct) / 100 : 0
+        return {
+          ...s,
+          dpType: 'amount',
+          downPaymentValue: Number(dpAmt.toFixed(2))
+        }
+      })
+    } else {
+      // In non target-PV modes, default to 20% DP expressed as percentage if nothing set
       setInputs(s => ({
         ...s,
-        // Ensure default 20% DP remains as percentage when entering target-PV modes
         dpType: s.dpType || 'percentage',
-        downPaymentValue: (s.downPaymentValue == null || s.downPaymentValue === 0) ? 20 : s.downPaymentValue
+        downPaymentValue:
+          (s.dpType === 'percentage' && (s.downPaymentValue == null || s.downPaymentValue === 0))
+            ? 20
+            : s.downPaymentValue
       }))
     }
-  }, [mode])
+  }, [mode, stdPlan.totalPrice])
 
   // Auto-compute Standard Calculated PV from Standard Total Price, Financial Rate, Duration and Frequency
   // IMPORTANT:

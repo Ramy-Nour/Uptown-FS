@@ -1454,26 +1454,85 @@ router.patch(
   authMiddleware,
   requireRole(['financial_manager']),
   async (req, res) => {
+    const client = await pool.connect()
     try {
       const id = ensureNumber(req.params.id)
-      if (!id) return bad(res, 400, 'Invalid id')
-      const r0 = await pool.query('SELECT * FROM reservation_forms WHERE id=$1', [id])
-      if (r0.rows.length === 0) return bad(res, 404, 'Reservation form not found')
-      if (r0.rows[0].status !== 'pending_approval') return bad(res, 400, 'Reservation form is not pending approval')
-      const upd = await pool.query(
+      if (!id) {
+        client.release()
+        return bad(res, 400, 'Invalid id')
+      }
+
+      await client.query('BEGIN')
+
+      const r0 = await client.query('SELECT * FROM reservation_forms WHERE id=$1', [id])
+      if (r0.rows.length === 0) {
+        await client.query('ROLLBACK')
+        client.release()
+        return bad(res, 404, 'Reservation form not found')
+      }
+      if (r0.rows[0].status !== 'pending_approval') {
+        await client.query('ROLLBACK')
+        client.release()
+        return bad(res, 400, 'Reservation form is not pending approval')
+      }
+
+      // Approve the reservation form
+      const upd = await client.query(
         `UPDATE reservation_forms
          SET status='approved', approved_by=$1, updated_at=now()
          WHERE id=$2
          RETURNING *`,
         [req.user.id, id]
       )
-      await pool.query(
+
+      // Resolve the unit_id behind this reservation (same logic as creation)
+      const current = upd.rows[0]
+      const pid = ensureNumber(current.payment_plan_id)
+      let unitId = null
+      if (current.details && typeof current.details === 'object') {
+        unitId = ensureNumber(current.details.unit_id)
+      }
+      if (!unitId && pid) {
+        const planRes = await client.query('SELECT details FROM payment_plans WHERE id=$1', [pid])
+        if (planRes.rows.length) {
+          const planDet = planRes.rows[0].details || {}
+          const unitInfo = planDet?.calculator?.unitInfo || {}
+          unitId = ensureNumber(unitInfo.unit_id)
+          if (!unitId && unitInfo.unit_code) {
+            const u = await client.query('SELECT id FROM units WHERE code=$1 LIMIT 1', [String(unitInfo.unit_code)])
+            if (u.rows.length) {
+              unitId = ensureNumber(u.rows[0].id)
+            }
+          }
+        }
+      }
+
+      // When a reservation is approved, move the unit from BLOCKED to RESERVED (availability already FALSE from block)
+      if (unitId) {
+        try {
+          await client.query(
+            `UPDATE units
+             SET unit_status='RESERVED', available=FALSE, updated_at=now()
+             WHERE id=$1`,
+            [unitId]
+          )
+        } catch (e) {
+          console.error('Failed to update unit to RESERVED on reservation approval:', e)
+        }
+      }
+
+      await client.query(
         `INSERT INTO reservation_forms_history (reservation_form_id, change_type, changed_by, old_values, new_values)
          VALUES ($1, 'approve', $2, $3::jsonb, $4::jsonb)`,
         [id, req.user.id, JSON.stringify(r0.rows[0]), JSON.stringify(upd.rows[0])]
       )
+
+      await client.query('COMMIT')
+      client.release()
       return ok(res, { reservation_form: upd.rows[0] })
     } catch (e) {
+      try { await client.query('ROLLBACK') } catch {}
+      client.release()
       console.error('PATCH /api/workflow/reservation-forms/:id/approve error:', e)
       return bad(res, 500, 'Internal error')
     }

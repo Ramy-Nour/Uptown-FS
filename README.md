@@ -121,6 +121,256 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-11-26 21:10] Reservation approval moves unit from BLOCKED to RESERVED
+  - API: Updated Financial Manager approval for reservation forms in api/src/workflowRoutes.js so that when a reservation_form is approved (PATCH /api/workflow/reservation-forms/:id/approve), the related unit is resolved from the reservation/payment plan snapshot and its unit_status is set to 'RESERVED' with available=FALSE. This aligns the workflow with the policy that a unit remains BLOCKED while the reservation is initiated by Financial Admin but only becomes RESERVED after Financial Manager approval.
+- [2025-11-26 20:25] API Parameter Mismatch — syntax correction and Customer Routes fixes
+  - API: Corrected the syntax in `api/src/dealsRoutes.js` where the previous fix for `LIMIT`/`OFFSET` placeholders was missing the `# Uptown-FS — Full Stack Financial System
+
+This repository contains a Dockerized full‑stack app for Uptown’s financial workflows:
+
+- Client: React + Vite (client/)
+- API: Node.js + Express (api/)
+- Database: PostgreSQL 16 (containerized)
+- Orchestration: Docker Compose (docker-compose.yml)
+- Dev environment: GitHub Codespaces with auto‑forwarded ports (.devcontainer/)
+
+The README is the living source of truth. Every significant change must be reflected here. See “AI/Agent Contribution Rules” below.
+
+---
+
+## Quick Start (local machine)
+
+Prerequisites: Docker Desktop.
+
+1) Create your environment file
+- Copy .env.example to .env and adjust if needed
+  - ADMIN_EMAIL / ADMIN_PASSWORD (for initial seed)
+  - DB_PASSWORD (already set to apppass for dev)
+
+2) Start the stack
+- docker compose up -d --build
+
+3) Access locally
+- Client: http://localhost:5173
+- API Health: http://localhost:3000/api/health
+- API Message: http://localhost:3000/api/message
+
+Stop everything:
+- docker compose down
+Note: Do NOT use docker compose down -v unless you want to wipe the database volume.
+
+---
+
+## Quick Start (GitHub Codespaces)
+
+This repo is configured for Codespaces.
+
+- Auto‑forwarded ports: 3001 (API), 5173 (Client)
+- Auto‑start stack: docker compose up -d runs on container start (postStartCommand)
+
+First run in a Codespace:
+1) Rebuild the container so devcontainer settings take effect
+- F1 → “Codespaces: Rebuild Container”
+2) The stack will start automatically (postStartCommand).
+3) Open the Ports panel and click:
+- 5173 → Client
+- 3001 → API
+
+Notes:
+- We expose the API container’s port 3000 to the host port 3001 to avoid conflicts (compose uses 3001:3000).
+- The client is configured for Codespaces HMR and uses the forwarded hosts, not localhost.
+- If you open a public port URL, GitHub may show a one‑time safety warning; click “Continue.”
+
+Health checks:
+- curl -sS https://<codespace>-3001.app.github.dev/api/health
+- Client should hot‑reload without ws://localhost references.
+
+---
+
+## Ports and Environment
+
+- API container listens on 0.0.0.0:3000.
+- Host forwards to:
+  - 3001 → API (container:3000)
+  - 5173 → Client (container:5173)
+- Vite config (client/vite.config.js) detects Codespaces and:
+  - Sets HMR over wss to the forwarded 5173 host
+  - Sets origin to the public 5173 host
+  - Sets VITE_API_URL to the public 3001 host
+- docker-compose.yml passes CODESPACE_NAME and GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN to client so the config can compute public URLs.
+
+---
+
+## Current Features and Status
+
+1) Calculation Service and API
+- Endpoint: POST /api/calculate
+- Modes include:
+  - evaluateCustomPrice
+  - calculateForTargetPV
+  - customYearlyThenEqual_useStdPrice
+  - customYearlyThenEqual_targetPV
+- Returns totals, PV, and metadata to drive the UI.
+
+2) Generator and Documents
+- Endpoint: POST /api/generate-plan
+- Document generation endpoint scaffolded: POST /api/generate-document
+- Client can export schedule to CSV/XLSX and generate a checks sheet XLSX.
+
+3) Inventory/Units (stubs for integration)
+- Basic endpoints scaffolded; UI has type and unit pickers with server calls.
+
+4) OCR Module (scaffold)
+- OCR upload endpoint design (tesseract primary; Google Cloud Vision optional via GCV_API_KEY) documented for future enablement.
+
+5) Auth and Roles (client side)
+- Role-aware UI sections (e.g., thresholds, contract sections).
+- Client persists session/role in localStorage.
+
+6) Codespaces Integration
+- Devcontainer auto‑forwards 3001/5173 and auto‑starts the stack.
+- Vite HMR configured to work behind Codespaces.
+
+## Configuration Requirements
+
+For calculations to work correctly, the following must be configured:
+
+- Per-Pricing Financial Settings are required for unit/model flows:
+  - std_financial_rate_percent: numeric percent (annual), must be > 0
+  - plan_duration_years: integer ≥ 1
+  - installment_frequency: one of { monthly, quarterly, biannually, annually } (normalized to 'bi-annually' internally)
+  - The calculator and plan generation will not fall back to Active Standard Plan when a unit/model is selected; per-pricing terms must exist and be approved.
+
+If no active Standard Plan exists or its values are invalid, the server will attempt to use the Financial Manager’s stored “Calculated PV” for the selected unit/model. If that is not present, the API returns 422 with a clear message.
+
+---
+
+ prefix (e.g., `LIMIT ${limitIdx}` vs `LIMIT ${limitIdx}`), which still caused parameter mismatch errors.
+  - API: Proactively fixed identical missing-`# Uptown-FS — Full Stack Financial System
+
+This repository contains a Dockerized full‑stack app for Uptown’s financial workflows:
+
+- Client: React + Vite (client/)
+- API: Node.js + Express (api/)
+- Database: PostgreSQL 16 (containerized)
+- Orchestration: Docker Compose (docker-compose.yml)
+- Dev environment: GitHub Codespaces with auto‑forwarded ports (.devcontainer/)
+
+The README is the living source of truth. Every significant change must be reflected here. See “AI/Agent Contribution Rules” below.
+
+---
+
+## Quick Start (local machine)
+
+Prerequisites: Docker Desktop.
+
+1) Create your environment file
+- Copy .env.example to .env and adjust if needed
+  - ADMIN_EMAIL / ADMIN_PASSWORD (for initial seed)
+  - DB_PASSWORD (already set to apppass for dev)
+
+2) Start the stack
+- docker compose up -d --build
+
+3) Access locally
+- Client: http://localhost:5173
+- API Health: http://localhost:3000/api/health
+- API Message: http://localhost:3000/api/message
+
+Stop everything:
+- docker compose down
+Note: Do NOT use docker compose down -v unless you want to wipe the database volume.
+
+---
+
+## Quick Start (GitHub Codespaces)
+
+This repo is configured for Codespaces.
+
+- Auto‑forwarded ports: 3001 (API), 5173 (Client)
+- Auto‑start stack: docker compose up -d runs on container start (postStartCommand)
+
+First run in a Codespace:
+1) Rebuild the container so devcontainer settings take effect
+- F1 → “Codespaces: Rebuild Container”
+2) The stack will start automatically (postStartCommand).
+3) Open the Ports panel and click:
+- 5173 → Client
+- 3001 → API
+
+Notes:
+- We expose the API container’s port 3000 to the host port 3001 to avoid conflicts (compose uses 3001:3000).
+- The client is configured for Codespaces HMR and uses the forwarded hosts, not localhost.
+- If you open a public port URL, GitHub may show a one‑time safety warning; click “Continue.”
+
+Health checks:
+- curl -sS https://<codespace>-3001.app.github.dev/api/health
+- Client should hot‑reload without ws://localhost references.
+
+---
+
+## Ports and Environment
+
+- API container listens on 0.0.0.0:3000.
+- Host forwards to:
+  - 3001 → API (container:3000)
+  - 5173 → Client (container:5173)
+- Vite config (client/vite.config.js) detects Codespaces and:
+  - Sets HMR over wss to the forwarded 5173 host
+  - Sets origin to the public 5173 host
+  - Sets VITE_API_URL to the public 3001 host
+- docker-compose.yml passes CODESPACE_NAME and GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN to client so the config can compute public URLs.
+
+---
+
+## Current Features and Status
+
+1) Calculation Service and API
+- Endpoint: POST /api/calculate
+- Modes include:
+  - evaluateCustomPrice
+  - calculateForTargetPV
+  - customYearlyThenEqual_useStdPrice
+  - customYearlyThenEqual_targetPV
+- Returns totals, PV, and metadata to drive the UI.
+
+2) Generator and Documents
+- Endpoint: POST /api/generate-plan
+- Document generation endpoint scaffolded: POST /api/generate-document
+- Client can export schedule to CSV/XLSX and generate a checks sheet XLSX.
+
+3) Inventory/Units (stubs for integration)
+- Basic endpoints scaffolded; UI has type and unit pickers with server calls.
+
+4) OCR Module (scaffold)
+- OCR upload endpoint design (tesseract primary; Google Cloud Vision optional via GCV_API_KEY) documented for future enablement.
+
+5) Auth and Roles (client side)
+- Role-aware UI sections (e.g., thresholds, contract sections).
+- Client persists session/role in localStorage.
+
+6) Codespaces Integration
+- Devcontainer auto‑forwards 3001/5173 and auto‑starts the stack.
+- Vite HMR configured to work behind Codespaces.
+
+## Configuration Requirements
+
+For calculations to work correctly, the following must be configured:
+
+- Per-Pricing Financial Settings are required for unit/model flows:
+  - std_financial_rate_percent: numeric percent (annual), must be > 0
+  - plan_duration_years: integer ≥ 1
+  - installment_frequency: one of { monthly, quarterly, biannually, annually } (normalized to 'bi-annually' internally)
+  - The calculator and plan generation will not fall back to Active Standard Plan when a unit/model is selected; per-pricing terms must exist and be approved.
+
+If no active Standard Plan exists or its values are invalid, the server will attempt to use the Financial Manager’s stored “Calculated PV” for the selected unit/model. If that is not present, the API returns 422 with a clear message.
+
+---
+
+ issues in `api/src/customerRoutes.js` across search filters, pagination, and update queries to prevent similar crashes and SQL injection vulnerabilities.
+- [2025-11-26 16:05] All Deals listing — fix SQL parameter mismatch causing internal error
+  - API: Corrected the GET /api/deals listing query in api/src/dealsRoutes.js so that LIMIT/OFFSET use their own bound placeholders instead of reusing the filter parameters array length directly. Previously, the prepared statement expected only the WHERE-clause parameters while the code supplied three parameters (filters + limit + offset), triggering “bind message supplies 3 parameters, but prepared statement \\\"\\\" requires 1” and showing “Internal error” on the consultant’s All Deals page. The listing now executes without parameter count errors across all filter combinations.ent Fixes and Changes
+Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
 - [2025-11-26 20:25] API Parameter Mismatch — syntax correction and Customer Routes fixes
   - API: Corrected the syntax in `api/src/dealsRoutes.js` where the previous fix for `LIMIT`/`OFFSET` placeholders was missing the `$` prefix (e.g., `LIMIT ${limitIdx}` vs `LIMIT $${limitIdx}`), which still caused parameter mismatch errors.
   - API: Proactively fixed identical missing-`$` issues in `api/src/customerRoutes.js` across search filters, pagination, and update queries to prevent similar crashes and SQL injection vulnerabilities.

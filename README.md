@@ -121,6 +121,8 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-11-26 16:05] All Deals listing — fix SQL parameter mismatch causing internal error
+  - API: Corrected the GET /api/deals listing query in api/src/dealsRoutes.js so that LIMIT/OFFSET use their own bound placeholders instead of reusing the filter parameters array length directly. Previously, the prepared statement expected only the WHERE-clause parameters while the code supplied three parameters (filters + limit + offset), triggering “bind message supplies 3 parameters, but prepared statement \"\" requires 1” and showing “Internal error” on the consultant’s All Deals page. The listing now executes without parameter count errors across all filter combinations.
 - [2025-11-26 15:25] Inventory cards — visual BLOCKED watermark for blocked units
   - Client: Inventory grid cards now show a large red “BLOCKED” watermark over any unit whose unit_status is BLOCKED, while keeping the details readable. The “Create Offer” button on blocked cards is visually dimmed and non-clickable, matching the existing behavior that prevents offer creation for blocked units. AVAILABLE units retain the normal white card with no watermark.
 - [2025-11-26 15:10] All Deals table — Unit Availability column and auto-approval wiring

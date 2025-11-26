@@ -586,96 +586,276 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
     const textAlignLeft = rtl ? 'text-right' : 'text-left'
     const textAlignRight = rtl ? 'text-left' : 'text-right'
 
+    // Build buyers HTML (up to 4 owners) using compact blocks
+    const buyersHtml = buyers.length
+      ? buyers.map((b, idx) => `
+        <div class="flex items-center mb-2 text-base leading-relaxed">
+          <span class="font-bold w-28 ml-2">${L('Buyer', 'العميل')} ${idx + 1}:</span>
+          <span class="flex-1 border-b border-dotted border-gray-500 pb-0.5">
+            ${b.buyer_name || '-'}
+          </span>
+        </div>
+      `).join('')
+      : `<div class="text-gray-500 text-sm">${L('No client data', 'لا توجد بيانات عملاء')}</div>`
+
     const html = `
       <!DOCTYPE html>
       <html lang="${language}" dir="${dir}">
       <head>
         <meta charset="UTF-8"/>
         <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-        <title>${L('Reservation Form', 'نموذج الحجز')}</title>
+        <title>${L('Reservation Form – Residential Unit', 'إستمارة حجز – وحدة سكنية')}</title>
         <script src="https://cdn.tailwindcss.com"></script>
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="${rtl ? 'https://fonts.googleapis.com/css2?family=Noto+Naskh+Arabic:wght@400;600;700&display=swap' : 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap'}" rel="stylesheet">
+        <link href="${rtl
+          ? 'https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap'
+          : 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap'}" rel="stylesheet">
         <style>
           html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          body { font-family: ${rtl ? "'Noto Naskh Arabic', serif" : "'Inter', sans-serif"}; }
+          body {
+            font-family: ${rtl ? "'Cairo', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" : "'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"};
+            background-color: #f3f4f6;
+          }
+          .page {
+            background: white;
+            box-shadow: 0 0 15px rgba(0,0,0,0.1);
+            max-width: 210mm;
+            min-height: 297mm;
+            margin: 20px auto;
+            padding: 20mm;
+            position: relative;
+          }
+          .form-input-like {
+            border-bottom: 1px dotted #000;
+            display: inline-block;
+            min-width: 80px;
+          }
+          @media print {
+            body { background: none; margin: 0; }
+            .page {
+              box-shadow: none;
+              margin: 0;
+              width: 100%;
+              max-width: none;
+              padding: 10mm;
+            }
+          }
           /* Corporate identity table styling for RF breakdown */
-          .rf-table { border: 2px solid #1f2937; border-collapse: collapse; }
-          .rf-table th { background: #A97E34; color: #000; border: 2px solid #1f2937; }
-          .rf-table td { border: 2px solid #1f2937; background: #fffdf5; }
+          .rf-table { border: 2px solid #1f2937; border-collapse: collapse; width: 100%; }
+          .rf-table th {
+            background: #A97E34;
+            color: #000;
+            border: 2px solid #1f2937;
+            font-size: 12px;
+            padding: 6px;
+          }
+          .rf-table td {
+            border: 2px solid #1f2937;
+            background: #fffdf5;
+            font-size: 12px;
+            padding: 6px;
+          }
         </style>
       </head>
-      <body class="bg-gray-100 p-4 sm:p-8">
-        <div class="container mx-auto max-w-4xl bg-white shadow-lg rounded-2xl overflow-hidden">
-          <div class="p-2 border-b border-gray-200 ${textAlignLeft}">
-          </div>
+      <body>
+        <div class="page">
+          <!-- Header -->
+          <header class="text-center mb-8 border-b-4 border-double border-gray-800 pb-4">
+            <h1 class="text-3xl font-bold text-gray-900 mb-1">
+              ${L('Reservation Form – Residential Unit', 'إستمارة حجز – وحدة سكنية')}
+            </h1>
+            <p class="text-xl font-bold text-gray-700">
+              ${L('Uptown Residence Project', 'مشروع ابتاون ريزيدنس')}
+            </p>
+          </header>
 
-          <div class="px-6 sm:px-8 py-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div class="bg-gray-50 rounded-xl p-4 border border-gray-200 ${textAlignLeft}">
-              <h2 class="text-lg font-semibold text-gray-700 mb-2">${L('Reservation Details', 'تفاصيل الحجز')}</h2>
-              <div class="space-y-1 text-gray-800">
-                <div><span class="font-medium">${L('Date', 'التاريخ')}:</span> ${reservationDate} <span class="text-gray-500">(${dayOfWeek})</span></div>
-                <div><span class="font-medium">${L('Preliminary Payment', 'دفعة الحجز الأولية')}:</span> ${Number(preliminaryPayment).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</div>
-                <div><span class="font-medium">${L('Down Payment', 'دفعة التعاقد')}:</span> ${Number(downPayment).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</div>
-                <div><span class="font-medium">${L('Total Unit Value (incl. maintenance)', 'قيمة الوحدة الإجمالية (شاملة وديعة الصيانة)')}:</span> ${Number(totalIncl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</div>
-                <div><span class="font-medium">${L('Remaining Amount', 'المبلغ المتبقي')}:</span> ${Number(remainingAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</div>
+          <!-- Intro / Date -->
+          <section class="mb-6 text-lg leading-relaxed ${textAlignLeft}">
+            <p>
+              ${rtl
+                ? `إنه فى يوم <span class="form-input-like px-2">${dayOfWeek || '-'}</span>
+                    الموافق <span class="form-input-like px-2">${reservationDate || '-'}</span>
+                    تحررت استمارة الحجز الآتي بياناتها:`
+                : `On the day of <span class="form-input-like px-2">${dayOfWeek || '-'}</span>,
+                    dated <span class="form-input-like px-2">${reservationDate || '-'}</span>,
+                    this reservation form has been issued with the following details:`}
+            </p>
+          </section>
+
+          <!-- Buyers Section -->
+          <section class="mb-6">
+            <h2 class="text-xl font-bold text-white bg-gray-800 px-4 py-2 mb-4 inline-block rounded-sm print:text-black print:bg-transparent print:border print:border-black">
+              ${L('Client Information', 'بيانات العميل')}
+            </h2>
+            <div class="text-lg">
+              ${buyersHtml}
+            </div>
+          </section>
+
+          <!-- Unit and Financial Data -->
+          <section class="mb-8">
+            <h2 class="text-xl font-bold text-white bg-gray-800 px-4 py-2 mb-4 inline-block rounded-sm print:text-black print:bg-transparent print:border print:border-black">
+              ${L('Unit Information and Financial Details', 'بيانات الوحدة وطريقة السداد')}
+            </h2>
+
+            <div class="space-y-3 text-lg leading-relaxed ${textAlignLeft}">
+              <div>
+                <span class="font-bold">${L('Unit Code', 'كود الوحدة')}:</span>
+                <span class="form-input-like px-2">${unit.unit_code || '-'}</span>
+              </div>
+              <div>
+                <span class="font-bold">${L('Unit Type', 'نوع الوحدة')}:</span>
+                <span class="form-input-like px-2">${unit.unit_type || '-'}</span>
               </div>
             </div>
-            <div class="bg-gray-50 rounded-xl p-4 border border-gray-200 ${textAlignLeft}">
-              <h2 class="text-lg font-semibold text-gray-700 mb-2">${L('Unit', 'الوحدة')}</h2>
-              <div class="space-y-1 text-gray-800">
-                <div><span class="font-medium">${L('Code', 'الكود')}:</span> ${unit.unit_code || '-'}</div>
-                <div><span class="font-medium">${L('Type', 'النوع')}:</span> ${unit.unit_type || '-'}</div>
-              </div>
-            </div>
-          </div>
 
-          <div class="px-6 sm:px-8 pb-6 ${textAlignLeft}">
-            <h2 class="text-lg font-semibold text-gray-700 mb-3">${L('Buyers', 'العملاء')}</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              ${
-                buyers.length
-                  ? buyers.map((b, i) => `
-                    <div class="rounded-xl border border-gray-200 p-4">
-                      <div class="text-sm text-gray-500 mb-1">${L('Buyer', 'العميل')} ${i + 1}</div>
-                      <div class="text-gray-800"><span class="font-medium">${L('Name', 'الاسم')}:</span> ${b.buyer_name || '-'}</div>
-                      <div class="text-gray-800"><span class="font-medium">${L('Phone', 'الهاتف')}:</span> ${[b.phone_primary, b.phone_secondary].filter(Boolean).join(' / ') || '-'}</div>
-                      <div class="text-gray-800"><span class="font-medium">${L('Email', 'البريد الإلكتروني')}:</span> ${b.email || '-'}</div>
-                    </div>
-                  `).join('')
-                  : `<div class="text-gray-500">${L('No client data', 'لا توجد بيانات عملاء')}</div>`
-              }
-            </div>
-          </div>
-
-          <div class="px-6 sm:px-8 pb-8 ${textAlignLeft}">
-            <h2 class="text-lg font-semibold text-gray-700 mb-3">${L('Pricing Breakdown', 'تفاصيل التسعير')}</h2>
-            <div class="rounded-xl border border-gray-200 overflow-hidden">
-              <table class="min-w-full rf-table">
+            <div class="mt-4">
+              <table class="rf-table">
                 <thead>
                   <tr>
-                    <th class="text-xs font-medium uppercase tracking-wider p-3 ${textAlignLeft}">${L('Label', 'البند')}</th>
-                    <th class="text-xs font-medium uppercase tracking-wider p-3 ${textAlignRight}">${L('Amount', 'القيمة')}</th>
+                    <th class="${textAlignLeft}">${L('Item', 'البند')}</th>
+                    <th class="${textAlignRight}">${L('Amount', 'القيمة')}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr><td class="p-3">${L('Base', 'السعر الأساسي')}</td><td class="p-3 ${textAlignRight}">${Number(upb?.base||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>
-                  ${Number(upb?.garden||0)>0 ? `<tr><td class="p-3">${L('Garden', 'الحديقة')}</td><td class="p-3 ${textAlignRight}">${Number(upb?.garden||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>` : ''}
-                  ${Number(upb?.roof||0)>0 ? `<tr><td class="p-3">${L('Roof', 'السطح')}</td><td class="p-3 ${textAlignRight}">${Number(upb?.roof||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>` : ''}
-                  ${Number(upb?.storage||0)>0 ? `<tr><td class="p-3">${L('Storage', 'غرفة التخزين')}</td><td class="p-3 ${textAlignRight}">${Number(upb?.storage||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>` : ''}
-                  ${Number(upb?.garage||0)>0 ? `<tr><td class="p-3">${L('Garage', 'الجراج')}</td><td class="p-3 ${textAlignRight}">${Number(upb?.garage||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>` : ''}
-                  ${Number(upb?.maintenance||0)>0 ? `<tr><td class="p-3">${L('Maintenance Deposit', 'وديعة الصيانة')}</td><td class="p-3 ${textAlignRight}">${Number(upb?.maintenance||0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>` : ''}
-                  <tr><td class="p-3 font-semibold">${L('Total (excl. maintenance)', 'الإجمالي (بدون وديعة الصيانة)')}</td><td class="p-3 ${textAlignRight} font-semibold">${Number(totalExcl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>
-                  <tr><td class="p-3 font-semibold">${L('Total (incl. maintenance)', 'الإجمالي (شامل وديعة الصيانة)')}</td><td class="p-3 ${textAlignRight} font-semibold">${Number(totalIncl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}</td></tr>
+                  <tr>
+                    <td>${L('Base Price', 'السعر الأساسي')}</td>
+                    <td class="${textAlignRight}">
+                      ${Number(upb?.base || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
+                    </td>
+                  </tr>
+                  ${Number(upb?.garden||0)>0 ? `
+                    <tr>
+                      <td>${L('Garden', 'الحديقة')}</td>
+                      <td class="${textAlignRight}">
+                        ${Number(upb?.garden || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
+                      </td>
+                    </tr>` : ''}
+                  ${Number(upb?.roof||0)>0 ? `
+                    <tr>
+                      <td>${L('Roof', 'السطح')}</td>
+                      <td class="${textAlignRight}">
+                        ${Number(upb?.roof || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
+                      </td>
+                    </tr>` : ''}
+                  ${Number(upb?.storage||0)>0 ? `
+                    <tr>
+                      <td>${L('Storage', 'غرفة التخزين')}</td>
+                      <td class="${textAlignRight}">
+                        ${Number(upb?.storage || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
+                      </td>
+                    </tr>` : ''}
+                  ${Number(upb?.garage||0)>0 ? `
+                    <tr>
+                      <td>${L('Garage', 'الجراج')}</td>
+                      <td class="${textAlignRight}">
+                        ${Number(upb?.garage || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
+                      </td>
+                    </tr>` : ''}
+                  ${Number(upb?.maintenance||0)>0 ? `
+                    <tr>
+                      <td>${L('Maintenance Deposit', 'وديعة الصيانة')}</td>
+                      <td class="${textAlignRight}">
+                        ${Number(upb?.maintenance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
+                      </td>
+                    </tr>` : ''}
+                  <tr>
+                    <td class="font-semibold">
+                      ${L('Total (excl. maintenance)', 'الإجمالي (بدون وديعة الصيانة)')}
+                    </td>
+                    <td class="${textAlignRight} font-semibold">
+                      ${Number(totalExcl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="font-semibold">
+                      ${L('Total (incl. maintenance)', 'الإجمالي (شامل وديعة الصيانة)')}
+                    </td>
+                    <td class="${textAlignRight} font-semibold">
+                      ${Number(totalIncl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      ${L('Preliminary Reservation Payment', 'دفعة حجز مبدئية')}
+                    </td>
+                    <td class="${textAlignRight}">
+                      ${Number(preliminaryPayment).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      ${L('Contract Down Payment', 'دفعة التعاقد')}
+                    </td>
+                    <td class="${textAlignRight}">
+                      ${Number(downPayment).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="font-semibold">
+                      ${L('Remaining Amount', 'المبلغ المتبقي')}
+                    </td>
+                    <td class="${textAlignRight} font-semibold">
+                      ${Number(remainingAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}
+                    </td>
+                  </tr>
                 </tbody>
               </table>
+              <p class="mt-2 text-sm italic text-gray-500 ${textAlignLeft}">
+                ${L('* The remaining amount will be paid according to the attached payment plan.', '* يتم سداد باقي المبلغ طبقا لملحق السداد المرفق.')}
+              </p>
             </div>
-          </div>
+          </section>
 
-          <div class="px-6 sm:px-8 pb-8 text-gray-500 text-sm border-t border-gray-100 ${textAlignLeft}">
-            ${L('This reservation form is generated automatically based on the consultant\'s saved plan and pricing. Values are indicative and subject to contract.', 'تم إنشاء نموذج الحجز تلقائيًا اعتمادًا على الخطة والأسعار المحفوظة بواسطة المستشار. القيم إرشادية وقابلة للتغيير عند التعاقد.')}
-          </div>
+          <!-- Conditions (shortened, based on your Arabic sample) -->
+          <section class="mb-8 text-justify">
+            <h2 class="text-xl font-bold text-white bg-gray-800 px-4 py-2 mb-4 inline-block rounded-sm print:text-black print:bg-transparent print:border print:border-black">
+              ${L('General Terms and Conditions', 'شروط عامة متفق عليها')}
+            </h2>
+            <ol class="list-decimal list-inside space-y-1 text-sm md:text-base leading-relaxed text-gray-800 ${rtl ? 'text-right' : ''}">
+              <li>${L(
+                'The client may not assign this reservation form to a third party without the company’s written approval.',
+                'لا يجوز للعميل التنازل عن استمارة الحجز للغير إلا بموافقة كتابية من الشركة.'
+              )}</li>
+              <li>${L(
+                'The client shall deliver the cheques to the company within 15 days from the date of issuing this reservation form unless extended by the company.',
+                'يلتزم العميل بتسليم الشيكات للشركة في مدة أقصاها (15) خمسة عشر يوم من تاريخ تحرير استمارة الحجز، ويجوز مد المدة بموافقة الشركة.'
+              )}</li>
+              <li>${L(
+                'This reservation form ceases to be valid once the purchase contract is signed and the contract terms apply instead.',
+                'ينتهي العمل بهذه الاستمارة فور توقيع العميل على عقد الشراء وتطبق بنود العقد ويحل محل هذه الاستمارة.'
+              )}</li>
+              <li>${L(
+                'If the client wishes to withdraw before signing the contract, the company may deduct a percentage from the paid amounts according to policy.',
+                'في حالة رغبة العميل في العدول عن إتمام البيع قبل استلامه للعقد، يحق للشركة خصم نسبة من المبالغ المدفوعة طبقا للسياسة المعتمدة.'
+              )}</li>
+            </ol>
+          </section>
+
+          <!-- Footer / Signatures -->
+          <footer class="mt-10 pt-6 border-t-2 border-gray-800">
+            <div class="text-center mb-6 text-base">
+              <span class="font-medium">
+                ${L('Issued on:', 'حررت في تاريخ:')}
+              </span>
+              <span class="form-input-like px-2">${reservationDate || '-'}</span>
+            </div>
+            <div class="grid grid-cols-3 gap-8 text-center text-sm md:text-base">
+              <div class="flex flex-col items-center">
+                <p class="font-bold mb-8">${L('Prepared By', 'إعداد')}</p>
+                <div class="w-3/4 border-b border-gray-400 h-8"></div>
+              </div>
+              <div class="flex flex-col items-center">
+                <p class="font-bold mb-8">${L('Client', 'العميل')}</p>
+                <div class="w-3/4 border-b border-gray-400 h-8"></div>
+              </div>
+              <div class="flex flex-col items-center">
+                <p class="font-bold mb-8">${L('Reservation Officer', 'مسئول الحجز')}</p>
+                <div class="w-3/4 border-b border-gray-400 h-8"></div>
+              </div>
+            </div>
+          </footer>
         </div>
       </body>
       </html>

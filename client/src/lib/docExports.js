@@ -180,6 +180,30 @@ export async function generateClientOfferPdf(body, API_URL, onProgress) {
 }
 
 /**
+ * Generate Reservation Form PDF via server-rendered HTML (Puppeteer).
+ * body should include: deal_id, reservation_form_date, preliminary_payment_amount, currency_override, language
+ */
+export async function generateReservationFormPdf(body, API_URL) {
+  const resp = await fetchWithAuth(`${API_URL}/api/documents/reservation-form`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  })
+  if (!resp.ok) {
+    let errMsg = 'Failed to generate Reservation Form PDF'
+    try {
+      const j = await resp.json()
+      errMsg = j?.error?.message || errMsg
+    } catch {}
+    throw new Error(errMsg)
+  }
+  const blob = await resp.blob()
+  const ts = new Date().toISOString().replace(/[:.]/g, '-')
+  const filename = `reservation_form_${ts}.pdf`
+  return { blob, filename }
+}
+
+/**
  * Generate a DOCX-based PDF via /api/generate-document using a template or documentType.
  * Returns { blob, filename } to be downloaded by the caller.
  */

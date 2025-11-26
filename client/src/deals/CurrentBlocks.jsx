@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { fetchWithAuth, API_URL } from '../lib/apiClient.js'
+import { generateReservationFormPdf } from '../lib/docExports.js'
 
 const th = { textAlign: 'left', padding: 10, borderBottom: '1px solid #eef2f7', fontSize: 13, color: '#475569', background: '#f9fbfd' }
 const td = { padding: 10, borderBottom: '1px solid #f2f5fa', fontSize: 14 }
@@ -48,13 +49,21 @@ export default function CurrentBlocks() {
       const data = await resp.json()
       if (!resp.ok) throw new Error(data?.error?.message || 'Failed to load approved plans')
       const plans = (data.payment_plans || []).map(p => ({
-        id: p.id, label: `#${p.id} v${p.version || 1} (approved)`
+        id: p.id,
+        label: `#${p.id} v${p.version || 1} (approved)`,
+        dealId: p.deal_id || null
       }))
       // Auto-select the latest plan (first in DESC list) and default language
-      setBlockForm(blockRow.id, { plans, selectedPlanId: plans[0]?.id || '', language: 'en' })
+      const first = plans[0] || {}
+      setBlockForm(blockRow.id, {
+        plans,
+        selectedPlanId: first.id || '',
+        selectedPlanDealId: first.dealId || null,
+        language: 'en'
+      })
     } catch (e) {
       // keep silent; form will show empty selector
-      setBlockForm(blockRow.id, { plans: [], selectedPlanId: '', language: 'en' })
+      setBlockForm(blockRow.id, { plans: [], selectedPlanId: '', selectedPlanDealId: null, language: 'en' })
     }
   }
 
@@ -68,12 +77,12 @@ export default function CurrentBlocks() {
       }
       // Validate preliminary payment as a non-negative number
       const prelim = f.preliminaryPayment === '' || f.preliminaryPayment == null ? 0 : Number(f.preliminaryPayment)
-      if (!Number.isFinite(prelim) || prelim < 0) {
+      if (!Number.isFinite(prelim) || prelim &lt; 0) {
         alert('Preliminary Payment must be a non-negative number.')
         return
       }
-      setCreating(s => new Set([...s, id]))
-      const row = rows.find(r => r.id === id)
+      setCreating(s =&gt; new Set([...s, id]))
+      const row = rows.find(r =&gt; r.id === id)
       const details = {
         reservation_date: f.reservationDate || null,
         preliminary_payment: prelim,
@@ -85,14 +94,50 @@ export default function CurrentBlocks() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ payment_plan_id: paymentPlanId, details })
       })
-      const data = await resp.json().catch(() => ({}))
+      const data = await resp.json().catch(() =&gt; ({}))
       if (!resp.ok) throw new Error(data?.error?.message || 'Failed to create reservation form')
       alert(`Reservation Form #${data?.reservation_form?.id} created and sent for Financial Manager approval.`)
-      setForm(fm => ({ ...fm, [id]: { ...fm[id], reservationDate: '', preliminaryPayment: '', language: 'en' } }))
+      setForm(fm =&gt; ({ ...fm, [id]: { ...fm[id], reservationDate: '', preliminaryPayment: '', language: 'en' } }))
     } catch (e) {
       alert(e.message || String(e))
     } finally {
-      setCreating(s => { const n = new Set(s); n.delete(id); return n })
+      setCreating(s =&gt; { const n = new Set(s); n.delete(id); return n })
+    }
+  }
+
+  async function printReservationPdf(id) {
+    try {
+      const f = form[id] || {}
+      const plans = f.plans || []
+      const plan = plans.find(p =&gt; p.id === f.selectedPlanId) || plans[0]
+      const dealId = plan?.dealId
+      if (!dealId) {
+        alert('Unable to determine the related deal for this plan. Reservation PDF requires a deal_id.')
+        return
+      }
+      const prelim = f.preliminaryPayment === '' || f.preliminaryPayment == null ? 0 : Number(f.preliminaryPayment)
+      if (!Number.isFinite(prelim) || prelim &lt; 0) {
+        alert('Preliminary Payment must be a non-negative number.')
+        return
+      }
+      const body = {
+        deal_id: Number(dealId),
+        reservation_form_date: (f.reservationDate || new Date().toISOString().slice(0, 10)),
+        preliminary_payment_amount: prelim,
+        currency_override: '',
+        language: f.language || 'en'
+      }
+      const { blob, filename } = await generateReservationFormPdf(body, API_URL)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      alert(e.message || String(e))
     }
   }
 
@@ -162,7 +207,7 @@ export default function CurrentBlocks() {
                         <option value="en">English</option>
                         <option value="ar">العربية</option>
                       </select>
-                      <div>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                         <button
                           style={btn}
                           onClick={() => createReservation(r.id)}
@@ -170,6 +215,13 @@ export default function CurrentBlocks() {
                           title="Create reservation form for this blocked unit (sends to Financial Manager for approval)"
                         >
                           {creating.has(r.id) ? 'Creating…' : 'Create Reservation Form'}
+                        </button>
+                        <button
+                          style={btn}
+                          onClick={() => printReservationPdf(r.id)}
+                          title="Generate Reservation Form PDF using the linked deal and plan"
+                        >
+                          Print Reservation PDF
                         </button>
                       </div>
                     </div>

@@ -532,6 +532,10 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
       } catch {}
     }
 
+    // Pricing for the reservation form must come strictly from the deal snapshot
+    // (calc.unitPricingBreakdown) so it reflects the agreed offer, not any later
+    // changes in unit_model_pricing. We still read unit.area from the live units
+    // table for informational purposes, but we do NOT override prices from there.
     let upb = calc?.unitPricingBreakdown || null
     let totalIncl = 0
     let currency = UIcurrency || calc?.currency || ''
@@ -546,30 +550,14 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
       if (Number.isFinite(unitId) && unitId > 0) {
         const r = await pool.query(`
           SELECT
-            u.area AS unit_area,
-            p.price,
-            p.maintenance_price,
-            p.garage_price,
-            p.garden_price,
-            p.roof_price,
-            p.storage_price
+            u.area AS unit_area
           FROM units u
-          JOIN unit_model_pricing p ON p.model_id = u.model_id
-          WHERE u.id=$1 AND p.status='approved'
-          ORDER BY p.id DESC
+          WHERE u.id=$1
           LIMIT 1
         `, [unitId])
         if (r.rows.length) {
           const row = r.rows[0]
           unit.unit_area = row.unit_area != null ? Number(row.unit_area) || null : null
-          upb = {
-            base: Number((upb && upb.base) ?? row.price) || 0,
-            garden: Number((upb && upb.garden) ?? row.garden_price) || 0,
-            roof: Number((upb && upb.roof) ?? row.roof_price) || 0,
-            storage: Number((upb && upb.storage) ?? row.storage_price) || 0,
-            garage: Number((upb && upb.garage) ?? row.garage_price) || 0,
-            maintenance: Number((upb && upb.maintenance) ?? row.maintenance_price) || 0
-          }
         }
       }
     } catch {}

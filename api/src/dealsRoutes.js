@@ -185,7 +185,7 @@ router.get('/', authMiddleware, async (req, res) => {
       LEFT JOIN units un ON un.id = (d.details->'calculator'->'unitInfo'->>'unit_id')::int
       ${whereSql}
       ORDER BY ${sortCol} ${dir}
-      LIMIT ${limitIdx} OFFSET ${offsetIdx}
+      LIMIT $${limitIdx} OFFSET $${offsetIdx}
     `
     const rows = await pool.query(listSql, params)
 

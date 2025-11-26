@@ -67,13 +67,13 @@ router.get('/customers', authMiddleware, async (req, res) => {
     
     if (search) {
       params.push(`%${search}%`)
-      query += ` AND (c.name ILIKE ${params.length} OR c.email ILIKE ${params.length} OR c.phone ILIKE ${params.length})`
+      query += ` AND (c.name ILIKE $${params.length} OR c.email ILIKE $${params.length} OR c.phone ILIKE $${params.length})`
     }
     
     // Sales reps can only see their own customers
     if (req.user.role === 'property_consultant') {
       params.push(req.user.id)
-      query += ` AND c.created_by = ${params.length}`
+      query += ` AND c.created_by = $${params.length}`
     }
     
     params.push(limitNum)
@@ -81,7 +81,7 @@ router.get('/customers', authMiddleware, async (req, res) => {
     query += `
       GROUP BY c.id, u.email
       ORDER BY c.created_at DESC
-      LIMIT ${params.length - 1} OFFSET ${params.length}
+      LIMIT $${params.length - 1} OFFSET $${params.length}
     `
     
     const customers = await pool.query(query, params)
@@ -96,12 +96,12 @@ router.get('/customers', authMiddleware, async (req, res) => {
     
     if (search) {
       countParams.push(`%${search}%`)
-      countQuery += ` AND (c.name ILIKE ${countParams.length} OR c.email ILIKE ${countParams.length} OR c.phone ILIKE ${countParams.length})`
+      countQuery += ` AND (c.name ILIKE $${countParams.length} OR c.email ILIKE $${countParams.length} OR c.phone ILIKE $${countParams.length})`
     }
     
     if (req.user.role === 'property_consultant') {
       countParams.push(req.user.id)
-      countQuery += ` AND c.created_by = ${countParams.length}`
+      countQuery += ` AND c.created_by = $${countParams.length}`
     }
     
     const totalCount = await pool.query(countQuery, countParams)
@@ -196,7 +196,7 @@ router.patch('/customers/:id', authMiddleware, validate(customerUpdateSchema), a
     
     for (const [key, value] of Object.entries(updates)) {
       if (allowedFields.includes(key)) {
-        updateFields.push(`${key} = ${paramCount}`)
+        updateFields.push(`${key} = $${paramCount}`)
         values.push(key === 'email' ? String(value).toLowerCase() : value)
         paramCount++
       }
@@ -210,7 +210,7 @@ router.patch('/customers/:id', authMiddleware, validate(customerUpdateSchema), a
     values.push(customerId)
     
     const result = await pool.query(
-      `UPDATE customers SET ${updateFields.join(', ')} WHERE id = ${paramCount} RETURNING *`,
+      `UPDATE customers SET ${updateFields.join(', ')} WHERE id = $${paramCount} RETURNING *`,
       values
     )
     

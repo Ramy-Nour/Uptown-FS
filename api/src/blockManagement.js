@@ -540,6 +540,56 @@ router.patch('/:id/approve', authMiddleware, requireRole(['financial_manager']),
         `,
         [row.unit_id]
       )
+
+      // Normal path: if financial criteria are met (ACCEPT) and no override was needed,
+      // automatically set the latest matching deal for this unit to approved so the
+      // consultant sees the offer as approved once the unit is blocked.
+      if (finOk && !overrideOk) {
+        try {
+          const dealRes = await pool.query(
+            `
+            SELECT d.id, d.status
+            FROM deals d
+            WHERE d.created_by = $1
+              AND d.status IN ('draft','pending_approval')
+              AND (d.details->'calculator'->'unitInfo'->>'unit_id')::int = $2
+              AND d.details->'calculator'->'generatedPlan'->'evaluation'->>'decision' = 'ACCEPT'
+            ORDER BY d.id DESC
+            LIMIT 1
+            `,
+            [row.requested_by, row.unit_id]
+          )
+          if (dealRes.rows.length > 0) {
+            const deal = dealRes.rows[0]
+            if (deal.status !== 'approved') {
+              const upd = await pool.query(
+                `UPDATE deals SET status='approved', updated_at=NOW() WHERE id=$1 RETURNING id, status`,
+                [deal.id]
+              )
+              const updated = upd.rows[0]
+              if (updated) {
+                await pool.query(
+                  `INSERT INTO deal_history (deal_id, user_id, action, notes)
+                   VALUES ($1, $2, $3, $4)`,
+                  [
+                    updated.id,
+                    req.user.id,
+                    'auto_approved_on_block',
+                    JSON.stringify({
+                      event: 'auto_approved_on_block',
+                      by: { id: req.user.id, role: req.user.role },
+                      reason: 'Block approved with financial decision ACCEPT and no override',
+                      at: new Date().toISOString()
+                    })
+                  ]
+                )
+              }
+            }
+          }
+        } catch (autoErr) {
+          console.warn('Auto-approve deal on block error:', autoErr?.message || autoErr)
+        }
+      }
     } else if (action === 'reject') {
       await pool.query(
         `

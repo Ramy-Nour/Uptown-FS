@@ -552,7 +552,7 @@ router.patch('/:id/approve', authMiddleware, requireRole(['financial_manager']),
             FROM deals d
             WHERE d.created_by = $1
               AND d.status IN ('draft','pending_approval')
-              AND TRIM(COALESCE(d.details->'calculator'->'unitInfo'->>'unit_id','')) ~ '^[0-9]+
+              AND TRIM(COALESCE(d.details->'calculator'->'unitInfo'->>'unit_id','')) ~ '^[0-9]+'
               AND TRIM(d.details->'calculator'->'unitInfo'->>'unit_id')::int = $2
               AND d.details->'calculator'->'generatedPlan'->'evaluation'->>'decision' = 'ACCEPT'
             ORDER BY d.id DESC

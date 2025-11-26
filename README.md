@@ -121,6 +121,9 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-11-26 20:25] API Parameter Mismatch — syntax correction and Customer Routes fixes
+  - API: Corrected the syntax in `api/src/dealsRoutes.js` where the previous fix for `LIMIT`/`OFFSET` placeholders was missing the `$` prefix (e.g., `LIMIT ${limitIdx}` vs `LIMIT $${limitIdx}`), which still caused parameter mismatch errors.
+  - API: Proactively fixed identical missing-`$` issues in `api/src/customerRoutes.js` across search filters, pagination, and update queries to prevent similar crashes and SQL injection vulnerabilities.
 - [2025-11-26 16:05] All Deals listing — fix SQL parameter mismatch causing internal error
   - API: Corrected the GET /api/deals listing query in api/src/dealsRoutes.js so that LIMIT/OFFSET use their own bound placeholders instead of reusing the filter parameters array length directly. Previously, the prepared statement expected only the WHERE-clause parameters while the code supplied three parameters (filters + limit + offset), triggering “bind message supplies 3 parameters, but prepared statement \"\" requires 1” and showing “Internal error” on the consultant’s All Deals page. The listing now executes without parameter count errors across all filter combinations.
 - [2025-11-26 15:25] Inventory cards — visual BLOCKED watermark for blocked units

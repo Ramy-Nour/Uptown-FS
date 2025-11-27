@@ -518,7 +518,7 @@ router.patch('/:id/approve', authMiddleware, requireRole(['financial_manager']),
         return res.status(400).json({ error: { message: 'Cannot approve block: financial criteria not met and no override approval present' } })
       }
 
-      // Normal criteria path (ACCEPT with no override): auto-approve the latest ACCEPT deal
+      // Normal criteria path (ACCEPT with no override): auto-approve the latest matching deal
       // and ensure an approved consultant payment plan exists for this unit/deal.
       if (finOk && !overrideOk) {
         try {
@@ -528,7 +528,6 @@ router.patch('/:id/approve', authMiddleware, requireRole(['financial_manager']),
             FROM deals d
             WHERE d.created_by = $1
               AND d.status IN ('draft','pending_approval','approved')
-              AND d.details->'calculator'->'generatedPlan'->'evaluation'->>'decision' = 'ACCEPT'
               AND (
                 (
                   TRIM(COALESCE(d.details->'calculator'->'unitInfo'->>'unit_id','')) ~ '^[0-9]+'

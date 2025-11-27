@@ -621,7 +621,6 @@ router.patch('/:id/approve', authMiddleware, requireRole(['financial_manager']),
           console.warn('Auto-approve deal on block error:', autoErr?.message || autoErr)
         }
       }
-      }
     } else if (action === 'reject') {
       await pool.query(
         `

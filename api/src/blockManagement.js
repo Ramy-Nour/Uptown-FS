@@ -545,27 +545,6 @@ router.patch('/:id/approve', authMiddleware, requireRole(['financial_manager']),
       // automatically set the latest matching deal for this unit to approved so the
       // consultant sees the offer as approved once the unit is blocked. In addition,
       // ensure there is an approved payment_plan row that exactly mirrors the deal
-      // snapshot so that FA can create a reservation directly from the blocked unit.
-      if (finOk && !overrideOk) {
-        try {
-          const dealRes = await pool.query(
-            `
-            SELECT d.id, d.status, d.details, d.created_by
-            FROM deals d
-            WHERE d.created_by = $1
-              AND d.status IN ('draft','pending_approval','approved')
-              AND TRIM(COALESCE(d.details->'calculator'->'unitInfo'->>'unit_id','')) ~ '^[0-9]+'
-              AND TRIM(d.details->'calculator'->'unitInfo'->>'unit_id')::int = $2
-              AND d.details->'calculator'->'generatedPlan'->'evaluation'->>'decision' = 'ACCEPT'
-            ORDER BY d.id DESC
-            LIMIT 1
-            `,
-            [row.requested_by, row.unit_id]
-          )
-          if (dealRes.rows.length > 0) {
-            const deal = dealRes.rows[0]
-
-            // 1) Auto-approve the deal if still in draft/pending_approval
             if (deal.status !== 'approved') {
               const upd = await pool.query(
                 `UPDATE deals SET status='approved', updated_at=NOW() WHERE id=$1 RETURNING id, status`,

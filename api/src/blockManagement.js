@@ -518,6 +518,79 @@ router.patch('/:id/approve', authMiddleware, requireRole(['financial_manager']),
         return res.status(400).json({ error: { message: 'Cannot approve block: financial criteria not met and no override approval present' } })
       }
 
+      // Normal criteria path (ACCEPT with no override): auto-approve the latest ACCEPT deal
+      // and ensure an approved consultant payment plan exists for this unit/deal.
+      if (finOk && !overrideOk) {
+        try {
+          const dealRes = await pool.query(
+            `
+            SELECT d.id, d.status, d.details, d.created_by
+            FROM deals d
+            WHERE d.created_by = $1
+              AND d.status IN ('draft','pending_approval','approved')
+              AND d.details->'calculator'->'generatedPlan'->'evaluation'->>'decision' = 'ACCEPT'
+              AND (
+                (
+                  TRIM(COALESCE(d.details->'calculator'->'unitInfo'->>'unit_id','')) ~ '^[0-9]+'
+                  AND TRIM(d.details->'calculator'->'unitInfo'->>'unit_id')::int = $2
+                )
+                OR
+                (
+                  TRIM(COALESCE(d.details->'calculator'->'unitInfo'->>'unit_code','')) = (
+                    SELECT TRIM(code) FROM units WHERE id = $2
+                  )
+                )
+              )
+            ORDER BY d.id DESC
+            LIMIT 1
+            `,
+            [row.requested_by, row.unit_id]
+          )
+
+          if (dealRes.rows.length > 0) {
+            const deal = dealRes.rows[0]
+
+            // If the deal is still draft/pending, auto-approve it
+            if (deal.status === 'draft' || deal.status === 'pending_approval') {
+              await pool.query(
+                `UPDATE deals SET status='approved', updated_at=NOW() WHERE id=$1`,
+                [deal.id]
+              )
+
+              const autoNote = {
+                event: 'auto_approved_on_block',
+                by: { id: req.user.id, role: req.user.role },
+                reason: 'Block approved with financial_decision=ACCEPT and no override; deal auto-approved to align with block.',
+                block_id: row.id,
+                unit_id: row.unit_id,
+                at: new Date().toISOString()
+              }
+              await pool.query(
+                `INSERT INTO deal_history (deal_id, user_id, action, notes) VALUES ($1, $2, $3, $4)`,
+                [deal.id, req.user.id, 'auto_approved_on_block', JSON.stringify(autoNote)]
+              )
+            }
+
+            // Ensure an approved consultant payment plan exists for this deal
+            const planCheck = await pool.query(
+              `SELECT id FROM payment_plans WHERE deal_id=$1 AND status='approved' LIMIT 1`,
+              [deal.id]
+            )
+            if (planCheck.rows.length === 0) {
+              await pool.query(
+                `INSERT INTO payment_plans (deal_id, details, created_by, status)
+                 VALUES ($1, $2, $3, 'approved')`,
+                [deal.id, deal.details || {}, deal.created_by]
+              )
+            }
+          }
+        } catch (e) {
+          console.error('Auto-approve deal / ensure payment plan on block-approve error:', e)
+          // Do not fail the whole approval if this helper step has issues.
+        }
+      }
+
+      // Approve the block itself
       await pool.query(
         `
         UPDATE blocks
@@ -530,20 +603,17 @@ router.patch('/:id/approve', authMiddleware, requireRole(['financial_manager']),
         `,
         [req.user.id, reason || null, blockId]
       )
+
+      // Mark the unit as BLOCKED and unavailable
       await pool.query(
         `
         UPDATE units
         SET available = FALSE,
             unit_status = 'BLOCKED',
             updated_at = NOW()
-        SET status = 'rejected',
-            rejected_by = $1,
-            rejected_at = NOW(),
-            rejection_reason = $2,
-            updated_at = NOW()
-        WHERE id = $3
+        WHERE id = $1
         `,
-        [req.user.id, reason || null, blockId]
+        [row.unit_id]
       )
     } else {
       return res.status(400).json({ error: { message: 'Invalid action' } })

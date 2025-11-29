@@ -100,32 +100,32 @@ export default function InputsForm({
         <div>
           <label style={styles.label}>{t('mode', language)}</label>
           <select value={mode} onChange={e => setMode(e.target.value)} style={select()}>
-            <option value="standardMode">{isRTL(language) ? 'الوضع القياسي (خطة افتراضية)' : 'Standard Mode (Default Plan)'}</option>
-            <option value="evaluateCustomPrice">{isRTL(language) ? 'سعر قياسي بعد الخصم (مقارنة بالقياسي)' : 'Discounted Standard Price (Compare to Standard)'}</option>
+            <option value="standardMode">{isRTL(language) ? 'الوضع القياسي (سياسة التمويل الافتراضية)' : 'Standard Mode (Default Financing Policy)'}</option>
+            <option value="evaluateCustomPrice">{isRTL(language) ? 'سعر القائمة بعد الخصم (مقارنة بالقياسي)' : 'Discounted List Price (Compare to Standard)'}</option>
             <option value="calculateForTargetPV">{isRTL(language) ? 'سعر مستهدف: مطابقة القيمة الحالية القياسية' : 'Target Price: Match Standard PV'}</option>
-            <option value="customYearlyThenEqual_useStdPrice">{isRTL(language) ? 'هيكل مخصص باستخدام السعر القياسي' : 'Custom Structure using Standard Price'}</option>
+            <option value="customYearlyThenEqual_useStdPrice">{isRTL(language) ? 'هيكل مخصص باستخدام سعر القائمة' : 'Custom Structure using List Price'}</option>
             <option value="customYearlyThenEqual_targetPV">{isRTL(language) ? 'هيكل مخصص بهدف مطابقة القيمة الحالية القياسية' : 'Custom Structure targeting Standard PV'}</option>
           </select>
           {(() => {
             const info = {
               standardMode: {
                 en: {
-                  name: 'Standard Mode (Default Plan)',
-                  desc: 'Uses the approved Standard Price with a fixed structure: 20% Down Payment (percentage), 6 years quarterly; Years 1–3 pay 15% per year (3.75% per quarter) and the remaining 35% is spread equally over Years 4–6. Handover is fixed at Year 3. Discount is allowed (up to 2% for consultants) but any non-zero discount will always require an override.'
+                  name: 'Standard Mode (Default Financing Policy)',
+                  desc: 'Uses the approved List Price under the Default Financing Policy with a fixed structure: 20% Down Payment (percentage), 6 years quarterly; Years 1–3 pay 15% per year (3.75% per quarter) and the remaining 35% is spread equally over Years 4–6. Handover is fixed at Year 3. Discount is allowed (up to 2% for consultants) but any non-zero discount will always require an override.'
                 },
                 ar: {
-                  name: 'الوضع القياسي (الخطة الافتراضية)',
-                  desc: 'يستخدم السعر القياسي المعتمد مع هيكل ثابت: ٢٠٪ دفعة مقدمة (كنسبة مئوية)، مدة ٦ سنوات بواقع ربع سنوي؛ السنوات ١–٣ تسدد ١٥٪ سنوياً (٣٫٧٥٪ لكل ربع سنة) والباقي ٣٥٪ يوزع بالتساوي على السنوات ٤–٦. سنة التسليم ثابتة عند السنة الثالثة. يُسمح بالخصم (حتى ٢٪ للمستشار) ولكن أي خصم أكبر من صفر يتطلب دائماً طلب استثناء (Override).'
+                  name: 'الوضع القياسي (سياسة التمويل الافتراضية)',
+                  desc: 'يستخدم سعر القائمة المعتمد ضمن سياسة التمويل الافتراضية مع هيكل ثابت: ٢٠٪ دفعة مقدمة (كنسبة مئوية)، مدة ٦ سنوات بواقع ربع سنوي؛ السنوات ١–٣ تسدد ١٥٪ سنوياً (٣٫٧٥٪ لكل ربع سنة) والباقي ٣٥٪ يوزع بالتساوي على السنوات ٤–٦. سنة التسليم ثابتة عند السنة الثالثة. يُسمح بالخصم (حتى ٢٪ للمستشار) ولكن أي خصم أكبر من صفر يتطلب دائماً طلب استثناء (Override).'
                 }
               },
               evaluateCustomPrice: {
                 en: {
-                  name: 'Discounted Standard Price (Compare to Standard)',
-                  desc: 'Applies Sales Discount to the Standard Price, computes the plan (including your Down Payment and structure), then compares the resulting schedule against acceptance thresholds. Default Down Payment is 20% as a percentage, but you can switch between percentage and amount.'
+                  name: 'Discounted List Price (Compare to Standard)',
+                  desc: 'Applies Sales Discount to the List Price, computes the plan (including your Down Payment and structure), then compares the resulting schedule against acceptance thresholds. Default Down Payment is 20% as a percentage, but you can switch between percentage and amount.'
                 },
                 ar: {
-                  name: 'سعر قياسي بعد الخصم (مقارنة بالقياسي)',
-                  desc: 'يطبق خصم المبيعات على السعر القياسي ويُكوّن الخطة (بما في ذلك الدفعة المقدمة وهيكل السداد) ثم يقارن الجدول بحدود القبول. الدفعة المقدمة الافتراضية ٢٠٪ كنسبة مئوية، ويمكنك التبديل بين النسبة والقيمة.'
+                  name: 'سعر القائمة بعد الخصم (مقارنة بالقياسي)',
+                  desc: 'يطبق خصم المبيعات على سعر القائمة ويُكوّن الخطة (بما في ذلك الدفعة المقدمة وهيكل السداد) ثم يقارن الجدول بحدود القبول. الدفعة المقدمة الافتراضية ٢٠٪ كنسبة مئوية، ويمكنك التبديل بين النسبة والقيمة.'
                 }
               },
               calculateForTargetPV: {
@@ -140,12 +140,12 @@ export default function InputsForm({
               },
               customYearlyThenEqual_useStdPrice: {
                 en: {
-                  name: 'Custom Structure using Standard Price',
-                  desc: 'Keeps the Standard Price but lets you define split First Year and subsequent years; the remainder is equal installments. Default Down Payment is 20% as a percentage, but you can choose either percentage or amount.'
+                  name: 'Custom Structure using List Price',
+                  desc: 'Keeps the List Price but lets you define split First Year and subsequent years; the remainder is equal installments. Default Down Payment is 20% as a percentage, but you can choose either percentage or amount.'
                 },
                 ar: {
-                  name: 'هيكل مخصص باستخدام السعر القياسي',
-                  desc: 'يُبقي على السعر القياسي مع تمكينك من تقسيم السنة الأولى وتحديد السنوات اللاحقة؛ ويتم توزيع الباقي كأقساط متساوية. الدفعة المقدمة الافتراضية ٢٠٪ كنسبة مئوية، ويمكنك اختيار النسبة أو القيمة.'
+                  name: 'هيكل مخصص باستخدام سعر القائمة',
+                  desc: 'يُبقي على سعر القائمة مع تمكينك من تقسيم السنة الأولى وتحديد السنوات اللاحقة؛ ويتم توزيع الباقي كأقساط متساوية. الدفعة المقدمة الافتراضية ٢٠٪ كنسبة مئوية، ويمكنك اختيار النسبة أو القيمة.'
                 }
               },
               customYearlyThenEqual_targetPV: {

@@ -457,7 +457,7 @@ export default function StandardPricing() {
       <BrandHeader onLogout={handleLogout} />
       <div style={pageContainer}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h2 style={pageTitle}>Standard Pricing (by Unit Model)</h2>
+          <h2 style={pageTitle}>List Price Configuration (by Unit Model)</h2>
           <div style={{ display: 'flex', gap: 8 }}>
             {role === 'financial_manager' ? (
               <>

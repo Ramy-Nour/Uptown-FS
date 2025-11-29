@@ -121,6 +121,13 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-11-29 13:30] Terminology updated to “Default Financing Policy” and “List Price Configuration”; canonical end-to-end Mermaid diagram added under Operational Workflow
+- [2025-11-29 12:00] Discount authority limits centralized; deal-by-unit helper added; evaluation guidance clarified; end-to-end offer→contract flow documented
+  - API: Centralized role-based discount authority limits in api/src/planningRoutes.js via getRoleDiscountLimit(role). /api/calculate now returns authorityLimit/overAuthority using this helper instead of hard-coded 2% and 5%, and /api/generate-plan enforces the same limits when generating plans. The defaults remain 2% for property_consultant and 5% for financial_manager, but the logic is now in one place and ready to be wired to database configuration in a future iteration.
+  - API: Added GET /api/deals/by-unit/:unitId in api/src/dealsRoutes.js to list deals for a specific unit based on details.calculator.unitInfo.unit_id. This endpoint is role-aware (non-elevated users only see their own deals for that unit) and is intended for UX checks and reporting around “multiple offers on the same unit” without introducing hard locking at deal creation.
+  - Client: Updated Create Deal (client/src/deals/CreateDeal.jsx) to call the new /api/deals/by-unit/:unitId helper when a unit is loaded, surfacing in logs whenever there are existing deals on that unit. This keeps the current “allow multiple deals” business policy while giving sales/ops context about potential conflicts. Future UI iterations can display this as a visible banner instead of a console-only note.
+  - Client: Improved rejection guidance in the calculator EvaluationPanel (client/src/components/calculator/EvaluationPanel.jsx) by expanding the “Unmet criteria” summary. For each failed condition, the banner now includes both the condition label and the minimum required percentage (when available), making it clearer why a plan was rejected and what threshold it failed to meet (e.g., “Payment by Handover (requires at least 65%)”).
+  - Documentation: Added a concise “End-to-End Offer → Contract Flow (Implementation)” description inside the Operational Workflow section, summarizing the implemented pipeline from Standard Pricing/Standard Plan → Inventory → Calculator modes → /api/generate-plan → Deals (offers) → Payment Plans workflow → Blocks → Reservations. This flow uses the same terminology as the application (Standard Mode, Payment Plans, Blocks, Reservations, Contracts) and aligns with the existing backend routes and business rules described elsewhere in the README.
 - [2025-11-27 16:15] Sales Manager queues page now shows payment plans instead of Unit Model approvals; Offer Progress internal error resolved
   - Client: Updated client/src/deals/PaymentPlanQueues.jsx so that /deals/queues becomes role-aware. Sales Managers now load GET /api/workflow/payment-plans/queue/sm and see a “Payment Plan Approval Queue” table (plan id, deal id, status) instead of the Unit Model Approval Queue. Only Financial Manager and Top Management roles (ceo/chairman/vice_chairman/top_management) continue to call GET /api/inventory/unit-models/changes and see the Unit Model approval list with Approve/Reject actions. This removes the confusing 403 “Forbidden” errors Sales Managers previously saw when the page tried to hit the unit-models endpoint, without changing FM/TM behavior.
   - Client: Kept the BrandHeader “Queues (N)” shortcut unchanged for Sales Managers; the count still reflects the number of pending payment plans from /api/workflow/payment-plans/queue/sm, but the underlying page now aligns its content and title with that queue instead of unit models.
@@ -1252,7 +1259,281 @@ Troubleshooting quick tips
 
 ---
 
+## Key Terms and Definitions
+
+This section explains the main financial terms used throughout the system so that everyone uses the same language.
+
+- Default Financing Policy (Standard Plan)
+  - A global set of financial terms configured by the Financial Manager and approved by Top Management.
+  - Defines the “standard” financing policy:
+    - Annual financial discount rate (%)
+    - Plan duration in years
+    - Default installment frequency (monthly/quarterly/bi-annually/annually)
+  - Used by the calculation engine as a baseline for Present Value (PV) comparisons and for Standard Mode structures.
+  - Technical name in code and DB: standard_plan.
+
+- List Price Configuration (Standard Pricing / Unit Model Pricing)
+  - Per-model or per-unit nominal price configuration, used to derive the official List Price for a unit.
+  - Components:
+    - Base unit price
+    - Optional components: garden, roof, storage, garage, maintenance
+    - std_financial_rate_percent, plan_duration_years, installment_frequency (per-pricing overrides when present)
+    - calculated_pv (FM’s approved Standard PV)
+  - “List Price” refers to the total nominal price built from these components for a specific unit or model.
+  - Technical names in code and DB: standard_pricing and unit_model_pricing.
+
+- Standard Unit / Inventory Unit
+  - A unit record in the inventory linked to a unit model and Standard/Unit Model Pricing.
+  - Lifecycle:
+    - Draft (created by CRM Admin)
+    - AVAILABLE (approved by Top Management and ready to sell)
+    - BLOCKED (temporarily held during a block)
+    - RESERVED (after reservation approval)
+  - Only AVAILABLE units can be used to create or submit Deals (offers).
+
+- Calculator Modes
+  - Standard Mode:
+    - Uses Standard Price and enforces a fixed structure (20% Down Payment, 6 years, quarterly installments, three 15% yearly blocks, remaining 35% as equal installments).
+  - Discounted Standard Price (Compare to Standard):
+    - Applies a discount to Standard Price and allows flexible structure inputs, then compares PV to the Standard PV.
+  - Target Price: Match Standard PV:
+    - Solves for a new nominal price that makes the PV equal to the Standard PV, given a structure and down payment amount.
+  - Custom Structure using Standard Price:
+    - Uses Standard Price, but allows custom yearly blocks + equal installments; PV is calculated on the resulting structure.
+  - Custom Structure targeting Standard PV:
+    - Uses a custom structure but solves for a price that matches Standard PV.
+
+- Deal (Offer)
+  - A sales offer record created from the calculator snapshot for a specific unit and client.
+  - Contains:
+    - Title, amount (typically the total nominal from the generated plan)
+    - details.calculator snapshot:
+      - mode, stdPlan, inputs, unitInfo, clientInfo
+      - generatedPlan (schedule, totals, evaluation)
+  - Status:
+    - draft → pending_approval → approved or rejected
+  - Represents “this is the offer we are proposing to the client,” including the exact payment plan at the time it was created.
+
+- Payment Plan
+  - A workflow wrapper around a calculator snapshot tied to a Deal.
+  - Stored in payment_plans with:
+    - details.calculator (same shape as in deals)
+    - Approval status:
+      - pending_sm, pending_fm, pending_tm, approved, rejected
+    - Metadata for discounts and policy limits
+  - Only one plan per deal can be marked accepted (accepted=true), but multiple approved plans can exist per unit (e.g., alternative scenarios).
+
+- Approved Plan vs Accepted Plan
+  - Approved Plan:
+    - A payment_plan row with status='approved' (after SM/FM/TM as needed).
+  - Accepted Plan:
+    - The single “chosen” approved plan for a given deal, marked via mark-accepted.
+    - Used as the primary reference when moving toward reservation and contract.
+
+- Block (Unit Hold)
+  - A temporary hold on an AVAILABLE unit requested by a Property Consultant or Sales Manager.
+  - Represents “we are holding this unit for this client/offer while approvals/reservations are processed.”
+  - Data lives in the blocks table with:
+    - Requester, reason, duration
+    - financial_decision (FM decision), override status if applicable
+    - blocked_until timestamp
+  - Approval:
+    - Financial Manager approves/rejects.
+    - On approval: unit_status='BLOCKED', available=FALSE.
+
+- Reservation Form
+  - A record representing a client’s reservation for a BLOCKED unit with a specific approved payment plan.
+  - Created by Financial Admin:
+    - Ties together: blocked unit, approved payment_plan, reservation date, and preliminary payment.
+  - Approval:
+    - Financial Manager approves/rejects reservation forms.
+    - On approval: unit_status='RESERVED', available=FALSE.
+  - Reservation Form PDF:
+    - Generated from the deal and plan snapshot; legally formatted for client signature.
+
+- Contract
+  - The legal contract generated after a reservation is approved.
+  - Today:
+    - Mainly a server-rendered PDF document from the deal snapshot and templates.
+  - Planned:
+    - A full workflow in contracts table:
+      - draft → CM review → TM approval → executed
+    - With explicit audit trail and status transitions.
+
+- Standard PV (Standard Present Value)
+  - The “standard” Present Value of the Standard Plan structure for a given unit/model.
+  - Usually the FM-approved calculated_pv stored in Standard Pricing / Unit Model Pricing.
+  - Target-PV modes and Acceptance Evaluation compare Proposed PV against this Standard PV.
+
+- Proposed PV (Offer Present Value)
+  - The Present Value of the proposed payment schedule (including down payment, custom years, equal installments, handover).
+  - Used to determine whether a plan is ACCEPT or REJECT based on tolerance thresholds from payment_thresholds.
+
+- Discount Percent (salesDiscountPercent)
+  - The percentage discount applied to the Standard Price to arrive at the nominal offer price in discounting modes.
+  - Subject to:
+    - Role-based Authority Limits (per role)
+    - Policy Limits (global/ scoped policies from approval_policies) that control whether plans must go to TM.
+
+- Authority Limit (Role-based Discount Limit)
+  - The maximum discount a given role can apply directly when generating a plan.
+  - Implemented via getRoleDiscountLimit(role) in the API, with current defaults:
+    - property_consultant: 2%
+    - financial_manager: 5%
+  - Enforced primarily in:
+    - /api/calculate (returned as authorityLimit/overAuthority in meta)
+    - /api/generate-plan (requests above the role’s limit are rejected with 403)
+  - Business meaning:
+    - Within the Authority Limit, the role can propose and generate plans freely.
+    - Above this limit, the plan must go through the override/workflow path (SM/FM/TM) instead of being accepted as a normal scenario.
+
+- Policy Limit (Global/Scoped Approval Policy)
+  - A discount threshold stored in approval_policies (scope_type='global' or more specific scopes in the future).
+  - Used primarily by Financial Manager and Top Management to decide whether TM approval is required:
+    - disc ≤ policy_limit_percent → can be approved at FM level.
+    - disc > policy_limit_percent → escalates to TM (pending_tm).
+  - This is distinct from a role’s Authority Limit:
+    - Authority Limit = what you are allowed to propose at all.
+    - Policy Limit = how far FM can approve alone before TM must be involved.
+
+- Override (Top-Management Override of Financial Decision)
+  - A controlled exception process that allows a REJECT plan or an over-policy-limit plan to proceed.
+  - Triggered when:
+    - A plan’s Acceptance Evaluation is REJECT but the business wants to consider it anyway.
+    - A discount is above the normal policy limit, requiring TM review.
+  - Workflow stages:
+    - Request Override (Consultant or Manager)
+    - Sales Manager review (override_sm_approve / override_sm_reject)
+    - Financial Manager review (override_fm_approve / override_fm_reject)
+    - Top Management decision (override_approve / override_reject)
+  - Recorded in:
+    - deal fields (needs_override, override_* columns)
+    - deal_history with structured JSON notes
+  - Effect:
+    - Once an override is approved by TM, the system treats the plan as authorized despite PV or threshold failures and allows dependent actions (blocks, deals, documents) to proceed under that exception.
+
+With these definitions, the terms in the flow below (Standard Plan, Standard Pricing, Deal, Payment Plan, Block, Reservation, Contract, Standard PV, etc.) should be unambiguous.
+
 ## Operational Workflow — End-to-End (Draft for Review)
+
+### Conceptual Flow (Mermaid Diagram)
+
+The diagram below shows the full flow from configuration, through offers and approvals, to blocks, reservations, and contracts using the updated terminology (Default Financing Policy, List Price Configuration, List Price, Authority Limit, Policy Limit).
+
+```mermaid
+flowchart TD
+    %% Configuration Phase
+    A[FM/TM Configures<br/>Default Financing Policy &<br/>List Price Configuration] --> B[Default Financing Policy<br/>standard_plan table &<br/>List Price Configuration<br/>standard_pricing, unit_model_pricing tables]
+    C[CRM Admin Creates<br/>Unit Drafts] --> D[TM Approves Units<br/>→ AVAILABLE Status]
+    
+    %% Calculator & Deal Flow
+    E[Consultant Selects<br/>AVAILABLE Unit] --> F{Choose Calculation Mode}
+    
+    F --> F1[Standard Mode<br/>Default Financing Policy]
+    F --> F2[Discounted List Price<br/>Compare to Standard]
+    F --> F3[Target Price: Match Standard PV<br/>calculateForTargetPV]
+    F --> F4[Custom Structure using List Price<br/>customYearlyThenEqual_useStdPrice]
+    F --> F5[Custom Structure targeting Standard PV<br/>customYearlyThenEqual_targetPV]
+    
+    F1 --> G[POST /api/generate-plan<br/>Schedule + Evaluation]
+    F2 --> G
+    F3 --> G
+    F4 --> G
+    F5 --> G
+    
+    G --> H{Acceptance Evaluation}
+    H -->|ACCEPT| I[Create Deal/Offer<br/>with Generated Plan]
+    H -->|REJECT| J[Flag for Override<br/>needs_override=true]
+    
+    J --> K[Override Workflow<br/>SM → FM → TM]
+    K --> L{Override Approved?}
+    L -->|Yes| I
+    L -->|No| M[Deal Rejected]
+    
+    %% Payment Plan Workflow
+    I --> N[Create Payment Plan<br/>POST /api/workflow/payment-plans]
+    
+    N --> O{Role & Discount Check}
+    O -->|Consultant<br/>Discount up to Authority Limit| P1[Pending SM<br/>Sales Manager Queue]
+    O -->|Sales Manager<br/>Discount ≤ Authority Limit| P2[Approved]
+    O -->|Sales Manager<br/>Discount > Authority Limit| P3[Pending FM<br/>Financial Manager Queue]
+    O -->|Financial Manager<br/>Discount ≤ Policy Limit| P2
+    O -->|Financial Manager<br/>Discount > Policy Limit| P4[Pending TM<br/>Top Management Queue]
+    
+    P1 --> P3
+    P3 --> P4
+    P4 --> P5[TM Dual Approval<br/>Required]
+    P5 --> P2
+    
+    P2 --> Q[Mark as Accepted<br/>One per Deal]
+    
+    %% Blocking Flow
+    Q --> R[Request Unit Block<br/>POST /api/blocks/request<br/>Requires: AVAILABLE unit +<br/>(Approved Payment Plan OR ACCEPT Deal)]
+    R --> S[FM Approves Block<br/>→ BLOCKED Status]
+    
+    %% Reservation Flow
+    S --> T[FA Creates Reservation Form<br/>with Approved Plan]
+    T --> U{Reservation Decision}
+    U -->|Approve| V[→ RESERVED Status]
+    U -->|Reject| S
+    
+    %% Contract Flow (Planned)
+    V --> W[Contract Generation<br/>PDF Documents]
+    W --> X[Contract Workflow<br/>CM → TM Approval]
+    X --> Y[Contract Executed]
+
+    %% Core Business Terms Definitions
+    subgraph BusinessTerms [Core Business Terms & Definitions]
+        BT1[Default Financing Policy<br/>Standard Plan: Global financial terms<br/>rate, duration, frequency - configured by FM]
+        BT2[List Price Configuration<br/>Standard Pricing / Unit Model Pricing:<br/>Per-model/unit nominal components + FM stored PV]
+        BT3[List Price<br/>Standard Price: Total nominal price from<br/>List Price Configuration components]
+        BT4[Deal/Offer<br/>Sales offer record with frozen calculator<br/>snapshot for specific client/unit]
+        BT5[Payment Plan<br/>Workflow record for approval containing<br/>calculator snapshot + status]
+        BT6[Accepted Plan<br/>Single marked approved plan per deal<br/>used for reservations]
+        BT7[Block<br/>Temporary unit hold for specific offer<br/>Requires: AVAILABLE unit +<br/>(Approved Payment Plan OR ACCEPT Deal)]
+        BT8[Reservation<br/>Client commitment with preliminary payment<br/>requires blocked unit + approved plan]
+    end
+
+    %% Financial Terms Definitions
+    subgraph FinancialTerms [Financial Terms & Definitions]
+        FT1[Present Value PV<br/>Current value of future cash flows<br/>discounted at financial rate]
+        FT2[Standard PV<br/>Authoritative baseline PV from<br/>FM-approved List Price Configuration<br/>(stored calculated_pv or computed fallback)]
+        FT3[Nominal Price<br/>Total offer price before<br/>PV discounting]
+        FT4[Financial Discount Rate<br/>Annual rate used to calculate PV<br/>Set in Default Financing Policy]
+        FT5[Down Payment DP<br/>Initial payment percentage or amount<br/>Standard Mode: 20% fixed]
+        FT6[Equal Installments<br/>Regular payments after custom periods<br/>Calculated to balance total nominal]
+        FT7[Handover Payment<br/>Lump sum due at unit handover<br/>Standard Mode: Year 3]
+        FT8[Maintenance Deposit<br/>Separate from unit price<br/>Excluded from PV calculations]
+        FT9[Authority Limit<br/>Role-based discount limit<br/>Consultant: 2%, FM: 5%]
+        FT10[Policy Limit<br/>Global discount threshold<br/>Requires TM approval if exceeded]
+    end
+
+    %% Styling
+    classDef config fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef inventory fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef calculator fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
+    classDef workflow fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef approval fill:#ffebee,stroke:#c62828,stroke-width:2px
+    classDef final fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+    classDef business fill:#f0f4c3,stroke:#827717,stroke-width:3px
+    classDef financial fill:#e1f5fe,stroke:#01579b,stroke-width:3px
+    
+    class A,B config
+    class C,D inventory
+    class E,F,F1,F2,F3,F4,F5,G,H calculator
+    class I,J,K,L,M,N workflow
+    class O,P1,P2,P3,P4,P5,Q approval
+    class R,S,T,U,V,W,X,Y final
+    class BusinessTerms,BT1,BT2,BT3,BT4,BT5,BT6,BT7,BT8 business
+    class FinancialTerms,FT1,FT2,FT3,FT4,FT5,FT6,FT7,FT8,FT9,FT10 financial
+
+    %% Key Decision Points
+    linkStyle 5 stroke:#ff0000,stroke-width:2px,stroke-dasharray: 5 5
+    linkStyle 6 stroke:#ff0000,stroke-width:2px,stroke-dasharray: 5 5
+    linkStyle 13 stroke:#ff0000,stroke-width:2px,stroke-dasharray: 5 5
+    linkStyle 14 stroke:#ff0000,stroke-width:2px,stroke-dasharray: 5 5
+    linkStyle 15 stroke:#ff0000,stroke-width:2px,stroke-dasharray: 5 5
+```
 
 Note: This section is a draft for stakeholder review. It distinguishes between Current Enforcement (what the system enforces today) and Planned Enforcement (to be added). Once approved, we will convert any planned items into implemented features and remove the “Draft” label.
 
@@ -1267,6 +1548,111 @@ Actors
 - Contract Manager (CM)
 
 Phase 1: Models, Standard Terms, and Inventory
+
+Compact visual flow (high level)
+
+- Configure Standard Terms and Prices:
+  - Standard Plan (global financial terms – rate, duration, frequency)
+  - Standard Pricing / Unit Model Pricing (per-model/unit nominal pieces and FM Calculated PV)
+- Build Inventory:
+  - CRM Admin creates unit drafts linked to models and pricing
+  - Top Management approves drafts → units become AVAILABLE
+
+End-to-end Offer → Contract pipeline (implemented today)
+
+- 1) Standard Terms and Inventory
+  - FM + TM:
+    - Configure Standard Plan and Standard Pricing / Unit Model Pricing
+  - CRM Admin + TM:
+    - Create units and approve to AVAILABLE
+
+- 2) Calculator and Plan Generation
+  - Property Consultant (PC) or Sales Manager (SM):
+    - Pick unit (AVAILABLE) from Deals → Inventory
+    - Use Calculator modes:
+      - Standard Mode (default structure)
+      - Discounted Standard Price (Compare to Standard)
+      - Target Price: Match Standard PV
+      - Custom Structure using Standard Price
+      - Custom Structure targeting Standard PV
+    - Call /api/generate-plan:
+      - Server resolves Standard Plan context from Standard Pricing/Unit Model/Standard Plan
+      - Computes schedule, totals, and Acceptance Evaluation (ACCEPT/REJECT)
+
+- 3) Deal (Offer) Creation
+  - PC/SM:
+    - Create a Deal via Create Deal (embedded calculator snapshot)
+      - POST /api/deals:
+        - Requires generatedPlan with schedule
+        - Requires unit_status='AVAILABLE'
+    - Submit Deal:
+      - POST /api/deals/:id/submit:
+        - Re-validates presence of plan and unit availability
+        - If evaluation.decision='REJECT', flags needs_override and requires override approval to proceed in strict flows
+
+- 4) Payment Plans Workflow
+  - Roles: PC, SM, FM, FA, TM
+  - PC/SM/FM/FA:
+    - Create payment_plans for a deal:
+      - POST /api/workflow/payment-plans (deal_id, details with calculator snapshot)
+      - Initial status:
+        - PC → pending_sm
+        - SM → approved (if discount ≤ 2%) or pending_fm
+        - FM → approved within policy_limit, otherwise pending_tm
+  - Queues:
+    - SM: /api/workflow/payment-plans/queue/sm
+    - FM: /api/workflow/payment-plans/queue/fm
+    - TM: /api/workflow/payment-plans/queue/tm
+  - Approvals:
+    - SM: approve-sm / reject-sm
+    - FM: approve / reject
+    - TM: approve-tm (dual approvals) / reject-tm
+  - One plan per deal can be marked accepted:
+    - PATCH /api/workflow/payment-plans/:id/mark-accepted (FM/CEO)
+  - For a given unit, FA/FM/SM/PC can list approved plans:
+    - GET /api/workflow/payment-plans/approved-for-unit?unit_id=…
+
+- 5) Blocks (Unit Holds)
+  - PC/SM:
+    - From Calculator or Deal, request a block for an AVAILABLE unit:
+      - POST /api/blocks/request
+        - Requires at least one approved consultant-created plan for the unit
+  - FM:
+    - Approves or rejects in Block Requests:
+      - PATCH /api/blocks/:id/approve (action='approve' or 'reject')
+      - On approve:
+        - unit_status='BLOCKED', available=FALSE
+        - For normal (ACCEPT) paths, related deal may be auto-approved and a payment_plan snapshot ensured
+
+- 6) Reservations
+  - FA:
+    - Uses Deals → Current Blocks:
+      - For each BLOCKED unit, selects an approved plan (auto-selected latest) and enters reservation date and preliminary payment
+      - Creates Reservation Form:
+        - POST /api/workflow/reservation-forms
+          - Requires BLOCKED unit + approved payment_plan
+  - FM:
+    - Approves or rejects Reservations in Reservations Queue:
+      - PATCH /api/workflow/reservation-forms/:id/approve:
+        - Sets reservation_forms.status='approved'
+        - unit_status='RESERVED', available=FALSE
+      - PATCH /api/workflow/reservation-forms/:id/reject:
+        - Keeps unit BLOCKED (block/unblock workflow is separate)
+
+- 7) Contracts (Partial / Planned)
+  - Contract Person (CP) and Contract Manager (CM):
+    - Generate contract PDFs from Deal Detail or Calculator using document endpoints:
+      - /api/generate-document or /api/documents/contract (per templates)
+    - Contracts table and audit history exist; a full CM/TM approval chain is planned:
+      - Draft → CM review → TM approval → Executed
+
+This flow uses the same terms as the application:
+- Standard Plan and Standard Pricing / Unit Model Pricing
+- AVAILABLE / BLOCKED / RESERVED unit states
+- Deals (offers) with embedded payment plans
+- Payment Plans workflow (PC/SM/FM/TM)
+- Blocks and Reservations
+- Contracts (document generation today; full approval workflow planned)
 
 1) Unit Models (structure, dimensions, features)
 - Owner: Financial Manager (requests), Top Management (approves)

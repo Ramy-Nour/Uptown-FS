@@ -97,10 +97,9 @@ router.post(
         return res.status(400).json({ error: { message: 'Unit is already blocked' } })
       }
 
-      // Require an approved consultant payment plan for this unit.
-      // We intentionally mirror the matching logic from
-      // /api/workflow/payment-plans/approved-for-unit so that any plan
-      // that justifies a block will always be visible in the FA/FM views.
+      // Primary rule: Prefer an approved consultant payment plan for this unit.
+      // We mirror /api/workflow/payment-plans/approved-for-unit so that any plan
+      // that justifies a block is always visible in FA/FM views.
       const approvedPlan = await pool.query(
         `
         WITH target AS (
@@ -116,11 +115,11 @@ router.post(
           AND u.role = 'property_consultant'
           AND (
             (
-              TRIM(COALESCE(pp.details->'calculator'->'unitInfo'->>'unit_id','')) ~ '^[0-9]+'
-              AND (TRIM(pp.details->'calculator'->'unitInfo'->>'unit_id')::int = t.unit_id)
+              TRIM(COALESCE(pp.details-&gt;'calculator'-&gt;'unitInfo'-&gt;&gt;'unit_id','')) ~ '^[0-9]+'
+              AND (TRIM(pp.details-&gt;'calculator'-&gt;'unitInfo'-&gt;&gt;'unit_id')::int = t.unit_id)
             )
             OR (
-              TRIM(COALESCE(pp.details->'calculator'->'unitInfo'->>'unit_code','')) = t.unit_code
+              TRIM(COALESCE(pp.details-&gt;'calculator'-&gt;'unitInfo'-&gt;&gt;'unit_code','')) = t.unit_code
             )
           )
         ORDER BY pp.id DESC
@@ -129,13 +128,70 @@ router.post(
         [unitId]
       )
 
-      if (approvedPlan.rows.length === 0) {
-        return res.status(400).json({ error: { message: 'An approved consultant payment plan is required to request a block for this unit.' } })
+      let planDetails = null
+      let planId = null
+      let decision = null
+
+      if (approvedPlan.rows.length > 0) {
+        planDetails = approvedPlan.rows[0].details || {}
+        planId = approvedPlan.rows[0].id || null
+        decision = planDetails?.calculator?.generatedPlan?.evaluation?.decision || null
+      } else {
+        // Fallback rule (documented in README): when no approved consultant payment plan
+        // exists yet, allow a block based on a valid ACCEPT deal snapshot for this unit.
+        //
+        // This lets a Property Consultant block a unit immediately after creating
+        // an offer whose payment plan passes all criteria, without waiting for
+        // FM/FA to approve a payment plan. The FM approval path will auto-create
+        // an approved consultant payment plan when the block is approved.
+        const dealRes = await pool.query(
+          `
+          SELECT d.id, d.details
+          FROM deals d
+          WHERE d.created_by = $1
+            AND d.status IN ('draft','pending_approval','approved')
+            AND (
+              (
+                TRIM(COALESCE(d.details-&gt;'calculator'-&gt;'unitInfo'-&gt;&gt;'unit_id','')) ~ '^[0-9]+'
+                AND TRIM(d.details-&gt;'calculator'-&gt;'unitInfo'-&gt;&gt;'unit_id')::int = $2
+              )
+              OR
+              (
+                TRIM(COALESCE(d.details-&gt;'calculator'-&gt;'unitInfo'-&gt;&gt;'unit_code','')) = (
+                  SELECT TRIM(code) FROM units WHERE id = $2
+                )
+              )
+            )
+          ORDER BY d.id DESC
+          LIMIT 1
+          `,
+          [req.user.id, unitId]
+        )
+
+        if (dealRes.rows.length > 0) {
+          const dealDetails = dealRes.rows[0].details || {}
+          const calc = dealDetails.calculator || {}
+          const gen = calc.generatedPlan || {}
+          const evaln = gen.evaluation || {}
+          const schedule = Array.isArray(gen.schedule) ? gen.schedule : []
+
+          const dealDecision = evaln.decision || null
+          if (dealDecision === 'ACCEPT' &amp;&amp; schedule.length &gt; 0) {
+            planDetails = { calculator: calc }
+            planId = null
+            decision = 'ACCEPT'
+          }
+        }
       }
 
-      const planDetails = approvedPlan.rows[0].details || {}
-      const planId = approvedPlan.rows[0].id || null
-      const decision = planDetails?.calculator?.generatedPlan?.evaluation?.decision || null
+      if (!decision) {
+        // Neither an approved consultant payment plan nor a valid ACCEPT deal snapshot exists.
+        return res.status(400).json({
+          error: {
+            message: 'An approved consultant payment plan is required to request a block for this unit.'
+          }
+        })
+      }
 
       // Use default of 7 days if not provided
       const d = Number(durationDays) || 7

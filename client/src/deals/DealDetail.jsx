@@ -26,6 +26,9 @@ export default function DealDetail() {
   const user = JSON.parse(localStorage.getItem('auth_user') || '{}')
   const role = user?.role || 'user'
 
+  // Conflict visibility: other deals for the same unit (for managers)
+  const [unitDeals, setUnitDeals] = useState([])
+
   // Reservation Form modal state
   const [reservationModalOpen, setReservationModalOpen] = useState(false)
   const [reservationForm, setReservationForm] = useState({
@@ -103,6 +106,12 @@ export default function DealDetail() {
   const [expandedNotes, setExpandedNotes] = useState({})
   const [assigning, setAssigning] = useState(false)
   const [settingPolicy, setSettingPolicy] = useState(false)
+
+  // Conflict visibility: other deals for the same unit (for managers)
+  const [unitDeals, setUnitDeals] = useState([])
+
+  // Local state for SM override rejection prompt (id to reject)
+  const [promptRejectId, setPromptRejectId] = useState(null)
 
   useEffect(() => {
     async function loadAux() {
@@ -189,9 +198,6 @@ export default function DealDetail() {
   const schedule = deal?.details?.calculator?.generatedPlan?.schedule || []
   const totals = deal?.details?.calculator?.generatedPlan?.totals || null
   const evaluation = deal?.details?.calculator?.generatedPlan?.evaluation || null
-
-  // Conflict visibility: other deals for the same unit (for managers)
-  const [unitDeals, setUnitDeals] = useState([])
 
   // Derive compact status/override/unit availability summary for the header
   const liveUnitStatusRaw = deal?.current_unit_status

@@ -121,6 +121,10 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-11-29 20:10] Deal Detail / Deals API — \"Sales Rep\" terminology and default assignment aligned with Property Consultant
+  - API: Updated POST /api/deals in api/src/dealsRoutes.js so that when a new deal is created without an explicit salesRepId, the system automatically sets sales_rep_id to the authenticated user id (the Property Consultant creating the offer). This ensures commission calculations have a default consultant and avoids \"unassigned\" deals in the database.
+  - Client: In client/src/deals/DealDetail.jsx, relabeled the \"Sales Rep\" field to \"Property Consultant\" and, for non-admin roles, replaced the editable dropdown with a read-only label showing the offer creator (created_by_email). Admins still have a dropdown to override the mapping if needed, with a clearer \"Use Offer Creator (default)\" option.
+  - Client: Adjusted the \"Calculate Commission\" button so that when sales_rep_id is null it automatically uses the deal creator (created_by) as the sales_person_id, eliminating the \"Assign a Sales Rep first\" error for normal offers where the Property Consultant is implicitly the salesperson.
 - [2025-11-29 19:35] Deal Detail — fix React hooks order error when conflict banner loads
   - Client: In client/src/deals/DealDetail.jsx, moved the unitDeals useState hook (used to display “Other deals exist for this unit…”) up with the other hooks so it is always called before any early return. Previously, the hook was declared after the early `if (error) return…` / `if (!deal) return…` branches, so some renders executed fewer hooks than others and triggered “Rendered more hooks than during the previous render” in the Deal Detail view after loading /api/deals/by-unit/:unitId.
 - [2025-11-29 19:25] /api/deals/by-unit/:unitId SQL placeholder fixed to prevent parameter-count error

@@ -367,6 +367,11 @@ router.post('/', authMiddleware, validate(dealCreateSchema), async (req, res) =>
     const amt = Number(amount || 0)
     const det = isObject(details) ? details : {}
 
+    // Business policy: the \"sales rep\" for a deal is the Property Consultant who
+    // created the offer. If the client does not explicitly send a salesRepId,
+    // default it to the authenticated user so commission calculations can use it.
+    const effectiveSalesRepId = salesRepId || req.user.id
+
     // Enforce: creating an offer/deal requires a generated payment plan from the calculator
     const plan = det?.calculator?.generatedPlan
     const hasPlan = !!(plan && Array.isArray(plan.schedule) && plan.schedule.length > 0)
@@ -394,7 +399,7 @@ router.post('/', authMiddleware, validate(dealCreateSchema), async (req, res) =>
 
     const result = await pool.query(
       'INSERT INTO deals (title, amount, details, unit_type, sales_rep_id, policy_id, status, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
-      [title.trim(), isFinite(amt) ? amt : 0, det, unitType || null, salesRepId || null, policyId || null, 'draft', req.user.id]
+      [title.trim(), isFinite(amt) ? amt : 0, det, unitType || null, effectiveSalesRepId || null, policyId || null, 'draft', req.user.id]
     )
     const deal = result.rows[0]
     const note = {

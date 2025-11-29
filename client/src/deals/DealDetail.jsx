@@ -586,44 +586,54 @@ export default function DealDetail() {
               <div style={{ marginTop: 4 }}>{deal.rejection_reason}</div>
             </div>
           ) : null}
+          {/* Property Consultant (offer creator) -- previously labeled "Sales Rep" */}
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '8px 0' }}>
-            <strong>Sales Rep:</strong>
-            <select
-              disabled={!canEdit || assigning}
-              value={deal.sales_rep_id || ''}
-              onChange={async (e) => {
-                const salesRepId = e.target.value ? Number(e.target.value) : null
-                setAssigning(true)
-                // optimistic UI
-                setDeal(d => ({ ...d, sales_rep_id: salesRepId }))
-                try {
-                  const resp = await fetchWithAuth(`${API_URL}/api/deals/${id}`, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ salesRepId })
-                  })
-                  const data = await resp.json()
-                  if (!resp.ok) {
-                    notifyError(data?.error?.message || 'Failed to assign sales rep')
-                    // revert optimistic update
+            <strong>Property Consultant:</strong>
+            {/* For consultants themselves (and most roles), this is fixed to the offer creator.
+                Admins can still override via the dropdown if needed. */}
+            {role !== 'admin' && role !== 'superadmin' ? (
+              <span>
+                {deal.created_by_email || deal.created_by}
+                {!deal.sales_rep_id && ' (used for commission by default)'}
+              </span>
+            ) : (
+              <select
+                disabled={!canEdit || assigning}
+                value={deal.sales_rep_id || ''}
+                onChange={async (e) => {
+                  const salesRepId = e.target.value ? Number(e.target.value) : null
+                  setAssigning(true)
+                  // optimistic UI
+                  setDeal(d => ({ ...d, sales_rep_id: salesRepId }))
+                  try {
+                    const resp = await fetchWithAuth(`${API_URL}/api/deals/${id}`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ salesRepId })
+                    })
+                    const data = await resp.json()
+                    if (!resp.ok) {
+                      notifyError(data?.error?.message || 'Failed to assign property consultant')
+                      // revert optimistic update
+                      setDeal(d => ({ ...d, sales_rep_id: deal.sales_rep_id || null }))
+                    } else {
+                      notifySuccess('Property consultant assignment updated.')
+                    }
+                  } catch (err) {
+                    notifyError(err, 'Failed to assign property consultant')
                     setDeal(d => ({ ...d, sales_rep_id: deal.sales_rep_id || null }))
-                  } else {
-                    notifySuccess('Sales rep assigned successfully.')
+                  } finally {
+                    setAssigning(false)
                   }
-                } catch (err) {
-                  notifyError(err, 'Failed to assign sales rep')
-                  setDeal(d => ({ ...d, sales_rep_id: deal.sales_rep_id || null }))
-                } finally {
-                  setAssigning(false)
-                }
-              }}
-              style={{ padding: 8, borderRadius: 8, border: '1px solid #d1d9e6' }}
-            >
-              <option value="">— Unassigned —</option>
-              {salesList.map(s => (
-                <option key={s.id} value={s.id}>{s.name} {s.email ? `(${s.email})` : ''}</option>
-              ))}
-            </select>
+                }}
+                style={{ padding: 8, borderRadius: 8, border: '1px solid #d1d9e6' }}
+              >
+                <option value="">— Use Offer Creator (default) —</option>
+                {salesList.map(s => (
+                  <option key={s.id} value={s.id}>{s.name} {s.email ? `(${s.email})` : ''}</option>
+                ))}
+              </select>
+            )}
             {salesError ? <small style={{ color: '#e11d48' }}>{salesError}</small> : null}
           </div>
 
@@ -1350,8 +1360,9 @@ export default function DealDetail() {
         )}
         <LoadingButton
           onClick={async () => {
-            if (!deal.sales_rep_id) {
-              notifyError('Assign a Sales Rep first.')
+            const salesPersonId = deal.sales_rep_id || deal.created_by
+            if (!salesPersonId) {
+              notifyError('Missing Property Consultant for this deal.')
               return
             }
             setCalcCommissionLoading(true)
@@ -1359,7 +1370,7 @@ export default function DealDetail() {
               const resp = await fetchWithAuth(`${API_URL}/api/commissions/calc-and-save`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ deal_id: deal.id, sales_person_id: deal.sales_rep_id })
+                body: JSON.stringify({ deal_id: deal.id, sales_person_id: salesPersonId })
               })
               const data = await resp.json()
               if (!resp.ok) {

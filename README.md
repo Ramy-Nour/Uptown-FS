@@ -1258,6 +1258,122 @@ Troubleshooting quick tips
 
 ---
 
+## Key Terms and Definitions
+
+This section explains the main financial terms used throughout the system so that everyone uses the same language.
+
+- Standard Plan
+  - A global set of financial terms configured by the Financial Manager and approved by Top Management.
+  - Defines the “standard” financing policy:
+    - Annual financial discount rate (%)
+    - Plan duration in years
+    - Default installment frequency (monthly/quarterly/bi-annually/annually)
+  - Used by the calculation engine as a baseline for Present Value (PV) comparisons and for Standard Mode structures.
+
+- Standard Pricing / Unit Model Pricing
+  - Per-model or per-unit nominal price configuration.
+  - Components:
+    - Base unit price
+    - Optional components: garden, roof, storage, garage, maintenance
+    - std_financial_rate_percent, plan_duration_years, installment_frequency (per-pricing overrides when present)
+    - calculated_pv (FM’s approved Standard PV)
+  - “Standard Price” in the UI refers to the total nominal price built from these components for a specific unit or model.
+
+- Standard Unit / Inventory Unit
+  - A unit record in the inventory linked to a unit model and Standard/Unit Model Pricing.
+  - Lifecycle:
+    - Draft (created by CRM Admin)
+    - AVAILABLE (approved by Top Management and ready to sell)
+    - BLOCKED (temporarily held during a block)
+    - RESERVED (after reservation approval)
+  - Only AVAILABLE units can be used to create or submit Deals (offers).
+
+- Calculator Modes
+  - Standard Mode:
+    - Uses Standard Price and enforces a fixed structure (20% Down Payment, 6 years, quarterly installments, three 15% yearly blocks, remaining 35% as equal installments).
+  - Discounted Standard Price (Compare to Standard):
+    - Applies a discount to Standard Price and allows flexible structure inputs, then compares PV to the Standard PV.
+  - Target Price: Match Standard PV:
+    - Solves for a new nominal price that makes the PV equal to the Standard PV, given a structure and down payment amount.
+  - Custom Structure using Standard Price:
+    - Uses Standard Price, but allows custom yearly blocks + equal installments; PV is calculated on the resulting structure.
+  - Custom Structure targeting Standard PV:
+    - Uses a custom structure but solves for a price that matches Standard PV.
+
+- Deal (Offer)
+  - A sales offer record created from the calculator snapshot for a specific unit and client.
+  - Contains:
+    - Title, amount (typically the total nominal from the generated plan)
+    - details.calculator snapshot:
+      - mode, stdPlan, inputs, unitInfo, clientInfo
+      - generatedPlan (schedule, totals, evaluation)
+  - Status:
+    - draft → pending_approval → approved or rejected
+  - Represents “this is the offer we are proposing to the client,” including the exact payment plan at the time it was created.
+
+- Payment Plan
+  - A workflow wrapper around a calculator snapshot tied to a Deal.
+  - Stored in payment_plans with:
+    - details.calculator (same shape as in deals)
+    - Approval status:
+      - pending_sm, pending_fm, pending_tm, approved, rejected
+    - Metadata for discounts and policy limits
+  - Only one plan per deal can be marked accepted (accepted=true), but multiple approved plans can exist per unit (e.g., alternative scenarios).
+
+- Approved Plan vs Accepted Plan
+  - Approved Plan:
+    - A payment_plan row with status='approved' (after SM/FM/TM as needed).
+  - Accepted Plan:
+    - The single “chosen” approved plan for a given deal, marked via mark-accepted.
+    - Used as the primary reference when moving toward reservation and contract.
+
+- Block (Unit Hold)
+  - A temporary hold on an AVAILABLE unit requested by a Property Consultant or Sales Manager.
+  - Represents “we are holding this unit for this client/offer while approvals/reservations are processed.”
+  - Data lives in the blocks table with:
+    - Requester, reason, duration
+    - financial_decision (FM decision), override status if applicable
+    - blocked_until timestamp
+  - Approval:
+    - Financial Manager approves/rejects.
+    - On approval: unit_status='BLOCKED', available=FALSE.
+
+- Reservation Form
+  - A record representing a client’s reservation for a BLOCKED unit with a specific approved payment plan.
+  - Created by Financial Admin:
+    - Ties together: blocked unit, approved payment_plan, reservation date, and preliminary payment.
+  - Approval:
+    - Financial Manager approves/rejects reservation forms.
+    - On approval: unit_status='RESERVED', available=FALSE.
+  - Reservation Form PDF:
+    - Generated from the deal and plan snapshot; legally formatted for client signature.
+
+- Contract
+  - The legal contract generated after a reservation is approved.
+  - Today:
+    - Mainly a server-rendered PDF document from the deal snapshot and templates.
+  - Planned:
+    - A full workflow in contracts table:
+      - draft → CM review → TM approval → executed
+    - With explicit audit trail and status transitions.
+
+- Standard PV (Standard Present Value)
+  - The “standard” Present Value of the Standard Plan structure for a given unit/model.
+  - Usually the FM-approved calculated_pv stored in Standard Pricing / Unit Model Pricing.
+  - Target-PV modes and Acceptance Evaluation compare Proposed PV against this Standard PV.
+
+- Proposed PV (Offer Present Value)
+  - The Present Value of the proposed payment schedule (including down payment, custom years, equal installments, handover).
+  - Used to determine whether a plan is ACCEPT or REJECT based on tolerance thresholds from payment_thresholds.
+
+- Discount Percent (salesDiscountPercent)
+  - The percentage discount applied to the Standard Price to arrive at the nominal offer price in discounting modes.
+  - Subject to:
+    - Role-based authority limits (e.g., consultants vs FM).
+    - Policy limits (approval_policies) that control whether plans must go to TM.
+
+With these definitions, the terms in the flow below (Standard Plan, Standard Pricing, Deal, Payment Plan, Block, Reservation, Contract, Standard PV, etc.) should be unambiguous.
+
 ## Operational Workflow — End-to-End (Draft for Review)
 
 Note: This section is a draft for stakeholder review. It distinguishes between Current Enforcement (what the system enforces today) and Planned Enforcement (to be added). Once approved, we will convert any planned items into implemented features and remove the “Draft” label.

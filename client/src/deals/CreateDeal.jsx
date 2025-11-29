@@ -460,6 +460,15 @@ export default function CreateDeal() {
             <h3 style={{ marginTop: 0, marginBottom: 8 }}>Selected Unit</h3>
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => navigate('/deals/inventory')} style={btnPlain}>Change Unit</button>
+              {selectedUnit?.id && (
+                <button
+                  onClick={() => navigate(`/deals?unitId=${Number(selectedUnit.id)}`)}
+                  style={btnPlain}
+                  title="View all deals created for this unit"
+                >
+                  View Deals for This Unit
+                </button>
+              )}
               {(() => {
                 try {
                   const u = JSON.parse(localStorage.getItem('auth_user') || '{}')

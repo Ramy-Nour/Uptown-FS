@@ -459,7 +459,17 @@ export default function DealDetail() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <h2 style={{ marginTop: 0 }}>Deal #{deal.id}</h2>
-        <LoadingButton onClick={() => navigate('/deals')}>Back to Dashboard</LoadingButton>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <LoadingButton onClick={() => navigate('/deals')}>Back to Dashboard</LoadingButton>
+          {deal?.details?.calculator?.unitInfo?.unit_id && (
+            <LoadingButton
+              onClick={() => navigate(`/deals?unitId=${Number(deal.details.calculator.unitInfo.unit_id)}`)}
+              title="View all deals created for this unit"
+            >
+              View Deals for This Unit
+            </LoadingButton>
+          )}
+        </div>
       </div>
 
       {!editCalc ? (

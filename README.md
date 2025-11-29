@@ -1274,6 +1274,111 @@ Actors
 
 Phase 1: Models, Standard Terms, and Inventory
 
+Compact visual flow (high level)
+
+- Configure Standard Terms and Prices:
+  - Standard Plan (global financial terms – rate, duration, frequency)
+  - Standard Pricing / Unit Model Pricing (per-model/unit nominal pieces and FM Calculated PV)
+- Build Inventory:
+  - CRM Admin creates unit drafts linked to models and pricing
+  - Top Management approves drafts → units become AVAILABLE
+
+End-to-end Offer → Contract pipeline (implemented today)
+
+- 1) Standard Terms and Inventory
+  - FM + TM:
+    - Configure Standard Plan and Standard Pricing / Unit Model Pricing
+  - CRM Admin + TM:
+    - Create units and approve to AVAILABLE
+
+- 2) Calculator and Plan Generation
+  - Property Consultant (PC) or Sales Manager (SM):
+    - Pick unit (AVAILABLE) from Deals → Inventory
+    - Use Calculator modes:
+      - Standard Mode (default structure)
+      - Discounted Standard Price (Compare to Standard)
+      - Target Price: Match Standard PV
+      - Custom Structure using Standard Price
+      - Custom Structure targeting Standard PV
+    - Call /api/generate-plan:
+      - Server resolves Standard Plan context from Standard Pricing/Unit Model/Standard Plan
+      - Computes schedule, totals, and Acceptance Evaluation (ACCEPT/REJECT)
+
+- 3) Deal (Offer) Creation
+  - PC/SM:
+    - Create a Deal via Create Deal (embedded calculator snapshot)
+      - POST /api/deals:
+        - Requires generatedPlan with schedule
+        - Requires unit_status='AVAILABLE'
+    - Submit Deal:
+      - POST /api/deals/:id/submit:
+        - Re-validates presence of plan and unit availability
+        - If evaluation.decision='REJECT', flags needs_override and requires override approval to proceed in strict flows
+
+- 4) Payment Plans Workflow
+  - Roles: PC, SM, FM, FA, TM
+  - PC/SM/FM/FA:
+    - Create payment_plans for a deal:
+      - POST /api/workflow/payment-plans (deal_id, details with calculator snapshot)
+      - Initial status:
+        - PC → pending_sm
+        - SM → approved (if discount ≤ 2%) or pending_fm
+        - FM → approved within policy_limit, otherwise pending_tm
+  - Queues:
+    - SM: /api/workflow/payment-plans/queue/sm
+    - FM: /api/workflow/payment-plans/queue/fm
+    - TM: /api/workflow/payment-plans/queue/tm
+  - Approvals:
+    - SM: approve-sm / reject-sm
+    - FM: approve / reject
+    - TM: approve-tm (dual approvals) / reject-tm
+  - One plan per deal can be marked accepted:
+    - PATCH /api/workflow/payment-plans/:id/mark-accepted (FM/CEO)
+  - For a given unit, FA/FM/SM/PC can list approved plans:
+    - GET /api/workflow/payment-plans/approved-for-unit?unit_id=…
+
+- 5) Blocks (Unit Holds)
+  - PC/SM:
+    - From Calculator or Deal, request a block for an AVAILABLE unit:
+      - POST /api/blocks/request
+        - Requires at least one approved consultant-created plan for the unit
+  - FM:
+    - Approves or rejects in Block Requests:
+      - PATCH /api/blocks/:id/approve (action='approve' or 'reject')
+      - On approve:
+        - unit_status='BLOCKED', available=FALSE
+        - For normal (ACCEPT) paths, related deal may be auto-approved and a payment_plan snapshot ensured
+
+- 6) Reservations
+  - FA:
+    - Uses Deals → Current Blocks:
+      - For each BLOCKED unit, selects an approved plan (auto-selected latest) and enters reservation date and preliminary payment
+      - Creates Reservation Form:
+        - POST /api/workflow/reservation-forms
+          - Requires BLOCKED unit + approved payment_plan
+  - FM:
+    - Approves or rejects Reservations in Reservations Queue:
+      - PATCH /api/workflow/reservation-forms/:id/approve:
+        - Sets reservation_forms.status='approved'
+        - unit_status='RESERVED', available=FALSE
+      - PATCH /api/workflow/reservation-forms/:id/reject:
+        - Keeps unit BLOCKED (block/unblock workflow is separate)
+
+- 7) Contracts (Partial / Planned)
+  - Contract Person (CP) and Contract Manager (CM):
+    - Generate contract PDFs from Deal Detail or Calculator using document endpoints:
+      - /api/generate-document or /api/documents/contract (per templates)
+    - Contracts table and audit history exist; a full CM/TM approval chain is planned:
+      - Draft → CM review → TM approval → Executed
+
+This flow uses the same terms as the application:
+- Standard Plan and Standard Pricing / Unit Model Pricing
+- AVAILABLE / BLOCKED / RESERVED unit states
+- Deals (offers) with embedded payment plans
+- Payment Plans workflow (PC/SM/FM/TM)
+- Blocks and Reservations
+- Contracts (document generation today; full approval workflow planned)
+
 1) Unit Models (structure, dimensions, features)
 - Owner: Financial Manager (requests), Top Management (approves)
 - Current Enforcement:

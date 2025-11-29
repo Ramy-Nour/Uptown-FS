@@ -67,6 +67,31 @@ export default function DealDetail() {
 
   useEffect(() => { load() }, [id])
 
+  // Load other deals for this unit (for visibility only; no locking)
+  useEffect(() => {
+    async function loadUnitDeals() {
+      try {
+        const unitId = Number(deal?.details?.calculator?.unitInfo?.unit_id) || 0
+        if (!unitId) {
+          setUnitDeals([])
+          return
+        }
+        const resp = await fetchWithAuth(`${API_URL}/api/deals/by-unit/${unitId}`)
+        const data = await resp.json()
+        if (resp.ok && Array.isArray(data.deals)) {
+          // Exclude this deal from the list for clarity
+          setUnitDeals(data.deals.filter(d => d.id !== Number(id)))
+        } else {
+          setUnitDeals([])
+        }
+      } catch (e) {
+        setUnitDeals([])
+      }
+    }
+    loadUnitDeals()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, deal?.details?.calculator?.unitInfo?.unit_id])
+
   const isOwner = deal && user && deal.created_by === user.id
   const canEdit = deal && deal.status === 'draft' && (isOwner || role === 'admin')
   const canSubmit = deal && deal.status === 'draft' && (isOwner || role === 'admin')
@@ -164,6 +189,9 @@ export default function DealDetail() {
   const schedule = deal?.details?.calculator?.generatedPlan?.schedule || []
   const totals = deal?.details?.calculator?.generatedPlan?.totals || null
   const evaluation = deal?.details?.calculator?.generatedPlan?.evaluation || null
+
+  // Conflict visibility: other deals for the same unit (for managers)
+  const [unitDeals, setUnitDeals] = useState([])
 
   // Derive compact status/override/unit availability summary for the header
   const liveUnitStatusRaw = deal?.current_unit_status
@@ -436,6 +464,25 @@ export default function DealDetail() {
 
       {!editCalc ? (
         <div style={{ marginBottom: 16 }}>
+          {/* Conflict banner: other deals for this unit */}
+          {Array.isArray(unitDeals) && unitDeals.length > 0 && (
+            <div style={{ marginBottom: 10, padding: '8px 10px', borderRadius: 8, border: '1px solid #fed7aa', background: '#fffbeb', color: '#9a3412', fontSize: 13 }}>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                Other deals exist for this unit: {unitDeals.length} deal(s).
+              </div>
+              <div>
+                {unitDeals.slice(0, 4).map(d => (
+                  <span key={d.id} style={{ marginRight: 8 }}>
+                    #{d.id} ({d.status || 'unknown'})
+                  </span>
+                ))}
+                {unitDeals.length > 4 && <span>…</span>}
+              </div>
+              <div style={{ marginTop: 4, fontSize: 12 }}>
+                This does not change this deal’s validity, but Sales/Finance should be aware of potentially competing offers on the same unit.
+              </div>
+            </div>
+          )}
           <p><strong>Title:</strong> {deal.title}</p>
           <p><strong>Amount:</strong> {Number(deal.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
 

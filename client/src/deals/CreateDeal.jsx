@@ -60,6 +60,21 @@ export default function CreateDeal() {
         const u = data.unit || {}
         setSelectedUnit(u)
 
+        // 1b) Load any existing deals for this unit to surface potential conflicts.
+        try {
+          const dealsResp = await fetchWithAuth(`${API_URL}/api/deals/by-unit/${unitId}`)
+          const dealsData = await dealsResp.json()
+          if (dealsResp.ok && Array.isArray(dealsData.deals) && dealsData.deals.length > 0) {
+            console.info(
+              `There are ${dealsData.deals.length} existing deals for this unit.`,
+              dealsData.deals.map(d => ({ id: d.id, status: d.status }))
+            )
+          }
+        } catch (e) {
+          // Non-fatal: conflict visibility is a UX aid only
+          console.warn('Failed to load existing deals for unit', e?.message || e)
+        }
+
         // 2) Prefill with unit and standard plan baseline
         const base = Number(u.base_price || 0)
         const garden = Number(u.garden_price || 0)

@@ -1262,22 +1262,24 @@ Troubleshooting quick tips
 
 This section explains the main financial terms used throughout the system so that everyone uses the same language.
 
-- Standard Plan
+- Default Financing Policy (Standard Plan)
   - A global set of financial terms configured by the Financial Manager and approved by Top Management.
   - Defines the “standard” financing policy:
     - Annual financial discount rate (%)
     - Plan duration in years
     - Default installment frequency (monthly/quarterly/bi-annually/annually)
   - Used by the calculation engine as a baseline for Present Value (PV) comparisons and for Standard Mode structures.
+  - Technical name in code and DB: standard_plan.
 
-- Standard Pricing / Unit Model Pricing
-  - Per-model or per-unit nominal price configuration.
+- List Price Configuration (Standard Pricing / Unit Model Pricing)
+  - Per-model or per-unit nominal price configuration, used to derive the official List Price for a unit.
   - Components:
     - Base unit price
     - Optional components: garden, roof, storage, garage, maintenance
     - std_financial_rate_percent, plan_duration_years, installment_frequency (per-pricing overrides when present)
     - calculated_pv (FM’s approved Standard PV)
-  - “Standard Price” in the UI refers to the total nominal price built from these components for a specific unit or model.
+  - “List Price” refers to the total nominal price built from these components for a specific unit or model.
+  - Technical names in code and DB: standard_pricing and unit_model_pricing.
 
 - Standard Unit / Inventory Unit
   - A unit record in the inventory linked to a unit model and Standard/Unit Model Pricing.

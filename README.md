@@ -1415,6 +1415,125 @@ With these definitions, the terms in the flow below (Standard Plan, Standard Pri
 
 ## Operational Workflow — End-to-End (Draft for Review)
 
+### Conceptual Flow (Mermaid Diagram)
+
+The diagram below shows the full flow from configuration, through offers and approvals, to blocks, reservations, and contracts using the updated terminology (Default Financing Policy, List Price Configuration, List Price, Authority Limit, Policy Limit).
+
+```mermaid
+flowchart TD
+    %% Configuration Phase
+    A[FM/TM Configures<br/>Default Financing Policy &<br/>List Price Configuration] --> B[Default Financing Policy<br/>standard_plan table &<br/>List Price Configuration<br/>standard_pricing, unit_model_pricing tables]
+    C[CRM Admin Creates<br/>Unit Drafts] --> D[TM Approves Units<br/>→ AVAILABLE Status]
+    
+    %% Calculator & Deal Flow
+    E[Consultant Selects<br/>AVAILABLE Unit] --> F{Choose Calculation Mode}
+    
+    F --> F1[Standard Mode<br/>Default Financing Policy]
+    F --> F2[Discounted List Price<br/>Compare to Standard]
+    F --> F3[Target Price: Match Standard PV<br/>calculateForTargetPV]
+    F --> F4[Custom Structure using List Price<br/>customYearlyThenEqual_useStdPrice]
+    F --> F5[Custom Structure targeting Standard PV<br/>customYearlyThenEqual_targetPV]
+    
+    F1 --> G[POST /api/generate-plan<br/>Schedule + Evaluation]
+    F2 --> G
+    F3 --> G
+    F4 --> G
+    F5 --> G
+    
+    G --> H{Acceptance Evaluation}
+    H -->|ACCEPT| I[Create Deal/Offer<br/>with Generated Plan]
+    H -->|REJECT| J[Flag for Override<br/>needs_override=true]
+    
+    J --> K[Override Workflow<br/>SM → FM → TM]
+    K --> L{Override Approved?}
+    L -->|Yes| I
+    L -->|No| M[Deal Rejected]
+    
+    %% Payment Plan Workflow
+    I --> N[Create Payment Plan<br/>POST /api/workflow/payment-plans]
+    
+    N --> O{Role & Discount Check}
+    O -->|Consultant<br/>Discount up to Authority Limit| P1[Pending SM<br/>Sales Manager Queue]
+    O -->|Sales Manager<br/>Discount ≤ Authority Limit| P2[Approved]
+    O -->|Sales Manager<br/>Discount > Authority Limit| P3[Pending FM<br/>Financial Manager Queue]
+    O -->|Financial Manager<br/>Discount ≤ Policy Limit| P2
+    O -->|Financial Manager<br/>Discount > Policy Limit| P4[Pending TM<br/>Top Management Queue]
+    
+    P1 --> P3
+    P3 --> P4
+    P4 --> P5[TM Dual Approval<br/>Required]
+    P5 --> P2
+    
+    P2 --> Q[Mark as Accepted<br/>One per Deal]
+    
+    %% Blocking Flow
+    Q --> R[Request Unit Block<br/>POST /api/blocks/request<br/>Requires: AVAILABLE unit +<br/>(Approved Payment Plan OR ACCEPT Deal)]
+    R --> S[FM Approves Block<br/>→ BLOCKED Status]
+    
+    %% Reservation Flow
+    S --> T[FA Creates Reservation Form<br/>with Approved Plan]
+    T --> U{Reservation Decision}
+    U -->|Approve| V[→ RESERVED Status]
+    U -->|Reject| S
+    
+    %% Contract Flow (Planned)
+    V --> W[Contract Generation<br/>PDF Documents]
+    W --> X[Contract Workflow<br/>CM → TM Approval]
+    X --> Y[Contract Executed]
+
+    %% Core Business Terms Definitions
+    subgraph BusinessTerms [Core Business Terms & Definitions]
+        BT1[Default Financing Policy<br/>Standard Plan: Global financial terms<br/>rate, duration, frequency - configured by FM]
+        BT2[List Price Configuration<br/>Standard Pricing / Unit Model Pricing:<br/>Per-model/unit nominal components + FM stored PV]
+        BT3[List Price<br/>Standard Price: Total nominal price from<br/>List Price Configuration components]
+        BT4[Deal/Offer<br/>Sales offer record with frozen calculator<br/>snapshot for specific client/unit]
+        BT5[Payment Plan<br/>Workflow record for approval containing<br/>calculator snapshot + status]
+        BT6[Accepted Plan<br/>Single marked approved plan per deal<br/>used for reservations]
+        BT7[Block<br/>Temporary unit hold for specific offer<br/>Requires: AVAILABLE unit +<br/>(Approved Payment Plan OR ACCEPT Deal)]
+        BT8[Reservation<br/>Client commitment with preliminary payment<br/>requires blocked unit + approved plan]
+    end
+
+    %% Financial Terms Definitions
+    subgraph FinancialTerms [Financial Terms & Definitions]
+        FT1[Present Value PV<br/>Current value of future cash flows<br/>discounted at financial rate]
+        FT2[Standard PV<br/>Authoritative baseline PV from<br/>FM-approved List Price Configuration<br/>(stored calculated_pv or computed fallback)]
+        FT3[Nominal Price<br/>Total offer price before<br/>PV discounting]
+        FT4[Financial Discount Rate<br/>Annual rate used to calculate PV<br/>Set in Default Financing Policy]
+        FT5[Down Payment DP<br/>Initial payment percentage or amount<br/>Standard Mode: 20% fixed]
+        FT6[Equal Installments<br/>Regular payments after custom periods<br/>Calculated to balance total nominal]
+        FT7[Handover Payment<br/>Lump sum due at unit handover<br/>Standard Mode: Year 3]
+        FT8[Maintenance Deposit<br/>Separate from unit price<br/>Excluded from PV calculations]
+        FT9[Authority Limit<br/>Role-based discount limit<br/>Consultant: 2%, FM: 5%]
+        FT10[Policy Limit<br/>Global discount threshold<br/>Requires TM approval if exceeded]
+    end
+
+    %% Styling
+    classDef config fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef inventory fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef calculator fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
+    classDef workflow fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef approval fill:#ffebee,stroke:#c62828,stroke-width:2px
+    classDef final fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+    classDef business fill:#f0f4c3,stroke:#827717,stroke-width:3px
+    classDef financial fill:#e1f5fe,stroke:#01579b,stroke-width:3px
+    
+    class A,B config
+    class C,D inventory
+    class E,F,F1,F2,F3,F4,F5,G,H calculator
+    class I,J,K,L,M,N workflow
+    class O,P1,P2,P3,P4,P5,Q approval
+    class R,S,T,U,V,W,X,Y final
+    class BusinessTerms,BT1,BT2,BT3,BT4,BT5,BT6,BT7,BT8 business
+    class FinancialTerms,FT1,FT2,FT3,FT4,FT5,FT6,FT7,FT8,FT9,FT10 financial
+
+    %% Key Decision Points
+    linkStyle 5 stroke:#ff0000,stroke-width:2px,stroke-dasharray: 5 5
+    linkStyle 6 stroke:#ff0000,stroke-width:2px,stroke-dasharray: 5 5
+    linkStyle 13 stroke:#ff0000,stroke-width:2px,stroke-dasharray: 5 5
+    linkStyle 14 stroke:#ff0000,stroke-width:2px,stroke-dasharray: 5 5
+    linkStyle 15 stroke:#ff0000,stroke-width:2px,stroke-dasharray: 5 5
+```
+
 Note: This section is a draft for stakeholder review. It distinguishes between Current Enforcement (what the system enforces today) and Planned Enforcement (to be added). Once approved, we will convert any planned items into implemented features and remove the “Draft” label.
 
 Actors

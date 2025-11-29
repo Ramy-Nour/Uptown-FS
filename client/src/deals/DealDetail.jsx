@@ -107,8 +107,8 @@ export default function DealDetail() {
   const [assigning, setAssigning] = useState(false)
   const [settingPolicy, setSettingPolicy] = useState(false)
 
-  // Conflict visibility: other deals for the same unit (for managers)
-  const [unitDeals, setUnitDeals] = useState([])
+
+
 
   // Local state for SM override rejection prompt (id to reject)
   const [promptRejectId, setPromptRejectId] = useState(null)

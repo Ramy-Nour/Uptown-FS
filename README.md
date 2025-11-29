@@ -121,6 +121,7 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-11-29 13:30] Terminology updated to “Default Financing Policy” and “List Price Configuration”; canonical end-to-end Mermaid diagram added under Operational Workflow
 - [2025-11-29 12:00] Discount authority limits centralized; deal-by-unit helper added; evaluation guidance clarified; end-to-end offer→contract flow documented
   - API: Centralized role-based discount authority limits in api/src/planningRoutes.js via getRoleDiscountLimit(role). /api/calculate now returns authorityLimit/overAuthority using this helper instead of hard-coded 2% and 5%, and /api/generate-plan enforces the same limits when generating plans. The defaults remain 2% for property_consultant and 5% for financial_manager, but the logic is now in one place and ready to be wired to database configuration in a future iteration.
   - API: Added GET /api/deals/by-unit/:unitId in api/src/dealsRoutes.js to list deals for a specific unit based on details.calculator.unitInfo.unit_id. This endpoint is role-aware (non-elevated users only see their own deals for that unit) and is intended for UX checks and reporting around “multiple offers on the same unit” without introducing hard locking at deal creation.

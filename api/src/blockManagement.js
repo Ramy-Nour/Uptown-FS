@@ -115,11 +115,11 @@ router.post(
           AND u.role = 'property_consultant'
           AND (
             (
-              TRIM(COALESCE(pp.details-&gt;'calculator'-&gt;'unitInfo'-&gt;&gt;'unit_id','')) ~ '^[0-9]+'
-              AND (TRIM(pp.details-&gt;'calculator'-&gt;'unitInfo'-&gt;&gt;'unit_id')::int = t.unit_id)
+              TRIM(COALESCE(pp.details->'calculator'->'unitInfo'->>'unit_id','')) ~ '^[0-9]+'
+              AND (TRIM(pp.details->'calculator'->'unitInfo'->>'unit_id')::int = t.unit_id)
             )
             OR (
-              TRIM(COALESCE(pp.details-&gt;'calculator'-&gt;'unitInfo'-&gt;&gt;'unit_code','')) = t.unit_code
+              TRIM(COALESCE(pp.details->'calculator'->'unitInfo'->>'unit_code','')) = t.unit_code
             )
           )
         ORDER BY pp.id DESC
@@ -152,12 +152,12 @@ router.post(
             AND d.status IN ('draft','pending_approval','approved')
             AND (
               (
-                TRIM(COALESCE(d.details-&gt;'calculator'-&gt;'unitInfo'-&gt;&gt;'unit_id','')) ~ '^[0-9]+'
-                AND TRIM(d.details-&gt;'calculator'-&gt;'unitInfo'-&gt;&gt;'unit_id')::int = $2
+                TRIM(COALESCE(d.details->'calculator'->'unitInfo'->>'unit_id','')) ~ '^[0-9]+'
+                AND TRIM(d.details->'calculator'->'unitInfo'->>'unit_id')::int = $2
               )
               OR
               (
-                TRIM(COALESCE(d.details-&gt;'calculator'-&gt;'unitInfo'-&gt;&gt;'unit_code','')) = (
+                TRIM(COALESCE(d.details->'calculator'->'unitInfo'->>'unit_code','')) = (
                   SELECT TRIM(code) FROM units WHERE id = $2
                 )
               )
@@ -176,7 +176,7 @@ router.post(
           const schedule = Array.isArray(gen.schedule) ? gen.schedule : []
 
           const dealDecision = evaln.decision || null
-          if (dealDecision === 'ACCEPT' &amp;&amp; schedule.length &gt; 0) {
+          if (dealDecision === 'ACCEPT' && schedule.length > 0) {
             planDetails = { calculator: calc }
             planId = null
             decision = 'ACCEPT'

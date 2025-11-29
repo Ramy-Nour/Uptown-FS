@@ -70,7 +70,7 @@ router.get('/customers', authMiddleware, async (req, res) => {
       query += ` AND (c.name ILIKE $${params.length} OR c.email ILIKE $${params.length} OR c.phone ILIKE $${params.length})`
     }
     
-    // Sales reps can only see their own customers
+    // Property consultants can only see their own customers
     if (req.user.role === 'property_consultant') {
       params.push(req.user.id)
       query += ` AND c.created_by = $${params.length}`

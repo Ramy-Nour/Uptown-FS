@@ -556,74 +556,134 @@ router.patch('/:id/approve', authMiddleware, requireRole(['financial_manager']),
         return res.status(400).json({ error: { message: 'Cannot approve block: financial criteria not met and no override approval present' } })
       }
 
-      // Normal criteria path (ACCEPT with no override): auto-approve the latest matching deal
-      // and ensure an approved consultant payment plan exists for this unit/deal.
+      let approvedPlanId = null
+
+      // Normal criteria path (ACCEPT with no override): guarantee a consultant plan exists
       if (finOk && !overrideOk) {
         try {
-          const dealRes = await pool.query(
+          // (a) Try to find an existing approved consultant payment plan for this unit
+          const approvedPlanRes = await pool.query(
             `
-            SELECT d.id, d.status, d.details, d.created_by
-            FROM deals d
-            WHERE d.created_by = $1
-              AND d.status IN ('draft','pending_approval','approved')
+            WITH target AS (
+              SELECT $1::int AS unit_id, TRIM(u.code) AS unit_code
+              FROM units u
+              WHERE u.id = $1
+            )
+            SELECT pp.id
+            FROM payment_plans pp
+            JOIN users u ON u.id = pp.created_by,
+                 target t
+            WHERE pp.status = 'approved'
+              AND u.role = 'property_consultant'
               AND (
                 (
-                  TRIM(COALESCE(d.details->'calculator'->'unitInfo'->>'unit_id','')) ~ '^[0-9]+'
-                  AND TRIM(d.details->'calculator'->'unitInfo'->>'unit_id')::int = $2
+                  TRIM(COALESCE(pp.details->'calculator'->'unitInfo'->>'unit_id','')) ~ '^[0-9]+'
+                  AND TRIM(pp.details->'calculator'->'unitInfo'->>'unit_id')::int = t.unit_id
                 )
-                OR
-                (
-                  TRIM(COALESCE(d.details->'calculator'->'unitInfo'->>'unit_code','')) = (
-                    SELECT TRIM(code) FROM units WHERE id = $2
-                  )
+                OR (
+                  TRIM(COALESCE(pp.details->'calculator'->'unitInfo'->>'unit_code','')) = t.unit_code
                 )
               )
-            ORDER BY d.id DESC
+            ORDER BY pp.id DESC
             LIMIT 1
             `,
-            [row.requested_by, row.unit_id]
+            [row.unit_id]
           )
 
-          if (dealRes.rows.length > 0) {
-            const deal = dealRes.rows[0]
+          if (approvedPlanRes.rows.length > 0) {
+            approvedPlanId = approvedPlanRes.rows[0].id
+          } else {
+            // (b) No existing plan: attempt to auto-create from a matching ACCEPT deal
+            const dealRes = await pool.query(
+              `
+              SELECT d.id, d.status, d.details, d.created_by
+              FROM deals d
+              WHERE d.created_by = $1
+                AND d.status IN ('draft','pending_approval','approved')
+                AND (
+                  (
+                    TRIM(COALESCE(d.details->'calculator'->'unitInfo'->>'unit_id','')) ~ '^[0-9]+'
+                    AND TRIM(d.details->'calculator'->'unitInfo'->>'unit_id')::int = $2
+                  )
+                  OR
+                  (
+                    TRIM(COALESCE(d.details->'calculator'->'unitInfo'->>'unit_code','')) = (
+                      SELECT TRIM(code) FROM units WHERE id = $2
+                    )
+                  )
+                )
+                AND COALESCE(d.details->'calculator'->'generatedPlan'->'evaluation'->>'decision','') = 'ACCEPT'
+              ORDER BY d.id DESC
+              LIMIT 1
+              `,
+              [row.requested_by, row.unit_id]
+            )
 
-            // If the deal is still draft/pending, auto-approve it
-            if (deal.status === 'draft' || deal.status === 'pending_approval') {
-              await pool.query(
-                `UPDATE deals SET status='approved', updated_at=NOW() WHERE id=$1`,
+            if (dealRes.rows.length > 0) {
+              const deal = dealRes.rows[0]
+
+              // If the deal is still draft/pending, auto-approve it
+              if (deal.status === 'draft' || deal.status === 'pending_approval') {
+                await pool.query(
+                  `UPDATE deals SET status='approved', updated_at=NOW() WHERE id=$1`,
+                  [deal.id]
+                )
+
+                const autoNote = {
+                  event: 'auto_approved_on_block',
+                  by: { id: req.user.id, role: req.user.role },
+                  reason: 'Block approved with financial_decision=ACCEPT and no override; deal auto-approved to align with block.',
+                  block_id: row.id,
+                  unit_id: row.unit_id,
+                  at: new Date().toISOString()
+                }
+                await pool.query(
+                  `INSERT INTO deal_history (deal_id, user_id, action, notes) VALUES ($1, $2, $3, $4)`,
+                  [deal.id, req.user.id, 'auto_approved_on_block', JSON.stringify(autoNote)]
+                )
+              }
+
+              // Ensure an approved consultant payment plan exists for this deal
+              const planCheck = await pool.query(
+                `SELECT id FROM payment_plans WHERE deal_id=$1 AND status='approved' LIMIT 1`,
                 [deal.id]
               )
-
-              const autoNote = {
-                event: 'auto_approved_on_block',
-                by: { id: req.user.id, role: req.user.role },
-                reason: 'Block approved with financial_decision=ACCEPT and no override; deal auto-approved to align with block.',
-                block_id: row.id,
-                unit_id: row.unit_id,
-                at: new Date().toISOString()
+              if (planCheck.rows.length > 0) {
+                approvedPlanId = planCheck.rows[0].id
+              } else {
+                const planInsert = await pool.query(
+                  `INSERT INTO payment_plans (deal_id, details, created_by, status)
+                   VALUES ($1, $2, $3, 'approved')
+                   RETURNING id`,
+                  [deal.id, deal.details || {}, deal.created_by]
+                )
+                approvedPlanId = planInsert.rows[0].id
+                console.log(
+                  '[blocks] Auto-created approved consultant plan %s for deal %s, unit %s during block approval.',
+                  approvedPlanId,
+                  deal.id,
+                  row.unit_id
+                )
               }
-              await pool.query(
-                `INSERT INTO deal_history (deal_id, user_id, action, notes) VALUES ($1, $2, $3, $4)`,
-                [deal.id, req.user.id, 'auto_approved_on_block', JSON.stringify(autoNote)]
-              )
             }
+          }
 
-            // Ensure an approved consultant payment plan exists for this deal
-            const planCheck = await pool.query(
-              `SELECT id FROM payment_plans WHERE deal_id=$1 AND status='approved' LIMIT 1`,
-              [deal.id]
+          if (!approvedPlanId) {
+            console.error(
+              '[blocks] Block approval refused: no eligible deal/payment plan for unit %s, block %s.',
+              row.unit_id,
+              row.id
             )
-            if (planCheck.rows.length === 0) {
-              await pool.query(
-                `INSERT INTO payment_plans (deal_id, details, created_by, status)
-                 VALUES ($1, $2, $3, 'approved')`,
-                [deal.id, deal.details || {}, deal.created_by]
-              )
-            }
+            return res.status(400).json({
+              error: {
+                message:
+                  'Cannot approve block: no consultant payment plan could be created for this unit. Ensure the deal has a valid ACCEPT plan and try again.'
+              }
+            })
           }
         } catch (e) {
           console.error('Auto-approve deal / ensure payment plan on block-approve error:', e)
-          // Do not fail the whole approval if this helper step has issues.
+          return res.status(500).json({ error: { message: 'Internal error' } })
         }
       }
 

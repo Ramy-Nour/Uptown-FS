@@ -121,6 +121,8 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-11-29 19:25] /api/deals/by-unit/:unitId SQL placeholder fixed to prevent parameter-count error
+  - API: Corrected the WHERE clause in api/src/dealsRoutes.js so that the created_by filter in GET /api/deals/by-unit/:unitId uses a proper $2-style placeholder when adding the current user id for non-elevated roles. Previously it appended the raw parameter index without the $ prefix (e.g., d.created_by = 2), causing Postgres to see a prepared statement with one bind placeholder while the driver supplied two parameters and log “bind message supplies 2 parameters, but prepared statement \"\" requires 1” whenever the endpoint was called by consultants.
 - [2025-11-29 13:30] Terminology updated to “Default Financing Policy” and “List Price Configuration”; canonical end-to-end Mermaid diagram added under Operational Workflow
 - [2025-11-29 12:00] Discount authority limits centralized; deal-by-unit helper added; evaluation guidance clarified; end-to-end offer→contract flow documented
   - API: Centralized role-based discount authority limits in api/src/planningRoutes.js via getRoleDiscountLimit(role). /api/calculate now returns authorityLimit/overAuthority using this helper instead of hard-coded 2% and 5%, and /api/generate-plan enforces the same limits when generating plans. The defaults remain 2% for property_consultant and 5% for financial_manager, but the logic is now in one place and ready to be wired to database configuration in a future iteration.

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { fetchWithAuth, API_URL } from '../lib/apiClient.js'
 import { notifyError, notifySuccess } from '../lib/notifications.js'
 import LoadingButton from '../components/LoadingButton.jsx'
@@ -35,10 +35,29 @@ export default function Dashboard() {
   const [deletingIds, setDeletingIds] = useState(new Set())
   const user = JSON.parse(localStorage.getItem('auth_user') || '{}')
 
+  // Optional deep-link filter: when unitId is provided in the query string,
+  // use /api/deals/by-unit/:unitId instead of the generic listing.
+  const location = useLocation()
+  const navigate = useNavigate()
+  const [unitIdFilter, setUnitIdFilter] = useState(null)
+
   async function load(p = page) {
     try {
       setLoading(true)
       setError('')
+
+      // If unitIdFilter is set, use the specialized endpoint and ignore
+      // most filters to present a unit-focused view.
+      if (unitIdFilter) {
+        const resp = await fetchWithAuth(`${API_URL}/api/deals/by-unit/${unitIdFilter}`)
+        const data = await resp.json()
+        if (!resp.ok) throw new Error(data?.error?.message || 'Failed to load deals for unit')
+        const list = data.deals || []
+        setDeals(list)
+        setTotal(list.length)
+        return
+      }
+
       const q = new URLSearchParams()
       if (status) q.set('status', status)
       if (search) q.set('search', search)
@@ -67,10 +86,26 @@ export default function Dashboard() {
     }
   }
 
+  // Initialize unitIdFilter from the URL (e.g., /deals?unitId=123)
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(location.search || '')
+      const unitIdParam = Number(params.get('unitId'))
+      if (Number.isFinite(unitIdParam) && unitIdParam > 0) {
+        setUnitIdFilter(unitIdParam)
+      } else {
+        setUnitIdFilter(null)
+      }
+    } catch {
+      setUnitIdFilter(null)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search])
+
   useEffect(() => {
     load(1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, search, creatorEmail, reviewerEmail, approverEmail, unitType, startDate, endDate, minAmount, maxAmount, pageSize, sortBy, sortDir])
+  }, [status, search, creatorEmail, reviewerEmail, approverEmail, unitType, startDate, endDate, minAmount, maxAmount, pageSize, sortBy, sortDir, unitIdFilter])
 
   useEffect(() => {
     load(page)
@@ -295,6 +330,24 @@ export default function Dashboard() {
           })()}
         </div>
       </div>
+
+      {unitIdFilter && (
+        <div style={{ marginTop: 4, marginBottom: 8, padding: '6px 8px', borderRadius: 8, border: '1px solid #fed7aa', background: '#fffbeb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 12, color: '#9a3412' }}>
+            Showing deals created for unit_id = {unitIdFilter}. Other filters are ignored while this view is active.
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setUnitIdFilter(null)
+              navigate('/deals', { replace: true })
+            }}
+            style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #d1d9e6', background: '#fff', cursor: 'pointer', fontSize: 12, color: '#475569' }}
+          >
+            Clear unit filter
+          </button>
+        </div>
+      )}
 
       <p style={{ marginTop: 4, marginBottom: 8, fontSize: 12, color: '#64748b' }}>
         Note: <strong>Deal Status</strong> shows the approval state of the offer itself (draft, pending_approval, approved, rejected).

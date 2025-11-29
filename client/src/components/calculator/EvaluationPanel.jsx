@@ -11,7 +11,14 @@ export default function EvaluationPanel({ evaluation, role, dealId, API_URL, sho
   if (!evaluation?.pv?.pass) failedCriteria.push('PV below standard')
   if (Array.isArray(evaluation?.conditions)) {
     for (const c of evaluation.conditions) {
-      if (c?.status && c.status !== 'PASS') failedCriteria.push(c.label)
+      if (c?.status && c.status !== 'PASS') {
+        failedCriteria.push(
+          c.label +
+          (c.required && typeof c.required === 'object' && c.required.min != null
+            ? ` (requires at least ${Number(c.required.min).toLocaleString()}%)`
+            : '')
+        )
+      }
     }
   }
 

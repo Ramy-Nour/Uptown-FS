@@ -20,6 +20,9 @@ export default function CreateDeal() {
   const [calcError, setCalcError] = useState('')
   const [calcResult, setCalcResult] = useState(null)
 
+  // Visibility helper: other deals for the same unit (to show a warning banner)
+  const [unitDeals, setUnitDeals] = useState([])
+
   const navigate = useNavigate()
   const { ready, getSnap, applyClient, apply, applyPrefill } = useCalculatorSnapshot()
 
@@ -59,6 +62,21 @@ export default function CreateDeal() {
         }
         const u = data.unit || {}
         setSelectedUnit(u)
+
+        // 1b) Load any existing deals for this unit to surface potential conflicts.
+        try {
+          const dealsResp = await fetchWithAuth(`${API_URL}/api/deals/by-unit/${unitId}`)
+          const dealsData = await dealsResp.json()
+          if (dealsResp.ok && Array.isArray(dealsData.deals)) {
+            setUnitDeals(dealsData.deals)
+          } else {
+            setUnitDeals([])
+          }
+        } catch (e) {
+          // Non-fatal: conflict visibility is a UX aid only
+          console.warn('Failed to load existing deals for unit', e?.message || e)
+          setUnitDeals([])
+        }
 
         // 2) Prefill with unit and standard plan baseline
         const base = Number(u.base_price || 0)
@@ -419,10 +437,38 @@ export default function CreateDeal() {
       {/* Selected Unit Summary */}
       {selectedUnit && (
         <div style={{ border: '1px solid #e6eaf0', borderRadius: 12, padding: 12, marginBottom: 12, background: '#fff' }}>
+          {/* Conflict banner: other deals on this unit */}
+          {Array.isArray(unitDeals) && unitDeals.length > 0 && (
+            <div style={{ marginBottom: 10, padding: '8px 10px', borderRadius: 8, border: '1px solid #fed7aa', background: '#fffbeb', color: '#9a3412', fontSize: 13 }}>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                There are {unitDeals.length} existing deal(s) for this unit.
+              </div>
+              <div>
+                {unitDeals.slice(0, 3).map(d => (
+                  <span key={d.id} style={{ marginRight: 8 }}>
+                    #{d.id} ({d.status || 'unknown'})
+                  </span>
+                ))}
+                {unitDeals.length > 3 && <span>…</span>}
+              </div>
+              <div style={{ marginTop: 4, fontSize: 12 }}>
+                This does not block creating a new offer, but consult your Sales Manager if there are conflicting offers.
+              </div>
+            </div>
+          )}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
             <h3 style={{ marginTop: 0, marginBottom: 8 }}>Selected Unit</h3>
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => navigate('/deals/inventory')} style={btnPlain}>Change Unit</button>
+              {selectedUnit?.id && (
+                <button
+                  onClick={() => navigate(`/deals?unitId=${Number(selectedUnit.id)}`)}
+                  style={btnPlain}
+                  title="View all deals created for this unit"
+                >
+                  View Deals for This Unit
+                </button>
+              )}
               {(() => {
                 try {
                   const u = JSON.parse(localStorage.getItem('auth_user') || '{}')

@@ -265,6 +265,41 @@ router.get('/my-proposals', authMiddleware, async (req, res) => {
   }
 })
 
+// Helper: list other deals for the same unit (by unit_id in calculator snapshot)
+router.get('/by-unit/:unitId', authMiddleware, async (req, res) => {
+  try {
+    const unitId = Number(req.params.unitId)
+    if (!Number.isFinite(unitId) || unitId <= 0) {
+      return res.status(400).json({ error: { message: 'Invalid unitId' } })
+    }
+    const elevatedRoles = new Set(['admin', 'superadmin', 'sales_manager', 'financial_manager'])
+    const isElevated = elevatedRoles.has(req.user?.role)
+
+    const params = [unitId]
+    const where = [`(d.details->'calculator'->'unitInfo'->>'unit_id')::int = $1`]
+
+    if (!isElevated) {
+      params.push(req.user.id)
+      where.push(`d.created_by = ${params.length}`)
+    }
+
+    const sql = `
+      SELECT
+        d.*,
+        u.email AS created_by_email
+      FROM deals d
+      LEFT JOIN users u ON u.id = d.created_by
+      WHERE ${where.join(' AND ')}
+      ORDER BY d.id DESC
+    `
+    const r = await pool.query(sql, params)
+    return res.json({ ok: true, deals: r.rows })
+  } catch (e) {
+    console.error('GET /api/deals/by-unit/:unitId error', e)
+    return res.status(500).json({ error: { message: 'Internal error' } })
+  }
+})
+
 // Get single deal by id
 router.get('/:id', authMiddleware, async (req, res) => {
   try {

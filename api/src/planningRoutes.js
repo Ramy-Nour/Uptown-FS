@@ -50,7 +50,28 @@ async function getActivePolicyLimitPercent() {
       if (Number.isFinite(v) && v > 0) return v
     }
   } catch (e) {}
+  // Sensible default when no explicit global policy row exists
   return 5
+}
+
+/**
+ * Resolve role-based authority discount limits.
+ * Currently uses fixed defaults but is centralized here so that
+ * future DB-backed configuration can hook in without changing callers.
+ */
+async function getRoleDiscountLimit(role) {
+  if (!role) return null
+
+  // In the future, this can read from a dedicated config/approval_policies mapping.
+  if (role === 'property_consultant') {
+    return 2
+  }
+  if (role === 'financial_manager') {
+    // FM authority limit is usually aligned with or below the global policy limit.
+    // We keep 5% as the default and may tighten it via DB policy later.
+    return 5
+  }
+  return null
 }
 
 function validateInputs(inputs) {
@@ -379,9 +400,7 @@ router.post('/calculate', authMiddleware, validate(calculateSchema), async (req,
 
     const role = req.user?.role
     const disc = Number(effInputs.salesDiscountPercent) || 0
-    let authorityLimit = null
-    if (role === 'property_consultant') authorityLimit = 2
-    if (role === 'financial_manager') authorityLimit = 5
+    const authorityLimit = await getRoleDiscountLimit(role)
     const overAuthority = authorityLimit != null ? disc > authorityLimit : false
 
     const policyLimit = await getActivePolicyLimitPercent()
@@ -676,11 +695,15 @@ router.post('/generate-plan', authMiddleware, validate(generatePlanSchema), asyn
 
     const role = req.user?.role
     const disc = Number(effInputs.salesDiscountPercent) || 0
-    if (role === 'property_consultant' && disc > 2) {
-      return bad(res, 403, 'Sales consultants can apply a maximum discount of 2%.')
-    }
-    if (role === 'financial_manager' && disc > 5) {
-      return bad(res, 403, 'Financial managers can apply a maximum discount of 5% (requires CEO approval in workflow if over 2%).')
+    const authorityLimit = await getRoleDiscountLimit(role)
+    if (authorityLimit != null && disc > authorityLimit) {
+      if (role === 'property_consultant') {
+        return bad(res, 403, `Sales consultants can apply a maximum discount of ${authorityLimit}%.`)
+      }
+      if (role === 'financial_manager') {
+        return bad(res, 403, `Financial managers can apply a maximum discount of ${authorityLimit}% (requests over this must go through the workflow as overrides).`)
+      }
+      return bad(res, 403, `Role ${role} can apply a maximum discount of ${authorityLimit}%.`)
     }
 
     const result = calculateByMode(mode, effectiveStdPlan, effInputs)

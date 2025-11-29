@@ -1369,8 +1369,45 @@ This section explains the main financial terms used throughout the system so tha
 - Discount Percent (salesDiscountPercent)
   - The percentage discount applied to the Standard Price to arrive at the nominal offer price in discounting modes.
   - Subject to:
-    - Role-based authority limits (e.g., consultants vs FM).
-    - Policy limits (approval_policies) that control whether plans must go to TM.
+    - Role-based Authority Limits (per role)
+    - Policy Limits (global/ scoped policies from approval_policies) that control whether plans must go to TM.
+
+- Authority Limit (Role-based Discount Limit)
+  - The maximum discount a given role can apply directly when generating a plan.
+  - Implemented via getRoleDiscountLimit(role) in the API, with current defaults:
+    - property_consultant: 2%
+    - financial_manager: 5%
+  - Enforced primarily in:
+    - /api/calculate (returned as authorityLimit/overAuthority in meta)
+    - /api/generate-plan (requests above the role’s limit are rejected with 403)
+  - Business meaning:
+    - Within the Authority Limit, the role can propose and generate plans freely.
+    - Above this limit, the plan must go through the override/workflow path (SM/FM/TM) instead of being accepted as a normal scenario.
+
+- Policy Limit (Global/Scoped Approval Policy)
+  - A discount threshold stored in approval_policies (scope_type='global' or more specific scopes in the future).
+  - Used primarily by Financial Manager and Top Management to decide whether TM approval is required:
+    - disc ≤ policy_limit_percent → can be approved at FM level.
+    - disc > policy_limit_percent → escalates to TM (pending_tm).
+  - This is distinct from a role’s Authority Limit:
+    - Authority Limit = what you are allowed to propose at all.
+    - Policy Limit = how far FM can approve alone before TM must be involved.
+
+- Override (Top-Management Override of Financial Decision)
+  - A controlled exception process that allows a REJECT plan or an over-policy-limit plan to proceed.
+  - Triggered when:
+    - A plan’s Acceptance Evaluation is REJECT but the business wants to consider it anyway.
+    - A discount is above the normal policy limit, requiring TM review.
+  - Workflow stages:
+    - Request Override (Consultant or Manager)
+    - Sales Manager review (override_sm_approve / override_sm_reject)
+    - Financial Manager review (override_fm_approve / override_fm_reject)
+    - Top Management decision (override_approve / override_reject)
+  - Recorded in:
+    - deal fields (needs_override, override_* columns)
+    - deal_history with structured JSON notes
+  - Effect:
+    - Once an override is approved by TM, the system treats the plan as authorized despite PV or threshold failures and allows dependent actions (blocks, deals, documents) to proceed under that exception.
 
 With these definitions, the terms in the flow below (Standard Plan, Standard Pricing, Deal, Payment Plan, Block, Reservation, Contract, Standard PV, etc.) should be unambiguous.
 

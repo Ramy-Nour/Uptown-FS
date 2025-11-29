@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { fetchWithAuth, API_URL } from '../lib/apiClient.js'
 import { notifyError, notifySuccess } from '../lib/notifications.js'
 import LoadingButton from '../components/LoadingButton.jsx'
@@ -38,6 +38,7 @@ export default function Dashboard() {
   // Optional deep-link filter: when unitId is provided in the query string,
   // use /api/deals/by-unit/:unitId instead of the generic listing.
   const location = useLocation()
+  const navigate = useNavigate()
   const [unitIdFilter, setUnitIdFilter] = useState(null)
 
   async function load(p = page) {
@@ -331,9 +332,21 @@ export default function Dashboard() {
       </div>
 
       {unitIdFilter && (
-        <p style={{ marginTop: 4, marginBottom: 8, fontSize: 12, color: '#9a3412', padding: '6px 8px', borderRadius: 8, border: '1px solid #fed7aa', background: '#fffbeb' }}>
-          Showing deals created for unit_id = {unitIdFilter}. Other filters are ignored while this view is active.
-        </p>
+        <div style={{ marginTop: 4, marginBottom: 8, padding: '6px 8px', borderRadius: 8, border: '1px solid #fed7aa', background: '#fffbeb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 12, color: '#9a3412' }}>
+            Showing deals created for unit_id = {unitIdFilter}. Other filters are ignored while this view is active.
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setUnitIdFilter(null)
+              navigate('/deals', { replace: true })
+            }}
+            style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #d1d9e6', background: '#fff', cursor: 'pointer', fontSize: 12, color: '#475569' }}
+          >
+            Clear unit filter
+          </button>
+        </div>
       )}
 
       <p style={{ marginTop: 4, marginBottom: 8, fontSize: 12, color: '#64748b' }}>

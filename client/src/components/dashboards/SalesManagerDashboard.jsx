@@ -41,7 +41,7 @@ const SalesManagerDashboard = () => {
 
   const offersColumns = [
     { title: 'Offer ID', dataIndex: 'id', key: 'id', width: 80 },
-    { title: 'Sales Rep', dataIndex: 'sales_rep_name', key: 'salesRep' },
+    { title: 'Property Consultant', dataIndex: 'sales_rep_name', key: 'salesRep' },
     { title: 'Customer', dataIndex: 'customer_name', key: 'customer' },
     { title: 'Unit', dataIndex: 'unit_code', key: 'unit' },
     { title: 'Amount', dataIndex: 'total_amount', key: 'amount', render: (amount) => `EGP ${amount?.toLocaleString()}` },
@@ -65,7 +65,7 @@ const SalesManagerDashboard = () => {
   ]
 
   const performanceColumns = [
-    { title: 'Sales Rep', dataIndex: 'name', key: 'name' },
+    { title: 'Property Consultant', dataIndex: 'name', key: 'name' },
     { title: 'Total Offers', dataIndex: 'total_offers', key: 'totalOffers' },
     { title: 'Approved', dataIndex: 'approved_offers', key: 'approved' },
     { title: 'Conversion Rate', dataIndex: 'conversion_rate', key: 'conversionRate', render: (rate) => `${rate}%` },

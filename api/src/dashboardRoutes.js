@@ -4,7 +4,7 @@ import { authMiddleware, requireRole } from './authRoutes.js'
 
 const router = express.Router()
 
-// Sales Rep stats
+// Property Consultant stats (formerly \"Sales Rep\" dashboard)
 router.get('/sales-rep/stats', authMiddleware, requireRole(['property_consultant']), async (req, res) => {
   try {
     const userId = req.user.id
@@ -43,7 +43,7 @@ router.get('/sales-rep/stats', authMiddleware, requireRole(['property_consultant
   }
 })
 
-// Sales Rep recent offers
+// Property Consultant recent offers
 router.get('/sales-rep/offers', authMiddleware, requireRole(['property_consultant']), async (req, res) => {
   try {
     const userId = req.user.id
@@ -72,7 +72,7 @@ router.get('/sales-rep/offers', authMiddleware, requireRole(['property_consultan
   }
 })
 
-// Sales Rep recent customers
+// Property Consultant recent customers
 router.get('/sales-rep/customers', authMiddleware, requireRole(['property_consultant']), async (req, res) => {
   try {
     const userId = req.user.id

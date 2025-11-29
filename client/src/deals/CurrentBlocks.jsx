@@ -50,7 +50,7 @@ export default function CurrentBlocks() {
       if (!resp.ok) throw new Error(data?.error?.message || 'Failed to load approved plans')
       const plans = (data.payment_plans || []).map(p => ({
         id: p.id,
-        label: `#${p.id} v${p.version || 1} (approved)`,
+        label: `Approved Payment Plan #${p.id}${p.version ? ` (v${p.version})` : ''}`,
         dealId: p.deal_id || null
       }))
       // Auto-select the latest plan (first in DESC list) and default language
@@ -72,7 +72,7 @@ export default function CurrentBlocks() {
       const f = form[id] || {}
       const paymentPlanId = Number(f.selectedPlanId) || 0
       if (!paymentPlanId) {
-        alert('No approved consultant plan is available for this unit.')
+        alert('No approved payment plan is available for this unit.')
         return
       }
       // Validate preliminary payment as a non-negative number
@@ -181,9 +181,9 @@ export default function CurrentBlocks() {
                       {/* Approved plan is auto-fetched and locked; show as read-only */}
                       <input
                         style={{ ...ctrl, background: '#f8fafc' }}
-                        value={plans.length ? (plans.find(p => p.id === f.selectedPlanId)?.label || plans[0].label) : 'No approved consultant plans'}
+                        value={plans.length ? (plans.find(p => p.id === f.selectedPlanId)?.label || plans[0].label) : 'No approved payment plans for this unit'}
                         readOnly
-                        title="Approved consultant plan (auto-selected)"
+                        title="Approved payment plan for this blocked unit (auto-selected)"
                         onFocus={() => { if (!plans.length) loadPlansForBlock(r) }}
                       />
                       <input

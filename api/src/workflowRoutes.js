@@ -700,6 +700,52 @@ router.get(
   }
 )
 
+// List approved payment plans for a unit (by unit_id inside plan details.calculator.unitInfo.unit_id)
+// NOTE: must be defined BEFORE /payment-plans/:id so Express does not treat "approved-for-unit" as :id.
+router.get(
+  '/payment-plans/approved-for-unit',
+  authMiddleware,
+  requireRole(['financial_admin','financial_manager','sales_manager','property_consultant']),
+  async (req, res) => {
+    try {
+      const unitId = ensureNumber(req.query.unit_id)
+      if (!unitId) return bad(res, 400, 'unit_id is required')
+      const sql = `
+        WITH target AS (
+          SELECT $1::int AS unit_id, TRIM(u.code) AS unit_code
+          FROM units u
+          WHERE u.id = $1
+        )
+        SELECT pp.id,
+               pp.deal_id,
+               COALESCE(pp.version, 1) AS version,
+               pp.status,
+               pp.created_at,
+               u.email AS consultant_email
+        FROM payment_plans pp
+        JOIN users u ON u.id = pp.created_by, target t
+        WHERE pp.status='approved'
+          AND u.role = 'property_consultant'
+          AND (
+            (
+              TRIM(COALESCE(pp.details->'calculator'->'unitInfo'->>'unit_id','')) ~ '^[0-9]+$'
+              AND (TRIM(pp.details->'calculator'->'unitInfo'->>'unit_id')::int = t.unit_id)
+            )
+            OR (
+              TRIM(COALESCE(pp.details->'calculator'->'unitInfo'->>'unit_code','')) = t.unit_code
+            )
+          )
+        ORDER BY pp.id DESC
+      `
+      const r = await pool.query(sql, [unitId])
+      return ok(res, { payment_plans: r.rows })
+    } catch (e) {
+      console.error('GET /api/workflow/payment-plans/approved-for-unit error:', e)
+      return bad(res, 500, 'Internal error')
+    }
+  }
+)
+
 // Get a payment plan by id
 router.get(
   '/payment-plans/:id',
@@ -1572,49 +1618,5 @@ router.patch(
   }
 )
 
-// List approved payment plans for a unit (by unit_id inside plan details.calculator.unitInfo.unit_id)
-router.get(
-  '/payment-plans/approved-for-unit',
-  authMiddleware,
-  requireRole(['financial_admin','financial_manager','sales_manager','property_consultant']),
-  async (req, res) => {
-    try {
-      const unitId = ensureNumber(req.query.unit_id)
-      if (!unitId) return bad(res, 400, 'unit_id is required')
-      const sql = `
-        WITH target AS (
-          SELECT $1::int AS unit_id, TRIM(u.code) AS unit_code
-          FROM units u
-          WHERE u.id = $1
-        )
-        SELECT pp.id,
-               pp.deal_id,
-               COALESCE(pp.version, 1) AS version,
-               pp.status,
-               pp.created_at,
-               u.email AS consultant_email
-        FROM payment_plans pp
-        JOIN users u ON u.id = pp.created_by, target t
-        WHERE pp.status='approved'
-          AND u.role = 'property_consultant'
-          AND (
-            (
-              TRIM(COALESCE(pp.details->'calculator'->'unitInfo'->>'unit_id','')) ~ '^[0-9]+$'
-              AND (TRIM(pp.details->'calculator'->'unitInfo'->>'unit_id')::int = t.unit_id)
-            )
-            OR (
-              TRIM(COALESCE(pp.details->'calculator'->'unitInfo'->>'unit_code','')) = t.unit_code
-            )
-          )
-        ORDER BY pp.id DESC
-      `
-      const r = await pool.query(sql, [unitId])
-      return ok(res, { payment_plans: r.rows })
-    } catch (e) {
-      console.error('GET /api/workflow/payment-plans/approved-for-unit error:', e)
-      return bad(res, 500, 'Internal error')
-    }
-  }
-)
 
 export default router

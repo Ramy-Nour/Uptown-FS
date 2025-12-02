@@ -1792,7 +1792,9 @@ Once you approve this Draft, I will:
 - Convert “[Planned]” items into implementation tasks
 - Update this section to remove the Draft label and move details into the main User Guide
 
-## Roadmap (next sessions)
+## Recent Fixes and Changes
+
+- [2025-12-02 21:10] (UTC) Fixed Express route ordering for `/api/workflow/payment-plans/approved-for-unit` so it no longer gets shadowed by the generic `/api/workflow/payment-plans/:id` route. This ensures Current Blocks correctly loads approved consultant payment plans for newly blocked units, allowing Financial Admins to create reservation forms when valid plans exist.oadmap (next sessions)
 
 Planned enhancements
 - Override Timeline UI refinements

@@ -7,6 +7,16 @@ const td = { padding: 10, borderBottom: '1px solid #f2f5fa', fontSize: 14 }
 const btn = { padding: '8px 10px', borderRadius: 8, border: '1px solid #d1d9e6', background: '#fff', cursor: 'pointer' }
 const ctrl = { padding: '6px 8px', borderRadius: 8, border: '1px solid #d1d9e6' }
 
+function toDdMmYyyy(value) {
+  if (!value) return ''
+  const parts = String(value).split('-')
+  if (parts.length === 3) {
+    const [yyyy, mm, dd] = parts
+    if (dd && mm && yyyy) return `${dd}/${mm}/${yyyy}`
+  }
+  return value
+}
+
 export default function CurrentBlocks() {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(false)
@@ -122,7 +132,7 @@ export default function CurrentBlocks() {
       }
       const body = {
         deal_id: Number(dealId),
-        reservation_form_date: (f.reservationDate || new Date().toISOString().slice(0, 10)),
+        reservation_form_date: toDdMmYyyy(f.reservationDate || new Date().toISOString().slice(0, 10)),
         preliminary_payment_amount: prelim,
         currency_override: '',
         language: f.language || 'en'

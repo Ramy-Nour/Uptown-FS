@@ -77,11 +77,21 @@ router.post(
         )
       }
 
+      const details = {
+        payment_plan_id: planId,
+        unit_id: unitId,
+        reservation_date: reservation_date || null,
+        preliminary_payment: preliminary_payment != null ? Number(preliminary_payment) : 0,
+        language: language || 'en',
+        deal_id: plan.deal_id ?? null,
+        calculator: calc || null
+      }
+
       const ins = await pool.query(
         `INSERT INTO reservation_forms
-           (payment_plan_id, unit_id, reservation_date, preliminary_payment, language, status, created_by)
+           (payment_plan_id, unit_id, reservation_date, preliminary_payment, language, status, created_by, details)
          VALUES
-           ($1, $2, $3, $4, $5, 'pending_approval', $6)
+           ($1, $2, $3, $4, $5, 'pending_approval', $6, $7)
          RETURNING *`,
         [
           planId,
@@ -89,7 +99,8 @@ router.post(
           reservation_date || new Date().toISOString(),
           preliminary_payment != null ? Number(preliminary_payment) : 0,
           language || 'en',
-          req.user.id
+          req.user.id,
+          details
         ]
       )
 

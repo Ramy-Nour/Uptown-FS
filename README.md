@@ -121,6 +121,9 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-12-03 17:40] Migration runner race — prevent double execution of migrations on API startup
+  - API: Updated api/src/migrate.js so that runMigrations() only auto-executes when migrate.js is run directly (node src/migrate.js), not when it is imported by api/src/index.js. Previously, the top-level IIFE in migrate.js ran once on import and a second time from index.js calling runMigrations(), which could trigger a race where the same migration filename was inserted twice into schema_migrations and crashed the API with “duplicate key value violates unique constraint \"schema_migrations_filename_key\"” for 046_reservation_forms_approval_audit.sql on startup.
+  - Runtime: With this change, migrations still run once on normal API startup via index.js → runMigrations(), and the standalone CLI usage remains available for manual runs. The schema_migrations table remains the source of truth, but we no longer see duplicate-key errors during container restarts.
 - [2025-12-03 16:55] Reservation Forms schema aligned with workflow routes to prevent 500s on FA Current Blocks
   - DB: Added migration 045_reservation_forms_unit_fields.sql to extend reservation_forms with unit_id, reservation_date, preliminary_payment, and language columns (plus an index on unit_id). This matches the insert used by api/src/reservationFormsRoutes.js so Financial Admin can create reservation forms from Deals → Current Blocks without hitting “column \"unit_id\" does not exist” internal errors after selecting an Approved Payment Plan.
   - API: No behavior change to roles or endpoints; POST /api/workflow/reservation-forms remains restricted to financial_admin. Existing reservation_forms rows continue to work with NULL values for the new columns.

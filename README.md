@@ -121,6 +121,9 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-12-03 16:55] Reservation Forms schema aligned with workflow routes to prevent 500s on FA Current Blocks
+  - DB: Added migration 045_reservation_forms_unit_fields.sql to extend reservation_forms with unit_id, reservation_date, preliminary_payment, and language columns (plus an index on unit_id). This matches the insert used by api/src/reservationFormsRoutes.js so Financial Admin can create reservation forms from Deals → Current Blocks without hitting “column \"unit_id\" does not exist” internal errors after selecting an Approved Payment Plan.
+  - API: No behavior change to roles or endpoints; POST /api/workflow/reservation-forms remains restricted to financial_admin. Existing reservation_forms rows continue to work with NULL values for the new columns.
 - [2025-12-02 12:00] Workflow modularization — split monolithic workflowRoutes into domain routers and removed duplicate payment-plan routes
   - API: Extracted shared helpers (bad/ok/ensureNumber and policy-limit resolvers) into api/src/workflowUtils.js so they can be reused without duplicating logic across workflow modules.
   - API: Moved Standard Pricing endpoints from api/src/workflowRoutes.js into api/src/standardPricingRoutes.js and mounted them back under /api/workflow via the parent router, preserving all existing paths (e.g., /api/workflow/standard-pricing, /:id/approve, /:id/reject).

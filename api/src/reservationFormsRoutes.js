@@ -77,10 +77,36 @@ router.post(
         )
       }
 
+      let reservationDateIso = null
+      if (reservation_date) {
+        if (typeof reservation_date === 'string') {
+          const trimmed = reservation_date.trim()
+          const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(trimmed)
+          if (m) {
+            const [, dd, mm, yyyy] = m
+            const d = new Date(Date.UTC(Number(yyyy), Number(mm) - 1, Number(dd)))
+            reservationDateIso = d.toISOString()
+          } else {
+            const d = new Date(trimmed)
+            if (!Number.isNaN(d.getTime())) {
+              reservationDateIso = d.toISOString()
+            }
+          }
+        } else {
+          const d = new Date(reservation_date)
+          if (!Number.isNaN(d.getTime())) {
+            reservationDateIso = d.toISOString()
+          }
+        }
+      }
+      if (!reservationDateIso) {
+        reservationDateIso = new Date().toISOString()
+      }
+
       const details = {
         payment_plan_id: planId,
         unit_id: unitId,
-        reservation_date: reservation_date || null,
+        reservation_date: reservationDateIso,
         preliminary_payment: preliminary_payment != null ? Number(preliminary_payment) : 0,
         language: language || 'en',
         deal_id: plan.deal_id ?? null,
@@ -96,7 +122,7 @@ router.post(
         [
           planId,
           unitId,
-          reservation_date || new Date().toISOString(),
+          reservationDateIso,
           preliminary_payment != null ? Number(preliminary_payment) : 0,
           language || 'en',
           req.user.id,

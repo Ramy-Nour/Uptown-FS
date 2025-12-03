@@ -186,13 +186,16 @@ export default function CurrentBlocks() {
                         title="Approved payment plan for this blocked unit (auto-selected)"
                         onFocus={() => { if (!plans.length) loadPlansForBlock(r) }}
                       />
-                      <input
-                        style={ctrl}
-                        type="date"
-                        placeholder="Reservation Date"
-                        value={f.reservationDate || ''}
-                        onChange={e => setBlockForm(r.id, { reservationDate: e.target.value })}
-                      />
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <input
+                          style={ctrl}
+                          type="date"
+                          placeholder="Reservation Date"
+                          value={f.reservationDate || ''}
+                          onChange={e => setBlockForm(r.id, { reservationDate: e.target.value })}
+                        />
+                        <span style={{ fontSize: 11, color: '#64748b' }}>Format: dd/MM/YYYY</span>
+                      </div>
                       <input
                         style={ctrl}
                         placeholder="Preliminary Payment"

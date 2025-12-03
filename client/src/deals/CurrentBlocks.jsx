@@ -94,15 +94,18 @@ export default function CurrentBlocks() {
       setCreating(s => new Set([...s, id]))
       const row = rows.find(r => r.id === id)
       const details = {
-        reservation_date: f.reservationDate || null,
-        preliminary_payment: prelim,
-        language: f.language || 'en',
         unit_id: row?.unit_id || null
       }
       const resp = await fetchWithAuth(`${API_URL}/api/workflow/reservation-forms`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ payment_plan_id: paymentPlanId, details })
+        body: JSON.stringify({
+          payment_plan_id: paymentPlanId,
+          reservation_date: f.reservationDate || null,
+          preliminary_payment: prelim,
+          language: f.language || 'en',
+          details
+        })
       })
       const data = await resp.json().catch(() => ({}))
       if (!resp.ok) throw new Error(data?.error?.message || 'Failed to create reservation form')

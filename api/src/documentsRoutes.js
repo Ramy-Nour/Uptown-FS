@@ -482,7 +482,22 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
             AND (
               pp.deal_id = $1
               OR (
-                rf.details->>'deal_id' ~ '^[0-9]+
+                rf.details->>'deal_id' ~ '^[0-9]+$'
+                AND (rf.details->>'deal_id')::int = $1
+              )
+            )
+          LIMIT 1
+        `,
+          [dealId]
+        )
+        if (rf.rows.length === 0) {
+          return bad(res, 403, 'Financial Manager approval required before generating Reservation Form')
+        }
+      } catch (e) {
+        console.error('reservation-form approval check error:', e)
+        return bad(res, 403, 'Financial Manager approval required before generating Reservation Form')
+      }
+    }
 
     const reservationDate = String(req.body?.reservation_form_date || '').slice(0, 10) || new Date().toISOString().slice(0, 10)
     const preliminaryPayment = Number(req.body?.preliminary_payment_amount) || 0

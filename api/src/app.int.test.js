@@ -45,10 +45,33 @@ async function testValidation() {
   console.log('✓ /api/calculate validation')
 }
 
+// Minimal smoke tests for documents routes to ensure documentsRoutes.js parses
+// and the routes are wired through the app. We don't try to generate real PDFs
+// here, only assert the auth layer responds as expected without 500s.
+async function testDocumentsClientOfferAuth() {
+  const res = await request(app)
+    .post('/api/documents/client-offer')
+    .send({})
+    .expect(401) // authMiddleware should reject unauthenticated requests
+  assert(res.body?.error, 'client-offer returns structured error on 401')
+  console.log('✓ /api/documents/client-offer (unauthenticated 401)')
+}
+
+async function testDocumentsReservationFormAuth() {
+  const res = await request(app)
+    .post('/api/documents/reservation-form')
+    .send({})
+    .expect(401) // authMiddleware should reject unauthenticated requests
+  assert(res.body?.error, 'reservation-form returns structured error on 401')
+  console.log('✓ /api/documents/reservation-form (unauthenticated 401)')
+}
+
 async function run() {
   await testHealth()
   await testCalculateTargetPV()
   await testValidation()
+  await testDocumentsClientOfferAuth()
+  await testDocumentsReservationFormAuth()
   console.log('All integration tests passed.')
 }
 

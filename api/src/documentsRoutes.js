@@ -672,40 +672,6 @@ router.post(
 // ----------------------
 // Reservation Form PDF
 // ----------------------
-router.post(
-  '/reservation-form',
-  authMiddleware,
-  requireRole(['financial_admin']),
-  async (req, res) => {
-    try {
-      const dealId = Number(req.body?.deal_id)
-      if (!Number.isFinite(dealId) || dealId <= 0) {
-        return bad(res, 400, 'deal_id must be a positive number')
-      }
-
-      const dr = await pool.query('SELECT * FROM deals WHERE id=$1', [dealId])
-      if (dr.rows.length === 0) return bad(res, 404, 'Deal not found')
-      const deal = dr.rows[0]
-
-      // FM approval/relaxation rules:
-      // 1) fm_review_at set, OR
-      // 2) at least one approved reservation_form linked to this deal
-      //    (via payment_plans.deal_id or reservation_forms.details->>'deal_id'), OR
-      // 3) unit already RESERVED in inventory for this deal's unit_id.
-      if (!deal.fm_review_at) {
-        let fmApproved = false
-
-        try {
-          const rf = await pool.query(
-            `
-              SELECT 1
-              FROM reservation_forms rf
-              LEFT JOIN payment_plans pp ON pp.id = rf.payment_plan_id
-              WHERE rf.status = 'approved'
-                AND (
-                  pp.deal_id = $1
-                  OR (
-                    rf.details->>'deal_id' ~ '^[0-9]+
 
 // Puppeteer singleton (per-process)
 let browserPromise: Promise<puppeteer.Browser> | null = null

@@ -638,6 +638,11 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
     const textAlignLeft = rtl ? 'text-right' : 'text-left'
     const textAlignRight = rtl ? 'text-left' : 'text-right'
 
+    // Title and header labels specific to the Reservation Form PDF
+    const title = L('Reservation Form – Residential Unit', 'إستمارة حجز – وحدة سكنية')
+    const headerReservationDateLabel = L('Reservation Date', 'تاريخ الحجز')
+    const headerUnitLabel = L('Unit', 'الوحدة')
+
     // Build buyers HTML (up to 4 owners) using compact blocks
     const buyersHtml = buyers.length
       ? buyers.map((b, idx) => `

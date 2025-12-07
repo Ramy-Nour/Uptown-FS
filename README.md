@@ -121,6 +121,8 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-12-07 16:25] Reservation Form PDF header decoupled from Client Offer variables to prevent 500s
+  - API: Updated api/src/documentsRoutes.js so the /api/documents/reservation-form handler uses its own headerTemplate based on reservationDate and unit fields only. Removed references to Client Offer-only variables (title, tOfferDate, offer_date, consultant, etc.) that were not defined in this route and caused “ReferenceError: title is not defined” and HTTP 500 responses whenever Financial Admin clicked “Print Reservation PDF” from Deals → Current Blocks, even for newly RESERVED units.
 - [2025-12-04 00:30] Documents router parse error removed; single clean ES module restored
   - API: Replaced the corrupted api/src/documentsRoutes.js (which contained duplicated TypeScript fragments and repeated /reservation-form handlers) with a single valid ES module. The file now exports one router with /api/documents/client-offer and /api/documents/reservation-form only, matching the policies already documented in this README.
   - API: Kept the Client Offer and Reservation Form business rules intact (buyers/unit hydration from the deal snapshot, pricing strictly from calc.unitPricingBreakdown for RF, unit metadata from units, Cairo-local timestamps, Arabic/English layouts, and FM-approval/RESERVED relaxations) while removing all stray duplicated blocks that were causing “SyntaxError: missing ) after argument list” on API startup.

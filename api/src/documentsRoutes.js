@@ -466,6 +466,27 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
     if (dr.rows.length === 0) return bad(res, 404, 'Deal not found')
     const deal = dr.rows[0]
 
+    // Fetch consultant (deal creator) for the header
+    let consultant = { name: null, email: null }
+    try {
+      const u = await pool.query(`
+        SELECT u.email,
+               COALESCE(NULLIF(TRIM(u.name),''), u.email) AS full_name
+        FROM deals d
+        JOIN users u ON u.id = d.created_by
+        WHERE d.id=$1
+        LIMIT 1
+      `, [dealId])
+      if (u.rows.length) {
+        consultant = {
+          name: u.rows[0].full_name || null,
+          email: u.rows[0].email || null
+        }
+      }
+    } catch (e) {
+      console.error('Failed to fetch consultant for RF:', e)
+    }
+
     // Allow RF generation when either:
     // - The underlying deal has been reviewed by FM (historic rule), OR
     // - There is at least one approved reservation_form linked to this deal
@@ -639,7 +660,19 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
     const textAlignRight = rtl ? 'text-left' : 'text-right'
 
     // Title and header labels specific to the Reservation Form PDF
+    // Note: 'title' is used in both the HTML body and the PDF header
     const title = L('Reservation Form – Residential Unit', 'إستمارة حجز – وحدة سكنية')
+
+    // Header specific labels (fixing ReferenceError)
+    // If business wants the label to remain "Offer Date", change the first string only.
+    const tOfferDate = L('Reservation Date', 'تاريخ الحجز')
+    const tFirstPayment = L('First Payment', 'أول دفعة')
+    const tUnit = L('Unit', 'الوحدة')
+    const tConsultant = L('Property Consultant', 'المستشار العقاري')
+
+    // Header data mapping
+    const offer_date = reservationDate
+    const first_payment_date = calc?.inputs?.firstPaymentDate || reservationDate
     const headerReservationDateLabel = L('Reservation Date', 'تاريخ الحجز')
     const headerUnitLabel = L('Unit', 'الوحدة')
 

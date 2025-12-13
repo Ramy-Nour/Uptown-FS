@@ -470,8 +470,9 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
     let consultant = { name: null, email: null }
     try {
       const u = await pool.query(`
-        SELECT u.email,
-               COALESCE(NULLIF(TRIM(u.name),''), u.email) AS full_name
+        SELECT
+          u.email,
+          COALESCE(NULLIF(TRIM(u.meta->>'name'), ''), u.email) AS full_name
         FROM deals d
         JOIN users u ON u.id = d.created_by
         WHERE d.id=$1
@@ -581,7 +582,9 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
     // informational purposes only; we do NOT override prices from there.
     let upb = calc?.unitPricingBreakdown || null
     let totalIncl = 0
-    let currency = UIcurrency || calc?.currency || ''
+    // Currency for RF comes from the calculator snapshot / deal details; there is
+    // no separate UIcurrency variable in this route, so avoid referencing it.
+    let currency = calc?.currency || deal.details?.currency || ''
     let unit = {
       unit_code: calc?.unitInfo?.unit_code || '',
       unit_type: calc?.unitInfo?.unit_type || '',

@@ -177,6 +177,98 @@ async function testDocumentsReservationFormPdfFlow() {
   console.log('✓ /api/documents/reservation-form (FM-approved deal, PDF 200)')
 }
 
+// Role-aware smoke test for GET /api/deals/by-unit/:unitId.
+// Ensures that:
+// - Non-elevated users (property_consultant) only see their own deals for that unit.
+// - Elevated users (sales_manager) see all deals for the unit.
+// - The underlying SQL uses proper placeholders for both unit_id and created_by
+//   so Postgres does not throw \"bind message supplies 2 parameters\".
+async function testDealsByUnitVisibilityAndBinding() {
+  const password = 'TestPassword123!'
+  const unitId = Math.floor(1e6 + Math.random() * 1e6)
+
+  // Register Property Consultant
+  const pcEmail = `pc_byunit_${Math.random().toString(36).slice(2, 8)}@example.com`
+  const regPc = await request(app)
+    .post('/api/auth/register')
+    .send({ email: pcEmail, password })
+    .expect(200)
+  assert(regPc.body.ok === true, 'pc register ok')
+  const pcId = regPc.body.user?.id
+  assert(pcId, 'pc user id')
+  await pool.query('UPDATE users SET role=$1 WHERE id=$2', ['property_consultant', pcId])
+
+  const loginPc = await request(app)
+    .post('/api/auth/login')
+    .send({ email: pcEmail, password })
+    .expect(200)
+  assert(loginPc.body.ok === true, 'pc login ok')
+  const pcToken = loginPc.body.accessToken
+  assert(pcToken, 'pc access token issued')
+
+  // Register Sales Manager (elevated)
+  const smEmail = `sm_byunit_${Math.random().toString(36).slice(2, 8)}@example.com`
+  const regSm = await request(app)
+    .post('/api/auth/register')
+    .send({ email: smEmail, password })
+    .expect(200)
+  assert(regSm.body.ok === true, 'sm register ok')
+  const smId = regSm.body.user?.id
+  assert(smId, 'sm user id')
+  await pool.query('UPDATE users SET role=$1 WHERE id=$2', ['sales_manager', smId])
+
+  const loginSm = await request(app)
+    .post('/api/auth/login')
+    .send({ email: smEmail, password })
+    .expect(200)
+  assert(loginSm.body.ok === true, 'sm login ok')
+  const smToken = loginSm.body.accessToken
+  assert(smToken, 'sm access token issued')
+
+  // Insert two deals for the same unit_id: one by PC, one by Sales Manager
+  const detailsPc = { calculator: { unitInfo: { unit_id: unitId } } }
+  await pool.query(
+    `INSERT INTO deals (title, amount, details, unit_type, status, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    ['PC Deal by unit', 100000, detailsPc, 'Apartment', 'draft', pcId]
+  )
+
+  const detailsSm = { calculator: { unitInfo: { unit_id: unitId } } }
+  await pool.query(
+    `INSERT INTO deals (title, amount, details, unit_type, status, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    ['SM Deal by unit', 200000, detailsSm, 'Apartment', 'draft', smId]
+  )
+
+  // Non-elevated consultant should only see their own deals for this unit
+  const pcRes = await request(app)
+    .get(`/api/deals/by-unit/${unitId}`)
+    .set('Authorization', `Bearer ${pcToken}`)
+    .expect(200)
+
+  assert(pcRes.body.ok === true, 'pc /by-unit ok true')
+  assert(Array.isArray(pcRes.body.deals), 'pc /by-unit deals is array')
+  assert(pcRes.body.deals.length >= 1, 'pc /by-unit returns at least one deal')
+  assert(
+    pcRes.body.deals.every(d => d.created_by === pcId),
+    'pc /by-unit only returns deals created_by the consultant'
+  )
+
+  // Elevated sales manager should see all deals for this unit (both creators)
+  const smRes = await request(app)
+    .get(`/api/deals/by-unit/${unitId}`)
+    .set('Authorization', `Bearer ${smToken}`)
+    .expect(200)
+
+  assert(smRes.body.ok === true, 'sm /by-unit ok true')
+  assert(Array.isArray(smRes.body.deals), 'sm /by-unit deals is array')
+  const creators = new Set(smRes.body.deals.map(d => d.created_by))
+  assert(creators.has(pcId), 'sm /by-unit includes consultant deal')
+  assert(creators.has(smId), 'sm /by-unit includes manager deal')
+
+  console.log('✓ /api/deals/by-unit/:unitId (role visibility + SQL binding)')
+}
+
 async function run() {
   await testHealth()
   await testCalculateTargetPV()
@@ -184,6 +276,7 @@ async function run() {
   await testDocumentsClientOfferAuth()
   await testDocumentsReservationFormAuth()
   await testDocumentsReservationFormPdfFlow()
+  await testDealsByUnitVisibilityAndBinding()
   console.log('All integration tests passed.')
 }
 

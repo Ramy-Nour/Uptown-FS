@@ -37,6 +37,7 @@ export default function DealDetail() {
     currency: '',
     language: 'en'
   })
+  const [approvedReservation, setApprovedReservation] = useState(null)
 
   // Edit request modal state
   const [showEditModal, setShowEditModal] = useState(false)
@@ -94,6 +95,66 @@ export default function DealDetail() {
     loadUnitDeals()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, deal?.details?.calculator?.unitInfo?.unit_id])
+
+  // Load the latest approved reservation form for this deal (if any),
+  // so we can prefill and lock Preliminary Payment in the Reservation Form modal.
+  useEffect(() => {
+    async function loadApprovedReservation() {
+      try {
+        if (!deal?.id) {
+          setApprovedReservation(null)
+          return
+        }
+        // Only Financial Admin / Financial Manager / elevated roles can see reservation forms.
+        if (!['financial_admin', 'financial_manager', 'admin', 'superadmin'].includes(role)) {
+          setApprovedReservation(null)
+          return
+        }
+        const resp = await fetchWithAuth(`${API_URL}/api/workflow/reservation-forms?status=approved`)
+        if (!resp.ok) {
+          setApprovedReservation(null)
+          return
+        }
+        const data = await resp.json().catch(() => null)
+        const forms = Array.isArray(data?.reservation_forms) ? data.reservation_forms : []
+        if (!forms.length) {
+          setApprovedReservation(null)
+          return
+        }
+        const dealIdNum = Number(deal.id)
+        let latest = null
+        for (const rf of forms) {
+          const directDealId = Number(rf.deal_id)
+          let detailsDealId = null
+          try {
+            const det = rf.details || {}
+            const raw = det.deal_id
+            if (raw != null) {
+              const n = Number(raw)
+              if (Number.isFinite(n)) detailsDealId = n
+            }
+          } catch {
+            // ignore parse errors
+          }
+          const matchesDeal = (directDealId === dealIdNum) || (detailsDealId === dealIdNum)
+          if (!matchesDeal) continue
+          if (!latest) {
+            latest = rf
+          } else {
+            const aTime = rf.approved_at ? new Date(rf.approved_at).getTime() : 0
+            const bTime = latest.approved_at ? new Date(latest.approved_at).getTime() : 0
+            if (aTime > bTime || (!aTime && rf.id > latest.id)) {
+              latest = rf
+            }
+          }
+        }
+        setApprovedReservation(latest)
+      } catch {
+        setApprovedReservation(null)
+      }
+    }
+    loadApprovedReservation()
+  }, [deal?.id, role])
 
   const isOwner = deal && user && deal.created_by === user.id
   const canEdit = deal && deal.status === 'draft' && (isOwner || role === 'admin')
@@ -1306,9 +1367,17 @@ export default function DealDetail() {
 
                   <ReservationFormModal
                     open={reservationModalOpen}
-                    defaultDate={new Date().toISOString().slice(0,10)}
-                    defaultLanguage="en"
+                    defaultDate={
+                      approvedReservation?.reservation_date
+                        ? new Date(approvedReservation.reservation_date).toISOString().slice(0, 10)
+                        : new Date().toISOString().slice(0, 10)
+                    }
+                    defaultLanguage={approvedReservation?.language || 'en'}
                     defaultCurrency=""
+                    defaultPreliminaryPayment={
+                      approvedReservation ? Number(approvedReservation.preliminary_payment || 0) : ''
+                    }
+                    preliminaryLocked={!!approvedReservation}
                     onCancel={() => setReservationModalOpen(false)}
                     onGenerate={async (opts) => {
                       try {

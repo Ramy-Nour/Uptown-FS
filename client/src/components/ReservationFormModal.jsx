@@ -6,22 +6,32 @@ export default function ReservationFormModal({
   defaultDate = new Date().toISOString().slice(0,10),
   defaultLanguage = 'en',
   defaultCurrency = '',
+  defaultPreliminaryPayment = '',
+  preliminaryLocked = false,
   onCancel,
   onGenerate
 }) {
   const [date, setDate] = React.useState(defaultDate)
-  const [prelim, setPrelim] = React.useState('')
+  const [prelim, setPrelim] = React.useState(
+    defaultPreliminaryPayment === '' || defaultPreliminaryPayment == null
+      ? ''
+      : String(defaultPreliminaryPayment)
+  )
   const [currency, setCurrency] = React.useState(defaultCurrency)
   const [language, setLanguage] = React.useState(defaultLanguage)
 
   React.useEffect(() => {
     if (open) {
       setDate(defaultDate)
-      setPrelim('')
+      setPrelim(
+        defaultPreliminaryPayment === '' || defaultPreliminaryPayment == null
+          ? ''
+          : String(defaultPreliminaryPayment)
+      )
       setCurrency(defaultCurrency)
       setLanguage(defaultLanguage)
     }
-  }, [open, defaultDate, defaultLanguage, defaultCurrency])
+  }, [open, defaultDate, defaultLanguage, defaultCurrency, defaultPreliminaryPayment])
 
   if (!open) return null
 
@@ -47,7 +57,8 @@ export default function ReservationFormModal({
               step="0.01"
               value={prelim}
               onChange={e => setPrelim(e.target.value)}
-              style={{ padding: 10, borderRadius: 10, border: '1px solid #d1d9e6', width: '100%' }}
+              disabled={preliminaryLocked}
+              style={{ padding: 10, borderRadius: 10, border: '1px solid #d1d9e6', width: '100%', background: preliminaryLocked ? '#f9fafb' : '#fff' }}
             />
           </div>
           <div>
@@ -78,7 +89,7 @@ export default function ReservationFormModal({
             variant="primary"
             onClick={() => {
               const preliminary_payment_amount = Number(prelim || 0)
-              if (!Number.isFinite(preliminary_payment_amount) || preliminary_payment_amount < 0) {
+              if (!Number.isFinite(preliminary_payment_amount) || preliminary_payment_amount &lt; 0) {
                 alert('Preliminary payment must be a non-negative number')
                 return
               }

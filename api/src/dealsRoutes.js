@@ -280,8 +280,8 @@ router.get('/by-unit/:unitId', authMiddleware, async (req, res) => {
 
     if (!isElevated) {
       params.push(req.user.id)
-      // Use a proper placeholder for the second bind parameter to avoid
-      // "bind message supplies 2 parameters, but prepared statement requires 1"
+      // Use a proper placeholder for the second bind parameter so Postgres
+      // sees both $1 (unit_id) and $2 (created_by).
       where.push(`d.created_by = ${params.length}`)
     }
 

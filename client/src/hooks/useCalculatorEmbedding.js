@@ -3,6 +3,7 @@ import { buildCalculationPayload } from '../lib/payloadBuilders.js'
 
 export function useCalculatorEmbedding({
   mode, language, currency, stdPlan, inputs, firstYearPayments, subsequentYears, clientInfo, unitInfo, contractInfo, customNotes,
+  unitPricingBreakdown, feeSchedule,
   genResult, preview, setClientInfo, setUnitInfo, setStdPlan, setUnitPricingBreakdown, setFeeSchedule, setCurrency
 }) {
   useEffect(() => {
@@ -18,6 +19,8 @@ export function useCalculatorEmbedding({
         clientInfo,
         unitInfo,
         contractInfo,
+        unitPricingBreakdown,
+        feeSchedule,
         customNotes
       }
       const payload = buildCalculationPayload({ mode, stdPlan, unitInfo, inputs, firstYearPayments, subsequentYears })
@@ -66,7 +69,9 @@ export function useCalculatorEmbedding({
       if (window.__uptown_calc_applyUnitPrefill === applyUnitPrefill) delete window.__uptown_calc_applyUnitPrefill
     }
   }, [
-    mode, language, currency, stdPlan, inputs, firstYearPayments, subsequentYears, clientInfo, unitInfo, contractInfo, customNotes, genResult, preview,
+    mode, language, currency, stdPlan, inputs, firstYearPayments, subsequentYears, clientInfo, unitInfo, contractInfo, customNotes,
+    unitPricingBreakdown, feeSchedule,
+    genResult, preview,
     setClientInfo, setUnitInfo, setStdPlan, setUnitPricingBreakdown, setFeeSchedule, setCurrency
   ])
 }

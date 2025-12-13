@@ -121,6 +121,9 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-12-13 12:30] Reservation Form pricing — calculator snapshot now persists unitPricingBreakdown
+  - Client: Updated `useCalculatorEmbedding` and the Deal Detail edit flow so calculator snapshots stored in deals always include `unitPricingBreakdown` and `feeSchedule`. New and re-saved deals now persist the full unit price breakdown used by the calculator.
+  - API: Reservation Form PDFs (`POST /api/documents/reservation-form`) continue to take Base Price, Maintenance Deposit, and Total strictly from `details.calculator.unitPricingBreakdown`, so the RF reflects the agreed offer values instead of live pricing. Previously, missing `unitPricingBreakdown` in the snapshot caused Base Price / Maintenance / Total to render as 0.00 even when the deal used a valid unit price breakdown.
 - [2025-12-09 16:15] Reservation Form PDF header variables defined; consultant and dates wired from deal snapshot
   - API: Updated api/src/documentsRoutes.js /reservation-form handler to define title, date labels, unit, and consultant variables explicitly, removing the ReferenceError that occurred when generating Reservation Form PDFs. Header now uses reservationDate for the “Reservation Date” field, firstPaymentDate from the calculator snapshot, and the deal creator’s email for the Property Consultant line, while preserving Preliminary Payment and related fields in the document body.
 - [2025-12-07 16:25] Reservation Form PDF header decoupled from Client Offer variables to prevent 500s

@@ -184,6 +184,8 @@ export default function DealDetail() {
             clientInfo: snap.clientInfo,
             unitInfo: snap.unitInfo,
             contractInfo: snap.contractInfo,
+            unitPricingBreakdown: snap.unitPricingBreakdown,
+            feeSchedule: snap.feeSchedule,
             customNotes: snap.customNotes
           }
           localStorage.setItem('uptown_calc_form_state_v2', JSON.stringify(snapshot))

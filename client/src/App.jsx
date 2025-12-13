@@ -287,6 +287,8 @@ export default function App(props) {
       if (saved.unitInfo) setUnitInfo(saved.unitInfo)
       if (saved.contractInfo) setContractInfo(saved.contractInfo)
       if (saved.customNotes) setCustomNotes(saved.customNotes)
+      if (saved.unitPricingBreakdown) setUnitPricingBreakdown(saved.unitPricingBreakdown)
+      if (saved.feeSchedule) setFeeSchedule(saved.feeSchedule)
     }
   }, [])
 
@@ -393,6 +395,7 @@ export default function App(props) {
   // Expose imperative APIs for embedding contexts (moved to hook)
   useCalculatorEmbedding({
     mode, language, currency, stdPlan, inputs, firstYearPayments, subsequentYears, clientInfo, unitInfo, contractInfo, customNotes,
+    unitPricingBreakdown, feeSchedule,
     genResult, preview, setClientInfo, setUnitInfo, setStdPlan, setUnitPricingBreakdown, setFeeSchedule, setCurrency
   })
 

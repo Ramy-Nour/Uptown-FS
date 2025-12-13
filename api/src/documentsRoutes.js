@@ -557,9 +557,71 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
       return parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : s
     }
 
+    // Determine language and reservation date for the Reservation Form layout.
+    const calcForLanguage = deal.details?.calculator || {}
+
+    // Language: prefer explicit request, then calculator snapshot, then default to English.
+    let language = req.body?.language || calcForLanguage?.language || calcForLanguage?.inputs?.language || ''
+    language = String(language || 'en').toLowerCase()
+    language = language.startsWith('ar') ? 'ar' : 'en'
+    const rtl = language === 'ar'
+
+    // Reservation date: prefer reservation_form_date from the request (dd/MM/YYYY or ISO-like),
+    // then any stored reservation date, then today.
+    let reservationDateDisplay = null
+    let reservationDateIso = null
+
+    const rawReservationFormDate = req.body?.reservation_form_date
+    if (typeof rawReservationFormDate === 'string' && rawReservationFormDate.trim()) {
+      const trimmed = rawReservationFormDate.trim()
+      const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(trimmed)
+      if (m) {
+        const [, dd, mm, yyyy] = m
+        reservationDateDisplay = `${dd}/${mm}/${yyyy}`
+        const d = new Date(Date.UTC(Number(yyyy), Number(mm) - 1, Number(dd)))
+        reservationDateIso = `${yyyy}-${mm}-${dd}`
+      } else {
+        const d = new Date(trimmed)
+        if (!Number.isNaN(d.getTime())) {
+          const dd = String(d.getUTCDate()).padStart(2, '0')
+          const mm = String(d.getUTCMonth() + 1).padStart(2, '0')
+          const yyyy = d.getUTCFullYear()
+          reservationDateDisplay = `${dd}/${mm}/${yyyy}`
+          reservationDateIso = `${yyyy}-${mm}-${dd}`
+        } else {
+          reservationDateDisplay = trimmed
+        }
+      }
+    }
+
+    if (!reservationDateIso) {
+      const rawDbDate = approvedReservation?.reservation_date || approvedReservation?.details?.reservation_date
+      if (rawDbDate) {
+        const d = new Date(rawDbDate)
+        if (!Number.isNaN(d.getTime())) {
+          const dd = String(d.getUTCDate()).padStart(2, '0')
+          const mm = String(d.getUTCMonth() + 1).padStart(2, '0')
+          const yyyy = d.getUTCFullYear()
+          reservationDateDisplay = reservationDateDisplay || `${dd}/${mm}/${yyyy}`
+          reservationDateIso = `${yyyy}-${mm}-${dd}`
+        }
+      }
+    }
+
+    if (!reservationDateIso) {
+      const d = new Date()
+      const dd = String(d.getDate()).padStart(2, '0')
+      const mm = String(d.getMonth() + 1).padStart(2, '0')
+      const yyyy = d.getFullYear()
+      reservationDateDisplay = reservationDateDisplay || `${dd}/${mm}/${yyyy}`
+      reservationDateIso = `${yyyy}-${mm}-${dd}`
+    }
+
+    const reservationDate = reservationDateDisplay
+
     let dayOfWeek = ''
     try {
-      const d = new Date(reservationDate)
+      const d = new Date(reservationDateIso || reservationDate)
       const namesEn = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
       const namesAr = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت']
       dayOfWeek = (rtl ? namesAr : namesEn)[d.getDay()] || ''
@@ -584,7 +646,15 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
     let totalIncl = 0
 
     // Ensure preliminaryPayment is defined (default to 0 if missing from request/approval)
-    const preliminaryPayment = Number(req.body?.preliminary_payment) || Number(approvedReservation?.details?.preliminary_payment) || 0
+    let preliminaryPayment = 0
+    if (approvedReservation) {
+      const fromColumn = approvedReservation.preliminary_payment
+      const fromDetails = approvedReservation.details?.preliminary_payment
+      preliminaryPayment = Number(fromColumn != null ? fromColumn : fromDetails) || 0
+    } else {
+      const fromBody = req.body?.preliminary_payment_amount ?? req.body?.preliminary_payment
+      preliminaryPayment = Number(fromBody) || 0
+    }
 
     // Currency for RF comes from the calculator snapshot / deal details; there is
     // no separate UIcurrency variable in this route, so avoid referencing it.
@@ -669,8 +739,8 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
     const tConsultant = L('Property Consultant', 'المستشار العقاري')
 
     // Header data mapping
-    const offer_date = reservationDate
-    const first_payment_date = calc?.inputs?.firstPaymentDate || reservationDate
+    const offer_date = reservationDateIso || reservationDate
+    const first_payment_date = calc?.inputs?.firstPaymentDate || (reservationDateIso || reservationDate)
     const headerReservationDateLabel = L('Reservation Date', 'تاريخ الحجز')
     const headerUnitLabel = L('Unit', 'الوحدة')
 

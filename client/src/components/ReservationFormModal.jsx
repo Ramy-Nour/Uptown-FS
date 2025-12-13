@@ -8,6 +8,8 @@ export default function ReservationFormModal({
   defaultCurrency = '',
   defaultPreliminaryPayment = '',
   preliminaryLocked = false,
+  loading = false,
+  progress = 0,
   onCancel,
   onGenerate
 }) {
@@ -83,26 +85,45 @@ export default function ReservationFormModal({
             </select>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
-          <LoadingButton onClick={onCancel}>Cancel</LoadingButton>
-          <LoadingButton
-            variant="primary"
-            onClick={() => {
-              const preliminary_payment_amount = Number(prelim || 0)
-              if (!Number.isFinite(preliminary_payment_amount) || preliminary_payment_amount &lt; 0) {
-                alert('Preliminary payment must be a non-negative number')
-                return
-              }
-              onGenerate({
-                reservation_form_date: date || new Date().toISOString().slice(0,10),
-                preliminary_payment_amount,
-                currency_override: currency || '',
-                language: language || 'en'
-              })
-            }}
-          >
-            Generate
-          </LoadingButton>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center', marginTop: 14 }}>
+          {loading && (
+            <div style={{ width: 160 }}>
+              <div style={{ height: 6, background: '#ead9bd', borderRadius: 8, overflow: 'hidden' }}>
+                <div
+                  style={{
+                    width: `${Math.min(100, Math.max(0, Math.round(progress)))}%`,
+                    height: '100%',
+                    background: '#A97E34',
+                    transition: 'width 300ms ease'
+                  }}
+                />
+              </div>
+              <small style={{ color: '#6b7280' }}>{Math.round(progress)}%</small>
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginLeft: 'auto' }}>
+            <LoadingButton onClick={onCancel} disabled={loading}>Cancel</LoadingButton>
+            <LoadingButton
+              variant="primary"
+              loading={loading}
+              disabled={loading}
+              onClick={() => {
+                const preliminary_payment_amount = Number(prelim || 0)
+                if (!Number.isFinite(preliminary_payment_amount) || preliminary_payment_amount < 0) {
+                  alert('Preliminary payment must be a non-negative number')
+                  return
+                }
+                onGenerate({
+                  reservation_form_date: date || new Date().toISOString().slice(0,10),
+                  preliminary_payment_amount,
+                  currency_override: currency || '',
+                  language: language || 'en'
+                })
+              }}
+            >
+              {loading ? 'Generating…' : 'Generate'}
+            </LoadingButton>
+          </div>
         </div>
       </div>
     </div>

@@ -1858,6 +1858,8 @@ Planned enhancements
 - Contract Cancellation Flow (future)
   - Design and implement contract cancellation workflow with approvals and audit trail.
   - Update documents and notifications to reflect cancellation and unit state changes.
+- Document-generation UX polish (future)
+  - Extend the Reservation Form generation progress pattern (progress bar + disabled buttons) to other long-running document exports such as Client Offer PDF and Contract PDF, so users always see that a document is being generated and are discouraged from clicking actions multiple times.
 
 - Polish Client Offer PDF (server-rendered):
   - Add branded header/logo, consistent typography, page headers/footers, and proper pagination (repeat table headers on page break).

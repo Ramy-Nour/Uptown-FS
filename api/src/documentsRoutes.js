@@ -502,7 +502,20 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
           AND (
             pp.deal_id = $1
             OR (
-              rf.details->>'deal_id' ~ '^[0-9]+
+              rf.details->>'deal_id' ~ '^[0-9]+$'
+              AND (rf.details->>'deal_id')::numeric = $1
+            )
+          )
+        LIMIT 1
+        `,
+        [dealId]
+      )
+      if (rf.rows.length > 0) {
+        approvedReservation = rf.rows[0]
+      }
+    } catch (e) {
+      console.error('Failed to look up approved reservation:', e)
+    }
 
     // Cairo-local timestamp helper
     const localTimestamp = () => {

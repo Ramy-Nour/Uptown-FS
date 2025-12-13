@@ -121,6 +121,9 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-12-13 13:45] Reservation Form — lock Preliminary Reservation Payment after FM approval
+  - API: Updated `POST /api/documents/reservation-form` so that once a reservation form has been approved (an `approved` row exists in `reservation_forms` linked to the deal), the Reservation Form PDF always uses the `reservation_forms.preliminary_payment` value. Any `preliminary_payment_amount` sent from the client is ignored in this case, so Financial Admin cannot change the Preliminary Reservation Payment during PDF generation after FM approval.
+  - Behaviour: When no approved `reservation_forms` row exists for the deal, the endpoint keeps the existing behaviour and uses the manually entered Preliminary Payment from the client request. This preserves flexibility before reservation approval while enforcing immutability afterwards.
 - [2025-12-13 12:30] Reservation Form pricing — calculator snapshot now persists unitPricingBreakdown
   - Client: Updated `useCalculatorEmbedding` and the Deal Detail edit flow so calculator snapshots stored in deals always include `unitPricingBreakdown` and `feeSchedule`. New and re-saved deals now persist the full unit price breakdown used by the calculator.
   - API: Reservation Form PDFs (`POST /api/documents/reservation-form`) continue to take Base Price, Maintenance Deposit, and Total strictly from `details.calculator.unitPricingBreakdown`, so the RF reflects the agreed offer values instead of live pricing. Previously, missing `unitPricingBreakdown` in the snapshot caused Base Price / Maintenance / Total to render as 0.00 even when the deal used a valid unit price breakdown.

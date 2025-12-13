@@ -582,6 +582,10 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
     // informational purposes only; we do NOT override prices from there.
     let upb = calc?.unitPricingBreakdown || null
     let totalIncl = 0
+
+    // Ensure preliminaryPayment is defined (default to 0 if missing from request/approval)
+    const preliminaryPayment = Number(req.body?.preliminary_payment) || Number(approvedReservation?.details?.preliminary_payment) || 0
+
     // Currency for RF comes from the calculator snapshot / deal details; there is
     // no separate UIcurrency variable in this route, so avoid referencing it.
     let currency = calc?.currency || deal.details?.currency || ''

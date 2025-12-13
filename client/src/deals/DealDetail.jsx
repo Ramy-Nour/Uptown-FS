@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { fetchWithAuth, API_URL } from '../lib/apiClient.js'
 import { notifyError, notifySuccess } from '../lib/notifications.js'
@@ -37,6 +37,10 @@ export default function DealDetail() {
     currency: '',
     language: 'en'
   })
+  const [approvedReservation, setApprovedReservation] = useState(null)
+  const [reservationGenerating, setReservationGenerating] = useState(false)
+  const [reservationProgress, setReservationProgress] = useState(0)
+  const reservationProgressTimer = useRef(null)
 
   // Edit request modal state
   const [showEditModal, setShowEditModal] = useState(false)
@@ -94,6 +98,66 @@ export default function DealDetail() {
     loadUnitDeals()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, deal?.details?.calculator?.unitInfo?.unit_id])
+
+  // Load the latest approved reservation form for this deal (if any),
+  // so we can prefill and lock Preliminary Payment in the Reservation Form modal.
+  useEffect(() => {
+    async function loadApprovedReservation() {
+      try {
+        if (!deal?.id) {
+          setApprovedReservation(null)
+          return
+        }
+        // Only Financial Admin / Financial Manager / elevated roles can see reservation forms.
+        if (!['financial_admin', 'financial_manager', 'admin', 'superadmin'].includes(role)) {
+          setApprovedReservation(null)
+          return
+        }
+        const resp = await fetchWithAuth(`${API_URL}/api/workflow/reservation-forms?status=approved`)
+        if (!resp.ok) {
+          setApprovedReservation(null)
+          return
+        }
+        const data = await resp.json().catch(() => null)
+        const forms = Array.isArray(data?.reservation_forms) ? data.reservation_forms : []
+        if (!forms.length) {
+          setApprovedReservation(null)
+          return
+        }
+        const dealIdNum = Number(deal.id)
+        let latest = null
+        for (const rf of forms) {
+          const directDealId = Number(rf.deal_id)
+          let detailsDealId = null
+          try {
+            const det = rf.details || {}
+            const raw = det.deal_id
+            if (raw != null) {
+              const n = Number(raw)
+              if (Number.isFinite(n)) detailsDealId = n
+            }
+          } catch {
+            // ignore parse errors
+          }
+          const matchesDeal = (directDealId === dealIdNum) || (detailsDealId === dealIdNum)
+          if (!matchesDeal) continue
+          if (!latest) {
+            latest = rf
+          } else {
+            const aTime = rf.approved_at ? new Date(rf.approved_at).getTime() : 0
+            const bTime = latest.approved_at ? new Date(latest.approved_at).getTime() : 0
+            if (aTime > bTime || (!aTime && rf.id > latest.id)) {
+              latest = rf
+            }
+          }
+        }
+        setApprovedReservation(latest)
+      } catch {
+        setApprovedReservation(null)
+      }
+    }
+    loadApprovedReservation()
+  }, [deal?.id, role])
 
   const isOwner = deal && user && deal.created_by === user.id
   const canEdit = deal && deal.status === 'draft' && (isOwner || role === 'admin')
@@ -200,6 +264,17 @@ export default function DealDetail() {
   const schedule = deal?.details?.calculator?.generatedPlan?.schedule || []
   const totals = deal?.details?.calculator?.generatedPlan?.totals || null
   const evaluation = deal?.details?.calculator?.generatedPlan?.evaluation || null
+  const snapBreakdown = deal?.details?.calculator?.unitPricingBreakdown
+  const hasPricingBreakdown =
+    !!snapBreakdown &&
+    [
+      snapBreakdown.base,
+      snapBreakdown.garden,
+      snapBreakdown.roof,
+      snapBreakdown.storage,
+      snapBreakdown.garage,
+      snapBreakdown.maintenance
+    ].some(v => Number(v || 0) !== 0)
 
   // Derive compact status/override/unit availability summary for the header
   const liveUnitStatusRaw = deal?.current_unit_status
@@ -481,30 +556,30 @@ export default function DealDetail() {
       </div>
 
       {!editCalc ? (
-        <div style={{ marginBottom: 16 }}>
-          {/* Conflict banner: other deals for this unit */}
-          {Array.isArray(unitDeals) && unitDeals.length > 0 && (
-            <div style={{ marginBottom: 10, padding: '8px 10px', borderRadius: 8, border: '1px solid #fed7aa', background: '#fffbeb', color: '#9a3412', fontSize: 13 }}>
-              <div style={{ fontWeight: 600, marginBottom: 4 }}>
-                Other deals exist for this unit: {unitDeals.length} deal(s).
+          <div style={{ marginBottom: 16 }}>
+            {/* Conflict banner: other deals for this unit */}
+            {Array.isArray(unitDeals) && unitDeals.length > 0 && (
+              <div style={{ marginBottom: 10, padding: '8px 10px', borderRadius: 8, border: '1px solid #fed7aa', background: '#fffbeb', color: '#9a3412', fontSize: 13 }}>
+                <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                  Other deals exist for this unit: {unitDeals.length} deal(s).
+                </div>
+                <div>
+                  {unitDeals.slice(0, 4).map(d => (
+                    <span key={d.id} style={{ marginRight: 8 }}>
+                      #{d.id} ({d.status || 'unknown'})
+                    </span>
+                  ))}
+                  {unitDeals.length > 4 && <span>…</span>}
+                </div>
+                <div style={{ marginTop: 4, fontSize: 12 }}>
+                  This does not change this deal’s validity, but Sales/Finance should be aware of potentially competing offers on the same unit.
+                </div>
               </div>
-              <div>
-                {unitDeals.slice(0, 4).map(d => (
-                  <span key={d.id} style={{ marginRight: 8 }}>
-                    #{d.id} ({d.status || 'unknown'})
-                  </span>
-                ))}
-                {unitDeals.length > 4 && <span>…</span>}
-              </div>
-              <div style={{ marginTop: 4, fontSize: 12 }}>
-                This does not change this deal’s validity, but Sales/Finance should be aware of potentially competing offers on the same unit.
-              </div>
-            </div>
-          )}
-          <p><strong>Title:</strong> {deal.title}</p>
-          <p><strong>Amount:</strong> {Number(deal.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+            )}
+            <p><strong>Title:</strong> {deal.title}</p>
+            <p><strong>Amount:</strong> {Number(deal.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
 
-          {/* Compact status/override/unit summary */}
+            {/* Compact status/override/unit summary */}
           <div
             style={{
               margin: '6px 0 10px 0',
@@ -582,6 +657,12 @@ export default function DealDetail() {
             <div><strong>Offer Date:</strong> {(deal?.details?.calculator?.inputs?.offerDate) || new Date().toISOString().slice(0, 10)}</div>
             <div><strong>First Payment Date:</strong> {(deal?.details?.calculator?.inputs?.firstPaymentDate) || (deal?.details?.calculator?.inputs?.offerDate) || new Date().toISOString().slice(0, 10)}</div>
           </div>
+          {!hasPricingBreakdown && (role === 'property_consultant' || role === 'financial_admin' || role === 'financial_manager') && (
+            <div style={{ margin: '4px 0 10px 0', padding: '8px 10px', borderRadius: 8, border: '1px solid #f97316', background: '#fff7ed', color: '#9a3412', fontSize: 13 }}>
+              <div style={{ fontWeight: 600, marginBottom: 2 }}>Unit price breakdown is missing from this offer snapshot.</div>
+              <div>Open “Edit Offer”, review the calculator, and click Save to refresh pricing before printing Client Offers or Reservation Forms.</div>
+            </div>
+          )}
           {deal.status === 'rejected' && deal.rejection_reason ? (
             <div style={{ marginTop: 8, padding: '10px 12px', borderRadius: 10, border: '1px solid #ef4444', background: '#fef2f2', color: '#7f1d1d' }}>
               <strong>Rejection Reason:</strong>
@@ -1306,13 +1387,31 @@ export default function DealDetail() {
 
                   <ReservationFormModal
                     open={reservationModalOpen}
-                    defaultDate={new Date().toISOString().slice(0,10)}
-                    defaultLanguage="en"
+                    defaultDate={
+                      approvedReservation?.reservation_date
+                        ? new Date(approvedReservation.reservation_date).toISOString().slice(0, 10)
+                        : new Date().toISOString().slice(0, 10)
+                    }
+                    defaultLanguage={approvedReservation?.language || 'en'}
                     defaultCurrency=""
+                    defaultPreliminaryPayment={
+                      approvedReservation ? Number(approvedReservation.preliminary_payment || 0) : ''
+                    }
+                    preliminaryLocked={!!approvedReservation}
+                    loading={reservationGenerating}
+                    progress={reservationProgress}
                     onCancel={() => setReservationModalOpen(false)}
                     onGenerate={async (opts) => {
+                      let timer = null
                       try {
-                        setMessage('Generating Reservation Form…'); setShow(true)
+                        setReservationGenerating(true)
+                        setReservationProgress(10)
+                        timer = setInterval(() => {
+                          setReservationProgress(prev => (prev >= 90 ? prev : prev + 5))
+                        }, 300)
+
+                        setMessage('Generating Reservation Form…')
+                        setShow(true)
                         const resp = await fetchWithAuth(`${API_URL}/api/documents/reservation-form`, {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
@@ -1327,7 +1426,8 @@ export default function DealDetail() {
                             const j = await resp.json()
                             errMsg = j?.error?.message || errMsg
                           } catch {}
-                          notifyError(errMsg); setShow(false); return
+                          notifyError(errMsg)
+                          return
                         }
                         const blob = await resp.blob()
                         const ts = new Date().toISOString().replace(/[:.]/g, '-')
@@ -1337,11 +1437,15 @@ export default function DealDetail() {
                         a.href = url; a.download = filename
                         document.body.appendChild(a); a.click(); document.body.removeChild(a)
                         URL.revokeObjectURL(url)
+                        setReservationProgress(100)
                         setReservationModalOpen(false)
                         notifySuccess('Reservation Form generated successfully.')
                       } catch (err) {
                         notifyError(err, 'Failed to generate reservation form')
                       } finally {
+                        if (timer) clearInterval(timer)
+                        setReservationGenerating(false)
+                        setTimeout(() => setReservationProgress(0), 800)
                         setShow(false)
                       }
                     }}

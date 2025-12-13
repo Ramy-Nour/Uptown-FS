@@ -121,6 +121,13 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-12-13 14:05] Reservation Form modal — prefill and lock Preliminary Payment after approval; agent rules updated for root-cause fixes only
+  - Client: On Deal Detail, the Reservation Form modal now pre-fills the Preliminary Payment, reservation date, and language from the latest approved `reservation_forms` row for that deal (if one exists). In this case, the Preliminary Payment input is disabled so Financial Admin can see the approved amount but cannot change it when printing the Reservation Form PDF.
+  - API: `POST /api/documents/reservation-form` already locks Preliminary Reservation Payment to `reservation_forms.preliminary_payment` once a reservation is approved; the UI now matches this behaviour and avoids suggesting that the value can be edited post-approval.
+  - Process: Updated the AI/Agent Contribution Rules to state that fixes should focus on root-cause changes for future flows; no retroactive data fixes or ad-hoc migrations should be added unless explicitly requested, since the system is still in the design phase.
+- [2025-12-13 13:45] Reservation Form — lock Preliminary Reservation Payment after FM approval
+  - API: Updated `POST /api/documents/reservation-form` so that once a reservation form has been approved (an `approved` row exists in `reservation_forms` linked to the deal), the Reservation Form PDF always uses the `reservation_forms.preliminary_payment` value. Any `preliminary_payment_amount` sent from the client is ignored in this case, so Financial Admin cannot change the Preliminary Reservation Payment during PDF generation after FM approval.
+  - Behaviour: When no approved `reservation_forms` row exists for the deal, the endpoint keeps the existing behaviour and uses the manually entered Preliminary Payment from the client request. This preserves flexibility before reservation approval while enforcing immutability afterwards.
 - [2025-12-13 12:30] Reservation Form pricing — calculator snapshot now persists unitPricingBreakdown
   - Client: Updated `useCalculatorEmbedding` and the Deal Detail edit flow so calculator snapshots stored in deals always include `unitPricingBreakdown` and `feeSchedule`. New and re-saved deals now persist the full unit price breakdown used by the calculator.
   - API: Reservation Form PDFs (`POST /api/documents/reservation-form`) continue to take Base Price, Maintenance Deposit, and Total strictly from `details.calculator.unitPricingBreakdown`, so the RF reflects the agreed offer values instead of live pricing. Previously, missing `unitPricingBreakdown` in the snapshot caused Base Price / Maintenance / Total to render as 0.00 even when the deal used a valid unit price breakdown.
@@ -1851,6 +1858,8 @@ Planned enhancements
 - Contract Cancellation Flow (future)
   - Design and implement contract cancellation workflow with approvals and audit trail.
   - Update documents and notifications to reflect cancellation and unit state changes.
+- Document-generation UX polish (future)
+  - Extend the Reservation Form generation progress pattern (progress bar + disabled buttons) to other long-running document exports such as Client Offer PDF and Contract PDF, so users always see that a document is being generated and are discouraged from clicking actions multiple times.
 
 - Polish Client Offer PDF (server-rendered):
   - Add branded header/logo, consistent typography, page headers/footers, and proper pagination (repeat table headers on page break).
@@ -1931,6 +1940,7 @@ Any automated agent (AI or script) committing changes MUST:
 4) Keep instructions accurate for both local Docker and Codespaces.
 5) Do not remove existing notes; append and refine.
 6) Prefix every new bullet in “Recent Fixes and Changes” with a timestamp in the form [YYYY-MM-DD HH:MM] (UTC).
+7) When fixing bugs or changing behavior, prioritize root-cause fixes that affect future flows. Do not add retroactive data fixes or one-off data migrations unless explicitly requested by the human owner; the system is still in the design phase and existing test data is not considered production.
 
 Checklist before finishing any task:
 - [ ] Code builds and runs locally (docker compose up -d) or in Codespaces

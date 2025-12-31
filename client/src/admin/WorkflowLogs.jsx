@@ -141,14 +141,30 @@ export default function WorkflowLogs() {
       XLSX.utils.book_append_sheet(wb, makeSheet(reservations, resHeaders), 'Reservations')
       XLSX.utils.book_append_sheet(wb, makeSheet(contracts, conHeaders), 'Contracts')
 
+      const offersTotal = (data.offers?.rows || []).reduce(
+        (s, r) => s + (Number(r.total_nominal) || 0),
+        0
+      )
+      const reservationsTotal = (data.reservations?.rows || []).reduce(
+        (s, r) => s + (Number(r.total_nominal) || 0),
+        0
+      )
+      const contractsTotal = (data.contracts?.rows || []).reduce(
+        (s, r) => s + (Number(r.total_nominal) || 0),
+        0
+      )
+
+      const offersCount = offers.length
+      const reservationsCount = reservations.length
+      const contractsCount = contracts.length
+
       const sumSheet = XLSX.utils.aoa_to_sheet([
-        ['Section', 'Total'],
-        ['Offers', Number(data.offers?.total || 0)],
-        ['Reservations', Number(data.reservations?.total || 0)],
-        ['Contracts', Number(data.contracts?.total || 0)],
-        ['Grand Total', Number(data.grandTotal || 0)]
+        ['Type', 'Count', 'Total Value'],
+        ['Offers', offersCount, offersTotal],
+        ['Reservations', reservationsCount, reservationsTotal],
+        ['Contracts', contractsCount, contractsTotal]
       ])
-      sumSheet['!cols'] = [{ wch: 24 }, { wch: 18 }]
+      sumSheet['!cols'] = [{ wch: 20 }, { wch: 10 }, { wch: 18 }]
       XLSX.utils.book_append_sheet(wb, sumSheet, 'Totals')
 
       const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
@@ -255,13 +271,7 @@ export default function WorkflowLogs() {
               total={data.contracts?.total}
               byStatus={data.contracts?.byStatus}
             />
-            <div style={{ marginTop: 12, fontWeight: 700 }}>
-              Grand Total:{' '}
-              {Number(data.grandTotal || 0).toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2
-              })}
-            </div>
+            <SummaryFooter data={data} />
           </>
         )}
       </div>
@@ -278,6 +288,10 @@ function Section({ title, rows, total, byStatus }) {
       ? byStatus
       : buildStatusBreakdown(list)
 
+  // Fallback: recompute total from rows if API total is missing or zero but we have data.
+  const computedTotal = list.reduce((s, r) => s + (Number(r.total_nominal) || 0), 0)
+  const displayTotal = Number(total || 0) || computedTotal
+
   return (
     <div style={{ marginTop: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -285,7 +299,7 @@ function Section({ title, rows, total, byStatus }) {
         <div style={{ textAlign: 'right' }}>
           <div style={{ fontWeight: 700 }}>
             Total:{' '}
-            {Number(total || 0).toLocaleString(undefined, {
+            {Number(displayTotal || 0).toLocaleString(undefined, {
               minimumFractionDigits: 2,
               maximumFractionDigits: 2
             })}
@@ -335,6 +349,34 @@ function buildStatusBreakdown(rows) {
     map.set(status, existing)
   }
   return Array.from(map.values())
+}
+
+function SummaryFooter({ data }) {
+  const offersRows = data.offers?.rows || []
+  const reservationsRows = data.reservations?.rows || []
+  const contractsRows = data.contracts?.rows || []
+
+  const offersTotal = offersRows.reduce((s, r) => s + (Number(r.total_nominal) || 0), 0)
+  const reservationsTotal = reservationsRows.reduce((s, r) => s + (Number(r.total_nominal) || 0), 0)
+  const contractsTotal = contractsRows.reduce((s, r) => s + (Number(r.total_nominal) || 0), 0)
+
+  const offersCount = offersRows.length
+  const reservationsCount = reservationsRows.length
+  const contractsCount = contractsRows.length
+
+  return (
+    <div style={{ marginTop: 12, fontWeight: 700 }}>
+      <div>
+        Offers: {offersCount} — {formatTotal(offersTotal)}
+      </div>
+      <div>
+        Reservations: {reservationsCount} — {formatTotal(reservationsTotal)}
+      </div>
+      <div>
+        Contracts: {contractsCount} — {formatTotal(contractsTotal)}
+      </div>
+    </div>
+  )
 }
 
 function formatTotal(v) {

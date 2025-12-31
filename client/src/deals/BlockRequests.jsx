@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { fetchWithAuth, API_URL } from '../lib/apiClient.js'
 import LoadingButton from '../components/LoadingButton.jsx'
 import { notifyError, notifySuccess } from '../lib/notifications.js'
@@ -14,6 +15,7 @@ export default function BlockRequests() {
   })()
   const role = user?.role
   const userId = user?.id
+  const location = useLocation()
 
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(false)
@@ -25,6 +27,11 @@ export default function BlockRequests() {
   )
   const [unblockRows, setUnblockRows] = useState([])
   const [loadingUnblock, setLoadingUnblock] = useState(false)
+  const [filterExpired, setFilterExpired] = useState(false)
+
+  const visibleUnblockRows = filterExpired
+    ? unblockRows.filter(r => (r.unblock_reason || '').startsWith('Block duration expired'))
+    : unblockRows
 
   async function load() {
     try {
@@ -64,6 +71,23 @@ export default function BlockRequests() {
       loadUnblock()
     }
   }, [showUnblock])
+
+  // Deep link support: /deals/block-requests?expired=1 opens the Unblock tab
+  // and filters to system-created requests for expired blocks.
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(location.search || '')
+      const isExpiredView = params.get('expired') === '1'
+      if (isExpiredView) {
+        setShowUnblock(true)
+        setFilterExpired(true)
+      } else {
+        setFilterExpired(false)
+      }
+    } catch {
+      setFilterExpired(false)
+    }
+  }, [location.search])
 
   const canCancelRow = (r) => {
     if (role === 'sales_manager') return true
@@ -305,9 +329,9 @@ export default function BlockRequests() {
             </thead>
             <tbody>
               {loadingUnblock && (
-                <tr><td style={td} colSpan={7}>Loading…</td></tr>
+                <tr><td style={td} colSpan={8}>Loading…</td></tr>
               )}
-              {!loadingUnblock && unblockRows.map(r => {
+              {!loadingUnblock && visibleUnblockRows.map(r => {
                 const status = String(r.unblock_status || '').toLowerCase()
                 const statusBadge = (() => {
                   if (status === 'pending_fm') return <span style={badge('#fef9c3', '#854d0e')}>Pending FM</span>
@@ -317,16 +341,34 @@ export default function BlockRequests() {
                   return <span style={badge('#f8fafc', '#334155')}>{r.unblock_status || '-'}</span>
                 })()
                 const overrideNote = (() => {
+                  const notes = []
+                  const isExpired = (r.unblock_reason || '').startsWith('Block duration expired')
+                  if (isExpired) {
+                    notes.push(
+                      <span key="expired" style={badge('#fffbeb', '#92400e')}>
+                        Expired block – system-created request
+                      </span>
+                    )
+                  }
                   // If TM can see this row and FM has not yet approved (no unblock_fm_id) while status is pending_fm,
                   // any TM approval here will be recorded as an override.
                   if (isTM && status === 'pending_fm' && !r.unblock_fm_id) {
-                    return <span style={badge('#fee2e2', '#b91c1c')}>TM override if approved (FM stage bypassed)</span>
+                    notes.push(
+                      <span key="tm-override" style={badge('#fee2e2', '#b91c1c')}>
+                        TM override if approved (FM stage bypassed)
+                      </span>
+                    )
                   }
                   // If FM has already approved (unblock_fm_id present) and status is pending_tm, TM decision is after FM.
                   if (status === 'pending_tm' && r.unblock_fm_id) {
-                    return <span style={badge('#e0f2fe', '#075985')}>FM approved – awaiting TM decision</span>
+                    notes.push(
+                      <span key="fm-approved" style={badge('#e0f2fe', '#075985')}>
+                        FM approved – awaiting TM decision
+                      </span>
+                    )
                   }
-                  return null
+                  if (!notes.length) return null
+                  return <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>{notes}</div>
                 })()
                 return (
                   <tr key={r.id}>
@@ -453,8 +495,8 @@ export default function BlockRequests() {
                 </tr>
                 )
               })}
-              {!loadingUnblock && unblockRows.length === 0 && (
-                <tr><td style={td} colSpan={8}>No pending unblock requests.</td></tr>
+              {!loadingUnblock && visibleUnblockRows.length === 0 && (
+                <tr><td style={td} colSpan={8}>{filterExpired ? 'No expired-block unblock requests.' : 'No pending unblock requests.'}</td></tr>
               )}
             </tbody>
           </table>

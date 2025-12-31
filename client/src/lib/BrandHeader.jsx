@@ -164,6 +164,7 @@ export default function BrandHeader({ title, onLogout }) {
           ...baseWithCalc,
           queuesLink,
           { label: 'Block Requests', href: '/deals/block-requests' },
+          { label: 'Expired Blocks', href: '/deals/block-requests?expired=1' },
           { label: 'Current Blocks', href: '/deals/current-blocks' },
           { label: 'Reservations', href: '/deals/reservations-queue' },
           { label: 'Inventory Changes', href: '/admin/inventory-changes' },
@@ -217,7 +218,8 @@ export default function BrandHeader({ title, onLogout }) {
           { label: 'Payment Threshold Approvals', href: '/admin/payment-thresholds' },
           { label: 'Workflow Logs', href: '/admin/workflow-logs' },
           { label: 'Hold Approvals', href: '/admin/hold-approvals' },
-          { label: 'Unblock Requests', href: '/deals/block-requests' }
+          { label: 'Unblock Requests', href: '/deals/block-requests' },
+          { label: 'Expired Blocks', href: '/deals/block-requests?expired=1' }
         ]
       default:
         return base

@@ -121,6 +121,9 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-12-31 05:15] Workflow Logs — wire nominal totals from calculator snapshots
+  - API: Updated GET /api/reports/workflow-logs in api/src/reportsRoutes.js so Offers/Reservations/Contracts now derive total_nominal from payment_plans.details.calculator.generatedPlan.totals.totalNominal, with fallbacks to the older totalNominalPrice fields when present. This matches how deals and PDFs already compute the nominal offer amount and fixes the “0.00” totals previously shown in the Workflow Logs report despite valid approved plans.
+  - API: Kept the previous fixes for user display names (users.meta->>'name' with email fallback) and restored proper $1/$2-style parameter bindings for consultant/manager/date filters in the same route.
 - [2025-12-31 05:00] Workflow Logs — fix user name lookups and parameter placeholders in reports route
   - API: Updated GET /api/reports/workflow-logs in api/src/reportsRoutes.js so all user display names are derived from users.meta->>'name' with a fallback to email (COALESCE(u.meta->>'name', u.email)) instead of a non-existent users.name column. This removes the “column u.name does not exist” (42703) error when TM/Admin loads the Workflow Logs page.
   - API: Corrected SQL parameter placeholders in reportsRoutes so the WHERE clauses use $1/$2… style bindings again (e.g., pp.created_by = $1), matching the established pattern and preventing potential SQL parsing issues as filters are applied.

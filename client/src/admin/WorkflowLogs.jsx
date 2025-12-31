@@ -154,13 +154,17 @@ export default function WorkflowLogs() {
         0
       )
 
+      const offersCount = offers.length
+      const reservationsCount = reservations.length
+      const contractsCount = contracts.length
+
       const sumSheet = XLSX.utils.aoa_to_sheet([
-        ['Section', 'Total'],
-        ['Offers', offersTotal],
-        ['Reservations', reservationsTotal],
-        ['Contracts', contractsTotal]
+        ['Section', 'Count', 'Total'],
+        ['Offers', offersCount, offersTotal],
+        ['Reservations', reservationsCount, reservationsTotal],
+        ['Contracts', contractsCount, contractsTotal]
       ])
-      sumSheet['!cols'] = [{ wch: 24 }, { wch: 18 }]
+      sumSheet['!cols'] = [{ wch: 24 }, { wch: 10 }, { wch: 18 }]
       XLSX.utils.book_append_sheet(wb, sumSheet, 'Totals')
 
       const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
@@ -356,11 +360,21 @@ function SummaryFooter({ data }) {
   const reservationsTotal = reservationsRows.reduce((s, r) => s + (Number(r.total_nominal) || 0), 0)
   const contractsTotal = contractsRows.reduce((s, r) => s + (Number(r.total_nominal) || 0), 0)
 
+  const offersCount = offersRows.length
+  const reservationsCount = reservationsRows.length
+  const contractsCount = contractsRows.length
+
   return (
     <div style={{ marginTop: 12, fontWeight: 700 }}>
-      <div>Offers Total: {formatTotal(offersTotal)}</div>
-      <div>Reservations Total: {formatTotal(reservationsTotal)}</div>
-      <div>Contracts Total: {formatTotal(contractsTotal)}</div>
+      <div>
+        Offers: {offersCount} deals — {formatTotal(offersTotal)}
+      </div>
+      <div>
+        Reservations: {reservationsCount} records — {formatTotal(reservationsTotal)}
+      </div>
+      <div>
+        Contracts: {contractsCount} records — {formatTotal(contractsTotal)}
+      </div>
     </div>
   )
 }

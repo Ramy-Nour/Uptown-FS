@@ -8,9 +8,10 @@ import { useLoader } from '../lib/loaderContext.jsx'
 import CalculatorApp from '../App.jsx'
 import * as XLSX from 'xlsx'
 import { generateClientOfferPdf } from '../lib/docExports.js'
-
-const th = { textAlign: 'left', padding: 10, borderBottom: '1px solid #eef2f7', fontSize: 13, color: '#475569', background: '#f9fbfd' }
-const td = { padding: 10, borderBottom: '1px solid #f2f5fa', fontSize: 14 }
+import DealHeaderSection from './components/DealHeaderSection.jsx'
+import DealAuditTrail from './components/DealAuditTrail.jsx'
+import DealActionsBar from './components/DealActionsBar.jsx'
+import DealEditRequestModal from './components/DealEditRequestModal.jsx'
 
 export default function DealDetail() {
   const { id } = useParams()
@@ -25,6 +26,17 @@ export default function DealDetail() {
   const { setShow, setMessage } = useLoader()
   const user = JSON.parse(localStorage.getItem('auth_user') || '{}')
   const role = user?.role || 'user'
+  const canViewUnitHistory = [
+    'crm_admin',
+    'financial_manager',
+    'financial_admin',
+    'admin',
+    'superadmin',
+    'ceo',
+    'chairman',
+    'vice_chairman',
+    'top_management'
+  ].includes(role)
 
   // Conflict visibility: other deals for the same unit (for managers)
   const [unitDeals, setUnitDeals] = useState([])
@@ -260,6 +272,8 @@ export default function DealDetail() {
 
   if (error) return <p style={{ color: '#e11d48' }}>{error}</p>
   if (!deal) return <p>Loading…</p>
+
+  const dealUnitId = Number(deal?.details?.calculator?.unitInfo?.unit_id) || null
 
   const schedule = deal?.details?.calculator?.generatedPlan?.schedule || []
   const totals = deal?.details?.calculator?.generatedPlan?.totals || null
@@ -540,140 +554,34 @@ export default function DealDetail() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-        <h2 style={{ marginTop: 0 }}>Deal #{deal.id}</h2>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <LoadingButton onClick={() => navigate('/deals')}>Back to Dashboard</LoadingButton>
-          {deal?.details?.calculator?.unitInfo?.unit_id && (
-            <LoadingButton
-              onClick={() => navigate(`/deals?unitId=${Number(deal.details.calculator.unitInfo.unit_id)}`)}
-              title="View all deals created for this unit"
-            >
-              View Deals for This Unit
-            </LoadingButton>
-          )}
-        </div>
-      </div>
+      <DealHeaderSection
+        deal={deal}
+        dealUnitId={dealUnitId}
+        canViewUnitHistory={canViewUnitHistory}
+        unitDeals={unitDeals}
+        dealStatusLabel={dealStatusLabel}
+        dealStatusColor={dealStatusColor}
+        overrideLabel={overrideLabel}
+        overrideColor={overrideColor}
+        unitAvailabilityLabel={unitAvailabilityLabel}
+        unitStatusColor={unitStatusColor}
+        autoApprovedOnBlock={autoApprovedOnBlock}
+        hasPricingBreakdown={hasPricingBreakdown}
+        role={role}
+        onBack={() => navigate('/deals')}
+        onViewUnitDeals={dealUnitId ? () => navigate(`/deals?unitId=${dealUnitId}`) : undefined}
+        onViewUnitHistory={
+          dealUnitId && canViewUnitHistory
+            ? () => navigate(`/admin/unit-history?unitId=${dealUnitId}`)
+            : undefined
+        }
+      />
 
       {!editCalc ? (
-          <div style={{ marginBottom: 16 }}>
-            {/* Conflict banner: other deals for this unit */}
-            {Array.isArray(unitDeals) && unitDeals.length > 0 && (
-              <div style={{ marginBottom: 10, padding: '8px 10px', borderRadius: 8, border: '1px solid #fed7aa', background: '#fffbeb', color: '#9a3412', fontSize: 13 }}>
-                <div style={{ fontWeight: 600, marginBottom: 4 }}>
-                  Other deals exist for this unit: {unitDeals.length} deal(s).
-                </div>
-                <div>
-                  {unitDeals.slice(0, 4).map(d => (
-                    <span key={d.id} style={{ marginRight: 8 }}>
-                      #{d.id} ({d.status || 'unknown'})
-                    </span>
-                  ))}
-                  {unitDeals.length > 4 && <span>…</span>}
-                </div>
-                <div style={{ marginTop: 4, fontSize: 12 }}>
-                  This does not change this deal’s validity, but Sales/Finance should be aware of potentially competing offers on the same unit.
-                </div>
-              </div>
-            )}
-            <p><strong>Title:</strong> {deal.title}</p>
-            <p><strong>Amount:</strong> {Number(deal.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
-
-            {/* Compact status/override/unit summary */}
-          <div
-            style={{
-              margin: '6px 0 10px 0',
-              padding: '10px 12px',
-              borderRadius: 10,
-              border: '1px solid #e6eaf0',
-              background: '#f9fafb',
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: 16
-            }}
-          >
-            <div>
-              <div style={{ fontSize: 12, textTransform: 'uppercase', color: '#6b7280' }}>Deal Status</div>
-              <div>
-                <span
-                  style={{
-                    padding: '2px 10px',
-                    borderRadius: 999,
-                    fontSize: 12,
-                    background: '#f8fafc',
-                    color: dealStatusColor,
-                    textTransform: 'none'
-                  }}
-                >
-                  {dealStatusLabel}
-                </span>
-              </div>
-            </div>
-            <div>
-              <div style={{ fontSize: 12, textTransform: 'uppercase', color: '#6b7280' }}>Override</div>
-              <div>
-                <span
-                  style={{
-                    padding: '2px 10px',
-                    borderRadius: 999,
-                    fontSize: 12,
-                    background: '#f8fafc',
-                    color: overrideColor,
-                    textTransform: 'none'
-                  }}
-                >
-                  {overrideLabel}
-                </span>
-              </div>
-            </div>
-            <div>
-              <div style={{ fontSize: 12, textTransform: 'uppercase', color: '#6b7280' }}>Unit Availability</div>
-              <div>
-                <span
-                  style={{
-                    padding: '2px 10px',
-                    borderRadius: 999,
-                    fontSize: 12,
-                    background: '#f8fafc',
-                    color: unitStatusColor,
-                    textTransform: 'uppercase',
-                    letterSpacing: 0.3
-                  }}
-                >
-                  {unitAvailabilityLabel}
-                </span>
-              </div>
-            </div>
-          </div>
-          {autoApprovedOnBlock && (
-            <div style={{ margin: '-4px 0 10px 0', fontSize: 12, color: '#6b7280' }}>
-              Note: This deal was automatically marked as "approved" when the Financial Manager approved the unit block (normal criteria path, no override).
-            </div>
-          )}
-
-          <p><strong>Unit Type:</strong> {deal.unit_type || '-'}</p>
-          {/* Dates summary near header */}
-          <div style={{ margin: '6px 0 10px 0', padding: '8px 10px', borderRadius: 8, background: '#fbfaf7', border: '1px solid #ead9bd', display: 'inline-flex', gap: 16, flexWrap: 'wrap' }}>
-            <div><strong>Offer Date:</strong> {(deal?.details?.calculator?.inputs?.offerDate) || new Date().toISOString().slice(0, 10)}</div>
-            <div><strong>First Payment Date:</strong> {(deal?.details?.calculator?.inputs?.firstPaymentDate) || (deal?.details?.calculator?.inputs?.offerDate) || new Date().toISOString().slice(0, 10)}</div>
-          </div>
-          {!hasPricingBreakdown && (role === 'property_consultant' || role === 'financial_admin' || role === 'financial_manager') && (
-            <div style={{ margin: '4px 0 10px 0', padding: '8px 10px', borderRadius: 8, border: '1px solid #f97316', background: '#fff7ed', color: '#9a3412', fontSize: 13 }}>
-              <div style={{ fontWeight: 600, marginBottom: 2 }}>Unit price breakdown is missing from this offer snapshot.</div>
-              <div>Open “Edit Offer”, review the calculator, and click Save to refresh pricing before printing Client Offers or Reservation Forms.</div>
-            </div>
-          )}
-          {deal.status === 'rejected' && deal.rejection_reason ? (
-            <div style={{ marginTop: 8, padding: '10px 12px', borderRadius: 10, border: '1px solid #ef4444', background: '#fef2f2', color: '#7f1d1d' }}>
-              <strong>Rejection Reason:</strong>
-              <div style={{ marginTop: 4 }}>{deal.rejection_reason}</div>
-            </div>
-          ) : null}
+        <div style={{ marginBottom: 16 }}>
           {/* Property Consultant (offer creator) -- previously labeled "Sales Rep" */}
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '8px 0' }}>
             <strong>Property Consultant:</strong>
-            {/* For consultants themselves (and most roles), this is fixed to the offer creator.
-                Admins can still override via the dropdown if needed. */}
             {role !== 'admin' && role !== 'superadmin' ? (
               <span>
                 {deal.created_by_email || deal.created_by}
@@ -686,7 +594,6 @@ export default function DealDetail() {
                 onChange={async (e) => {
                   const salesRepId = e.target.value ? Number(e.target.value) : null
                   setAssigning(true)
-                  // optimistic UI
                   setDeal(d => ({ ...d, sales_rep_id: salesRepId }))
                   try {
                     const resp = await fetchWithAuth(`${API_URL}/api/deals/${id}`, {
@@ -697,7 +604,6 @@ export default function DealDetail() {
                     const data = await resp.json()
                     if (!resp.ok) {
                       notifyError(data?.error?.message || 'Failed to assign property consultant')
-                      // revert optimistic update
                       setDeal(d => ({ ...d, sales_rep_id: deal.sales_rep_id || null }))
                     } else {
                       notifySuccess('Property consultant assignment updated.')
@@ -713,7 +619,9 @@ export default function DealDetail() {
               >
                 <option value="">— Use Offer Creator (default) —</option>
                 {salesList.map(s => (
-                  <option key={s.id} value={s.id}>{s.name} {s.email ? `(${s.email})` : ''}</option>
+                  <option key={s.id} value={s.id}>
+                    {s.name} {s.email ? `(${s.email})` : ''}
+                  </option>
                 ))}
               </select>
             )}
@@ -728,7 +636,6 @@ export default function DealDetail() {
               onChange={async (e) => {
                 const policyId = e.target.value ? Number(e.target.value) : null
                 setSettingPolicy(true)
-                // optimistic
                 setDeal(d => ({ ...d, policy_id: policyId }))
                 try {
                   const resp = await fetchWithAuth(`${API_URL}/api/deals/${id}`, {
@@ -754,20 +661,43 @@ export default function DealDetail() {
             >
               <option value="">— Use Active Policy —</option>
               {policies.map(p => (
-                <option key={p.id} value={p.id}>{p.name} {p.active ? '' : '(inactive)'}</option>
+                <option key={p.id} value={p.id}>
+                  {p.name} {p.active ? '' : '(inactive)'}
+                </option>
               ))}
             </select>
             {policiesError ? <small style={{ color: '#e11d48' }}>{policiesError}</small> : null}
           </div>
 
           <h3>Payment Schedule</h3>
-          {/* Dates summary for visibility */}
-          <div style={{ margin: '6px 0 10px 0', padding: '8px 10px', borderRadius: 8, background: '#fbfaf7', border: '1px solid #ead9bd', display: 'inline-flex', gap: 16, flexWrap: 'wrap' }}>
-            <div><strong>Offer Date:</strong> {(deal?.details?.calculator?.inputs?.offerDate) || new Date().toISOString().slice(0, 10)}</div>
-            <div><strong>First Payment Date:</strong> {(deal?.details?.calculator?.inputs?.firstPaymentDate) || (deal?.details?.calculator?.inputs?.offerDate) || new Date().toISOString().slice(0, 10)}</div>
+          <div
+            style={{
+              margin: '6px 0 10px 0',
+              padding: '8px 10px',
+              borderRadius: 8,
+              background: '#fbfaf7',
+              border: '1px solid #ead9bd',
+              display: 'inline-flex',
+              gap: 16,
+              flexWrap: 'wrap'
+            }}
+          >
+            <div>
+              <strong>Offer Date:</strong>{' '}
+              {deal?.details?.calculator?.inputs?.offerDate ||
+                new Date().toISOString().slice(0, 10)}
+            </div>
+            <div>
+              <strong>First Payment Date:</strong>{' '}
+              {deal?.details?.calculator?.inputs?.firstPaymentDate ||
+                deal?.details?.calculator?.inputs?.offerDate ||
+                new Date().toISOString().slice(0, 10)}
+            </div>
           </div>
           {schedule.length === 0 ? (
-            <p style={{ color: '#64748b' }}>No saved schedule. Use Edit Offer to generate and save one.</p>
+            <p style={{ color: '#64748b' }}>
+              No saved schedule. Use Edit Offer to generate and save one.
+            </p>
           ) : (
             <div style={{ overflow: 'auto', border: '1px solid #e6eaf0', borderRadius: 12 }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -786,7 +716,12 @@ export default function DealDetail() {
                       <td style={td}>{idx + 1}</td>
                       <td style={td}>{row.month}</td>
                       <td style={td}>{row.label}</td>
-                      <td style={{ ...td, textAlign: 'right' }}>{Number(row.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td style={{ ...td, textAlign: 'right' }}>
+                        {Number(row.amount || 0).toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2
+                        })}
+                      </td>
                       <td style={td}>{row.writtenAmount}</td>
                     </tr>
                   ))}
@@ -794,9 +729,23 @@ export default function DealDetail() {
                 {totals && (
                   <tfoot>
                     <tr>
-                      <td colSpan={3} style={{ ...td, textAlign: 'right', fontWeight: 700 }}>Total</td>
-                      <td style={{ ...td, textAlign: 'right', fontWeight: 700 }}>
-                        {Number(totals.totalNominal || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      <td
+                        colSpan={3}
+                        style={{ ...td, textAlign: 'right', fontWeight: 700 }}
+                      >
+                        Total
+                      </td>
+                      <td
+                        style={{
+                          ...td,
+                          textAlign: 'right',
+                          fontWeight: 700
+                        }}
+                      >
+                        {Number(totals.totalNominal || 0).toLocaleString(
+                          undefined,
+                          { minimumFractionDigits: 2 }
+                        )}
                       </td>
                       <td></td>
                     </tr>
@@ -806,9 +755,15 @@ export default function DealDetail() {
             </div>
           )}
 
-          {/* Acceptance Evaluation summary */}
           {evaluation && (
-            <div style={{ marginTop: 16, border: '1px solid #e6eaf0', borderRadius: 12, padding: 12 }}>
+            <div
+              style={{
+                marginTop: 16,
+                border: '1px solid #e6eaf0',
+                borderRadius: 12,
+                padding: 12
+              }}
+            >
               <h3 style={{ marginTop: 0 }}>Acceptance Evaluation</h3>
               {(() => {
                 const ok = evaluation.decision === 'ACCEPT'
@@ -1132,513 +1087,448 @@ export default function DealDetail() {
       })()}
 
       {/* Actions — restrict printing offer until approved */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-        {canEdit && !editCalc && <LoadingButton onClick={() => setEditCalc(true)}>Edit Offer</LoadingButton>}
-        {canSubmit && role !== 'property_consultant' && (
-          <LoadingButton
-            onClick={async () => {
-              const savedPlan = deal?.details?.calculator?.generatedPlan
-              if (!savedPlan || !Array.isArray(savedPlan.schedule) || savedPlan.schedule.length === 0) {
-                notifyError('Please generate and save a payment plan before submitting.')
-                return
-              }
-              setSubmitting(true)
-              try {
-                const resp = await fetchWithAuth(`${API_URL}/api/deals/${id}/submit`, { method: 'POST' })
-                const data = await resp.json()
-                if (!resp.ok) {
-                  notifyError(data?.error?.message || 'Submit failed')
-                } else {
-                  notifySuccess('Deal submitted successfully.')
-                  await load()
-                }
-              } catch (err) {
-                notifyError(err, 'Submit failed')
-              } finally {
-                setSubmitting(false)
-              }
-            }}
-            loading={submitting}
-            variant="primary"
-          >
-            Submit for Approval
-          </LoadingButton>
-        )}
-        
-        {/* Sales Manager Approval Action */}
-        {(role === 'sales_manager' && deal.status === 'pending_approval') && (
-          <LoadingButton
-            onClick={async () => {
-              if (!window.confirm('Approve this deal?')) return
-              try {
-                const resp = await fetchWithAuth(`${API_URL}/api/deals/${id}/approve`, { method: 'POST' })
-                const data = await resp.json()
-                if (!resp.ok) notifyError(data?.error?.message || 'Approval failed')
-                else { notifySuccess('Deal approved.'); await load() }
-              } catch (err) {
-                notifyError(err, 'Approval failed')
-              }
-            }}
-            variant="primary"
-            style={{ background: '#10b981', borderColor: '#10b981' }}
-          >
-            Approve Deal
-          </LoadingButton>
-        )}
-
-        {/* Request Override button for Property Consultant or Managers when evaluation is REJECT */}
-        {evaluation?.decision === 'REJECT' && (role === 'property_consultant' || role === 'sales_manager' || role === 'financial_manager' || role === 'admin' || role === 'superadmin') && (
-          <LoadingButton
-            onClick={async () => {
-              const reason = window.prompt('Provide a reason for override request (optional):', '')
-              try {
-                const resp = await fetchWithAuth(`${API_URL}/api/deals/${id}/request-override`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ reason: reason || null })
-                })
-                const data = await resp.json()
-                if (!resp.ok) {
-                  notifyError(data?.error?.message || 'Failed to request override')
-                } else {
-                  notifySuccess('Override requested. Waiting for Sales Manager review.')
-                  await load()
-                }
-              } catch (err) {
-                notifyError(err, 'Failed to request override')
-              }
-            }}
-          >
-            Request Override
-          </LoadingButton>
-        )}
-        {(role === 'property_consultant' && (deal.status === 'approved' || deal.status === 'draft')) && (
-          <>
-            {/* Export Client Offer (PDF) &#8211; same behavior as Calculator page */}
-            <LoadingButton
-              onClick={async () => {
-                try {
-                  const snap = deal?.details?.calculator
-                  const plan = snap?.generatedPlan
-                  const schedule = plan?.schedule || []
-                  if (!plan || !schedule.length) {
-                    notifyError('No saved payment schedule found. Use Edit Offer to generate and save a plan first.')
-                    return
-                  }
-                  const totals = plan.totals || {
-                    totalNominal: schedule.reduce((s, e) => s + (Number(e.amount) || 0), 0)
-                  }
-                  const ci = snap?.clientInfo || {}
-                  const numBuyersRaw = Number(ci.number_of_buyers)
-                  const numBuyers = Math.min(Math.max(numBuyersRaw || 1, 1), 4)
-                  const buyers = []
-                  for (let i = 1; i <= numBuyers; i++) {
-                    const sfx = i === 1 ? '' : `_${i}`
-                    buyers.push({
-                      buyer_name: ci[`buyer_name${sfx}`] || '',
-                      phone_primary: ci[`phone_primary${sfx}`] || '',
-                      phone_secondary: ci[`phone_secondary${sfx}`] || '',
-                      email: ci[`email${sfx}`] || ''
-                    })
-                  }
-
-                  // Only include a breakdown when the snapshot actually has one.
-                  // For older deals without unitPricingBreakdown, omit the field so the
-                  // server can fall back to the latest approved unit_model_pricing.
-                  const snapBreakdown = snap?.unitPricingBreakdown
-                  const body = {
-                    language: snap?.language || 'en',
-                    currency: snap?.currency || 'EGP',
-                    buyers,
-                    schedule,
-                    totals,
-                    offer_date: snap?.inputs?.offerDate || new Date().toISOString().slice(0, 10),
-                    first_payment_date: snap?.inputs?.firstPaymentDate || snap?.inputs?.offerDate || new Date().toISOString().slice(0, 10),
-                    unit: {
-                      unit_code: snap?.unitInfo?.unit_code || '',
-                      unit_type: snap?.unitInfo?.unit_type || '',
-                      unit_id: Number(snap?.unitInfo?.unit_id) || null
-                    }
-                  }
-
-                  if (snapBreakdown) {
-                    body.unit_pricing_breakdown = {
-                      base: Number(snapBreakdown.base || 0),
-                      garden: Number(snapBreakdown.garden || 0),
-                      roof: Number(snapBreakdown.roof || 0),
-                      storage: Number(snapBreakdown.storage || 0),
-                      garage: Number(snapBreakdown.garage || 0),
-                      maintenance: Number(snapBreakdown.maintenance || 0),
-                      totalExclMaintenance: Number(snapBreakdown.totalExclMaintenance || 0)
-                    }
-                  }
-
-                  const { blob, filename } = await generateClientOfferPdf(body, API_URL)
-                  const url = URL.createObjectURL(blob)
-                  const a = document.createElement('a')
-                  a.href = url
-                  a.download = filename
-                  document.body.appendChild(a); a.click(); document.body.removeChild(a)
-                  URL.revokeObjectURL(url)
-                  notifySuccess('Client Offer PDF exported successfully.')
-                } catch (e) {
-                  notifyError(e, 'Failed to export Client Offer PDF')
-                }
-              }}
-            >
-              Print Offer (Client Offer PDF)
-            </LoadingButton>
-
-            {/* Unit block / unblock action based on latest unit status and evaluation */}
-            {(() => {
-              const snap = deal?.details?.calculator
-              const savedUnitInfo = snap?.unitInfo || {}
-              const unitId = Number(savedUnitInfo.unit_id) || null
-
-              if (!unitId) {
-                return null
-              }
-
-              // Prefer live unit status from DB (joined in dealsRoutes) over the snapshot,
-              // since the calculator snapshot may still show AVAILABLE after a block/unblock.
-              const liveStatus = deal?.current_unit_status
-              const liveAvailable = deal?.current_unit_available
-              const normalizedLiveStatus = typeof liveStatus === 'string' ? liveStatus.toUpperCase() : null
-
-              const snapshotBlocked = savedUnitInfo.unit_status === 'BLOCKED' || savedUnitInfo.available === false
-              const liveBlocked = normalizedLiveStatus === 'BLOCKED' || liveAvailable === false
-
-              const isBlocked = liveBlocked || snapshotBlocked
-
-              const decision = evaluation?.decision || null
-              const overrideApproved = !!deal?.override_approved_at
-
-              // Policy: allow block/unblock only when the original evaluation passed OR a TM override is approved.
-              const canBlockOrUnblock = !!unitId && (decision === 'ACCEPT' || overrideApproved)
-
-              const label = isBlocked ? 'Request Unit Unblock' : 'Request Unit Block'
-              const title = canBlockOrUnblock
-                ? (isBlocked ? 'Request to unblock this unit' : 'Request a block on this unit')
-                : 'Available after plan is ACCEPTED or override is approved (and unit is linked to this deal)'
-
-              return (
-                <LoadingButton
-                  onClick={async () => {
-                    try {
-                      if (isBlocked) {
-                        // Already blocked: send unblock request without duration
-                        const reason = window.prompt('Reason for unblock request (optional):', '') || ''
-                        const resp = await fetchWithAuth(`${API_URL}/api/blocks/request-unblock`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ unitId, reason })
-                        })
-                        const data = await resp.json()
-                        if (!resp.ok) {
-                          notifyError(data?.error?.message || 'Failed to request unit unblock')
-                        } else {
-                          notifySuccess('Unblock request submitted. Waiting for Financial Manager review.')
-                        }
-                      } else {
-                        // Not blocked: request a new block with duration + optional reason
-                        const durationStr = window.prompt('Block duration in days (default 7):', '7')
-                        if (durationStr === null) return
-                        const durationDays = Number(durationStr) || 7
-                        const reason = window.prompt('Reason for block (optional):', '') || ''
-                        const resp = await fetchWithAuth(`${API_URL}/api/blocks/request`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ unitId, durationDays, reason })
-                        })
-                        const data = await resp.json()
-                        if (!resp.ok) {
-                          notifyError(data?.error?.message || 'Failed to request unit block')
-                        } else {
-                          notifySuccess('Block request submitted for approval.')
-                        }
-                      }
-                    } catch (err) {
-                      notifyError(err, isBlocked ? 'Failed to request unit unblock' : 'Failed to request unit block')
-                    }
-                  }}
-                  disabled={!canBlockOrUnblock}
-                  style={{ opacity: canBlockOrUnblock ? 1 : 0.6 }}
-                  title={title}
-                >
-                  {label}
-                </LoadingButton>
-              )
-            })()}
-          </>
-        )}
-        {(role === 'financial_admin') && (
-          <>
-            {(() => {
-              const fmApproved = !!deal?.fm_review_at
-              return (
-                <>
-                  <LoadingButton
-                    onClick={() => setReservationModalOpen(true)}
-                    disabled={!fmApproved}
-                    title={fmApproved ? 'Generate Reservation Form (after FM approval)' : 'Available after Financial Manager approval'}
-                  >
-                    Generate Reservation Form (PDF)
-                  </LoadingButton>
-
-                  <ReservationFormModal
-                    open={reservationModalOpen}
-                    defaultDate={
-                      approvedReservation?.reservation_date
-                        ? new Date(approvedReservation.reservation_date).toISOString().slice(0, 10)
-                        : new Date().toISOString().slice(0, 10)
-                    }
-                    defaultLanguage={approvedReservation?.language || 'en'}
-                    defaultCurrency=""
-                    defaultPreliminaryPayment={
-                      approvedReservation ? Number(approvedReservation.preliminary_payment || 0) : ''
-                    }
-                    preliminaryLocked={!!approvedReservation}
-                    loading={reservationGenerating}
-                    progress={reservationProgress}
-                    onCancel={() => setReservationModalOpen(false)}
-                    onGenerate={async (opts) => {
-                      let timer = null
-                      try {
-                        setReservationGenerating(true)
-                        setReservationProgress(10)
-                        timer = setInterval(() => {
-                          setReservationProgress(prev => (prev >= 90 ? prev : prev + 5))
-                        }, 300)
-
-                        setMessage('Generating Reservation Form…')
-                        setShow(true)
-                        const resp = await fetchWithAuth(`${API_URL}/api/documents/reservation-form`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            deal_id: Number(deal.id),
-                            ...opts
-                          })
-                        })
-                        if (!resp.ok) {
-                          let errMsg = 'Failed to generate reservation form'
-                          try {
-                            const j = await resp.json()
-                            errMsg = j?.error?.message || errMsg
-                          } catch {}
-                          notifyError(errMsg)
-                          return
-                        }
-                        const blob = await resp.blob()
-                        const ts = new Date().toISOString().replace(/[:.]/g, '-')
-                        const filename = `reservation_form_${ts}.pdf`
-                        const url = URL.createObjectURL(blob)
-                        const a = document.createElement('a')
-                        a.href = url; a.download = filename
-                        document.body.appendChild(a); a.click(); document.body.removeChild(a)
-                        URL.revokeObjectURL(url)
-                        setReservationProgress(100)
-                        setReservationModalOpen(false)
-                        notifySuccess('Reservation Form generated successfully.')
-                      } catch (err) {
-                        notifyError(err, 'Failed to generate reservation form')
-                      } finally {
-                        if (timer) clearInterval(timer)
-                        setReservationGenerating(false)
-                        setTimeout(() => setReservationProgress(0), 800)
-                        setShow(false)
-                      }
-                    }}
-                  />
-                </>
-              )
-            })()}
-            <LoadingButton onClick={() => setShowEditModal(true)}>
-              Request Edits From Consultant
-            </LoadingButton>
-          </>
-        )}
-        {(role === 'contract_person' && deal.status === 'approved') && (
-          <LoadingButton onClick={() => generateDocFromSaved('contract')}>Generate Contract (PDF)</LoadingButton>
-        )}
-        {role === 'financial_admin' && (
-          <LoadingButton onClick={generateChecksSheetFromSaved}>Generate Checks Sheet (.xlsx)</LoadingButton>
-        )}
-        <LoadingButton
-          onClick={async () => {
-            const salesPersonId = deal.sales_rep_id || deal.created_by
-            if (!salesPersonId) {
-              notifyError('Missing Property Consultant for this deal.')
-              return
+      <DealActionsBar
+        deal={deal}
+        role={role}
+        canEdit={canEdit}
+        canSubmit={canSubmit}
+        editCalc={editCalc}
+        evaluation={evaluation}
+        approvedReservation={approvedReservation}
+        reservationModalOpen={reservationModalOpen}
+        reservationGenerating={reservationGenerating}
+        reservationProgress={reservationProgress}
+        calcCommissionLoading={calcCommissionLoading}
+        onToggleEditCalc={() => setEditCalc(true)}
+        onSubmitDeal={async () => {
+          const savedPlan = deal?.details?.calculator?.generatedPlan
+          if (
+            !savedPlan ||
+            !Array.isArray(savedPlan.schedule) ||
+            savedPlan.schedule.length === 0
+          ) {
+            notifyError(
+              'Please generate and save a payment plan before submitting.'
+            )
+            return
+          }
+          setSubmitting(true)
+          try {
+            const resp = await fetchWithAuth(
+              `${API_URL}/api/deals/${id}/submit`,
+              { method: 'POST' }
+            )
+            const data = await resp.json()
+            if (!resp.ok) {
+              notifyError(data?.error?.message || 'Submit failed')
+            } else {
+              notifySuccess('Deal submitted successfully.')
+              await load()
             }
-            setCalcCommissionLoading(true)
-            try {
-              const resp = await fetchWithAuth(`${API_URL}/api/commissions/calc-and-save`, {
+          } catch (err) {
+            notifyError(err, 'Submit failed')
+          } finally {
+            setSubmitting(false)
+          }
+        }}
+        onApproveDealAsSM={async () => {
+          if (!window.confirm('Approve this deal?')) return
+          try {
+            const resp = await fetchWithAuth(
+              `${API_URL}/api/deals/${id}/approve`,
+              { method: 'POST' }
+            )
+            const data = await resp.json()
+            if (!resp.ok) {
+              notifyError(data?.error?.message || 'Approval failed')
+            } else {
+              notifySuccess('Deal approved.')
+              await load()
+            }
+          } catch (err) {
+            notifyError(err, 'Approval failed')
+          }
+        }}
+        onRequestOverride={async () => {
+          const reason = window.prompt(
+            'Provide a reason for override request (optional):',
+            ''
+          )
+          try {
+            const resp = await fetchWithAuth(
+              `${API_URL}/api/deals/${id}/request-override`,
+              {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ deal_id: deal.id, sales_person_id: salesPersonId })
+                body: JSON.stringify({ reason: reason || null })
+              }
+            )
+            const data = await resp.json()
+            if (!resp.ok) {
+              notifyError(
+                data?.error?.message || 'Failed to request override'
+              )
+            } else {
+              notifySuccess(
+                'Override requested. Waiting for Sales Manager review.'
+              )
+              await load()
+            }
+          } catch (err) {
+            notifyError(err, 'Failed to request override')
+          }
+        }}
+        onGenerateClientOfferPdf={async () => {
+          try {
+            const snap = deal?.details?.calculator
+            const plan = snap?.generatedPlan
+            const scheduleLocal = plan?.schedule || []
+            if (!plan || !scheduleLocal.length) {
+              notifyError(
+                'No saved payment schedule found. Use Edit Offer to generate and save a plan first.'
+              )
+              return
+            }
+            const totalsLocal = plan.totals || {
+              totalNominal: scheduleLocal.reduce(
+                (s, e) => s + (Number(e.amount) || 0),
+                0
+              )
+            }
+            const ci = snap?.clientInfo || {}
+            const numBuyersRaw = Number(ci.number_of_buyers)
+            const numBuyers = Math.min(Math.max(numBuyersRaw || 1, 1), 4)
+            const buyers = []
+            for (let i = 1; i <= numBuyers; i++) {
+              const sfx = i === 1 ? '' : `_${i}`
+              buyers.push({
+                buyer_name: ci[`buyer_name${sfx}`] || '',
+                phone_primary: ci[`phone_primary${sfx}`] || '',
+                phone_secondary: ci[`phone_secondary${sfx}`] || '',
+                email: ci[`email${sfx}`] || ''
               })
+            }
+
+            const snapBreakdownLocal = snap?.unitPricingBreakdown
+            const body = {
+              language: snap?.language || 'en',
+              currency: snap?.currency || 'EGP',
+              buyers,
+              schedule: scheduleLocal,
+              totals: totalsLocal,
+              offer_date:
+                snap?.inputs?.offerDate ||
+                new Date().toISOString().slice(0, 10),
+              first_payment_date:
+                snap?.inputs?.firstPaymentDate ||
+                snap?.inputs?.offerDate ||
+                new Date().toISOString().slice(0, 10),
+              unit: {
+                unit_code: snap?.unitInfo?.unit_code || '',
+                unit_type: snap?.unitInfo?.unit_type || '',
+                unit_id: Number(snap?.unitInfo?.unit_id) || null
+              }
+            }
+
+            if (snapBreakdownLocal) {
+              body.unit_pricing_breakdown = {
+                base: Number(snapBreakdownLocal.base || 0),
+                garden: Number(snapBreakdownLocal.garden || 0),
+                roof: Number(snapBreakdownLocal.roof || 0),
+                storage: Number(snapBreakdownLocal.storage || 0),
+                garage: Number(snapBreakdownLocal.garage || 0),
+                maintenance: Number(snapBreakdownLocal.maintenance || 0),
+                totalExclMaintenance: Number(
+                  snapBreakdownLocal.totalExclMaintenance || 0
+                )
+              }
+            }
+
+            const { blob, filename } = await generateClientOfferPdf(
+              body,
+              API_URL
+            )
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = filename
+            document.body.appendChild(a)
+            a.click()
+            document.body.removeChild(a)
+            URL.revokeObjectURL(url)
+            notifySuccess('Client Offer PDF exported successfully.')
+          } catch (e) {
+            notifyError(e, 'Failed to export Client Offer PDF')
+          }
+        }}
+        onBlockOrUnblockUnit={async () => {
+          const snap = deal?.details?.calculator
+          const savedUnitInfo = snap?.unitInfo || {}
+          const unitId = Number(savedUnitInfo.unit_id) || null
+
+          if (!unitId) {
+            return
+          }
+
+          const liveStatus = deal?.current_unit_status
+          const liveAvailable = deal?.current_unit_available
+          const normalizedLiveStatus =
+            typeof liveStatus === 'string' ? liveStatus.toUpperCase() : null
+
+          const snapshotBlocked =
+            savedUnitInfo.unit_status === 'BLOCKED' ||
+            savedUnitInfo.available === false
+          const liveBlocked =
+            normalizedLiveStatus === 'BLOCKED' || liveAvailable === false
+
+          const isBlocked = liveBlocked || snapshotBlocked
+
+          const decision = evaluation?.decision || null
+          const overrideApproved = !!deal?.override_approved_at
+          const canBlockOrUnblockLocal =
+            !!unitId && (decision === 'ACCEPT' || overrideApproved)
+
+          const label = isBlocked
+            ? 'Request Unit Unblock'
+            : 'Request Unit Block'
+          const title = canBlockOrUnblockLocal
+            ? isBlocked
+              ? 'Request to unblock this unit'
+              : 'Request a block on this unit'
+            : 'Available after plan is ACCEPTED or override is approved (and unit is linked to this deal)'
+
+          if (!canBlockOrUnblockLocal) {
+            notifyError(title)
+            return
+          }
+
+          try {
+            if (isBlocked) {
+              const reason =
+                window.prompt(
+                  'Reason for unblock request (optional):',
+                  ''
+                ) || ''
+              const resp = await fetchWithAuth(
+                `${API_URL}/api/blocks/request-unblock`,
+                {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ unitId, reason })
+                }
+              )
               const data = await resp.json()
               if (!resp.ok) {
-                notifyError(data?.error?.message || 'Failed to calculate commission')
+                notifyError(
+                  data?.error?.message || 'Failed to request unit unblock'
+                )
               } else {
-                notifySuccess(`Commission calculated: ${Number(data.commission.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`)
-                await load()
+                notifySuccess(
+                  'Unblock request submitted. Waiting for Financial Manager review.'
+                )
               }
-            } catch (err) {
-              notifyError(err, 'Failed to calculate commission')
-            } finally {
-              setCalcCommissionLoading(false)
+            } else {
+              const durationStr = window.prompt(
+                'Block duration in days (default 7):',
+                '7'
+              )
+              if (durationStr === null) return
+              const durationDays = Number(durationStr) || 7
+              const reason =
+                window.prompt('Reason for block (optional):', '') || ''
+              const resp = await fetchWithAuth(
+                `${API_URL}/api/blocks/request`,
+                {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ unitId, durationDays, reason })
+                }
+              )
+              const data = await resp.json()
+              if (!resp.ok) {
+                notifyError(
+                  data?.error?.message || 'Failed to request unit block'
+                )
+              } else {
+                notifySuccess('Block request submitted for approval.')
+              }
             }
-          }}
-          loading={calcCommissionLoading}
-        >
-          Calculate Commission
-        </LoadingButton>
-      </div>
+          } catch (err) {
+            notifyError(
+              err,
+              isBlocked
+                ? 'Failed to request unit unblock'
+                : 'Failed to request unit block'
+            )
+          }
+        }}
+        onOpenReservationModal={() => setReservationModalOpen(true)}
+        onCloseReservationModal={() => setReservationModalOpen(false)}
+        onGenerateReservationFormPdf={async (opts) => {
+          let timer = null
+          try {
+            setReservationGenerating(true)
+            setReservationProgress(10)
+            timer = setInterval(() => {
+              setReservationProgress(prev => (prev >= 90 ? prev : prev + 5))
+            }, 300)
 
-      <h3>Audit Trail</h3>
-      <div style={{ overflow: 'auto', border: '1px solid #e6eaf0', borderRadius: 12 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr>
-              <th style={th}>#</th>
-              <th style={th}>Action</th>
-              <th style={th}>User</th>
-              <th style={th}>Notes</th>
-              <th style={th}>Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            {history.map((h, idx) => (
-              <tr key={h.id}>
-                <td style={td}>{idx + 1}</td>
-                <td style={td}>{h.action}</td>
-                <td style={td}>{h.user_email || h.user_id}</td>
-                <td style={td}>
-                  {(() => {
-                    const raw = h.notes || ''
-                    let parsed = null
-                    try {
-                      if (typeof raw === 'string' && raw.trim().startsWith('{')) {
-                        parsed = JSON.parse(raw)
-                      }
-                    } catch {}
-                    if (!parsed) return raw
-                    const isAuto = parsed.event === 'auto_commission'
-                    const sum = isAuto
-                      ? `Auto commission — Policy: ${parsed?.policy?.name || parsed?.policy?.id || ''}, Amount: ${Number(parsed?.amounts?.commission || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
-                      : 'Details'
-                    const open = !!expandedNotes[h.id]
-                    return (
-                      <div>
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                          <span>{sum}</span>
-                          <button
-                            type="button"
-                            onClick={() => setExpandedNotes(s => ({ ...s, [h.id]: !s[h.id] }))}
-                            style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #d1d9e6', background: '#fff', cursor: 'pointer' }}
-                          >
-                            {open ? 'Hide' : 'Show'} JSON
-                          </button>
-                        </div>
-                        {open && (
-                          <pre style={{ background: '#f6f8fa', padding: 8, borderRadius: 6, border: '1px solid #eef2f7', marginTop: 6, maxWidth: 640, overflow: 'auto' }}>
-{JSON.stringify(parsed, null, 2)}
-                          </pre>
-                        )}
-                      </div>
-                    )
-                  })()}
-                </td>
-                <td style={td}>{h.created_at ? new Date(h.created_at).toLocaleString() : ''}</td>
-              </tr>
-            ))}
-            {history.length === 0 && (
-              <tr>
-                <td style={td} colSpan={5}>No history yet.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    {/* Edit Request Modal */}
-      {showEditModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: '#fff', borderRadius: 12, padding: 16, width: 520, maxWidth: '90vw', boxShadow: '0 8px 24px rgba(0,0,0,0.12)' }}>
-            <h3 style={{ marginTop: 0 }}>Request Edits From Consultant</h3>
-            <p style={{ color: '#6b7280', marginTop: 4 }}>Select the fields that need correction and optionally add a comment. Identity and unit data are locked after block approval.</p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                <input type="checkbox" checked={editFields.address} onChange={e => setEditFields(s => ({ ...s, address: e.target.checked }))} />
-                Address
-              </label>
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                <input type="checkbox" checked={editFields.payment_plan} onChange={e => setEditFields(s => ({ ...s, payment_plan: e.target.checked }))} />
-                Payment Plan
-              </label>
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                <input type="checkbox" checked={editFields.maintenance_date} onChange={e => setEditFields(s => ({ ...s, maintenance_date: e.target.checked }))} />
-                Maintenance Deposit Date
-              </label>
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                <input type="checkbox" checked={editFields.offer_dates} onChange={e => setEditFields(s => ({ ...s, offer_dates: e.target.checked }))} />
-                Offer/First Payment Dates
-              </label>
-            </div>
-            <div style={{ marginTop: 10 }}>
-              <label style={{ display: 'block', fontWeight: 600, fontSize: 13, color: '#374151', marginBottom: 4 }}>Other (specify)</label>
-              <input
-                type="text"
-                value={editFields.other}
-                onChange={e => setEditFields(s => ({ ...s, other: e.target.value }))}
-                style={{ padding: 10, borderRadius: 10, border: '1px solid #d1d9e6', width: '100%' }}
-                placeholder="e.g., POA clause text or custom note"
-              />
-            </div>
-            <div style={{ marginTop: 10 }}>
-              <label style={{ display: 'block', fontWeight: 600, fontSize: 13, color: '#374151', marginBottom: 4 }}>Comment</label>
-              <textarea
-                value={editReason}
-                onChange={e => setEditReason(e.target.value)}
-                style={{ padding: 10, borderRadius: 10, border: '1px solid #d1d9e6', width: '100%', minHeight: 80 }}
-                placeholder="Describe what needs to be changed"
-              />
-            </div>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
-              <LoadingButton onClick={() => { setShowEditModal(false); setEditFields({ address: false, payment_plan: false, maintenance_date: false, offer_dates: false, other: '' }); setEditReason('') }}>Cancel</LoadingButton>
-              <LoadingButton
-                variant="primary"
-                onClick={async () => {
-                  const fields = ['address','payment_plan','maintenance_date','offer_dates'].filter(k => editFields[k])
-                  if (editFields.other && editFields.other.trim()) fields.push(editFields.other.trim())
-                  try {
-                    const resp = await fetchWithAuth(`${API_URL}/api/deals/${id}/request-edits`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ reason: editReason || '', fields, comment: editReason || '' })
-                    })
-                    const data = await resp.json().catch(() => null)
-                    if (!resp.ok) {
-                      notifyError(data?.error?.message || 'Failed to request edits')
-                    } else {
-                      notifySuccess('Edit request sent to consultant.')
-                      setShowEditModal(false)
-                      setEditFields({ address: false, payment_plan: false, maintenance_date: false, offer_dates: false, other: '' })
-                      setEditReason('')
-                      await load()
-                    }
-                  } catch (err) {
-                    notifyError(err, 'Failed to request edits')
-                  }
-                }}
-              >
-                Send Request
-              </LoadingButton>
-            </div>
-          </div>
-        </div>
-      )}
+            setMessage('Generating Reservation Form…')
+            setShow(true)
+            const resp = await fetchWithAuth(
+              `${API_URL}/api/documents/reservation-form`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  deal_id: Number(deal.id),
+                  ...opts
+                })
+              }
+            )
+            if (!resp.ok) {
+              let errMsg = 'Failed to generate reservation form'
+              try {
+                const j = await resp.json()
+                errMsg = j?.error?.message || errMsg
+              } catch {}
+              notifyError(errMsg)
+              return
+            }
+            const blob = await resp.blob()
+            const ts = new Date().toISOString().replace(/[:.]/g, '-')
+            const filename = `reservation_form_${ts}.pdf`
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = filename
+            document.body.appendChild(a)
+            a.click()
+            document.body.removeChild(a)
+            URL.revokeObjectURL(url)
+            setReservationProgress(100)
+            setReservationModalOpen(false)
+            notifySuccess('Reservation Form generated successfully.')
+          } catch (err) {
+            notifyError(err, 'Failed to generate reservation form')
+          } finally {
+            if (timer) clearInterval(timer)
+            setReservationGenerating(false)
+            setTimeout(() => setReservationProgress(0), 800)
+            setShow(false)
+          }
+        }}
+        onRequestEdits={() => setShowEditModal(true)}
+        onGenerateContractPdf={() => generateDocFromSaved('contract')}
+        onGenerateChecksSheet={generateChecksSheetFromSaved}
+        onCalculateCommission={async () => {
+          const salesPersonId = deal.sales_rep_id || deal.created_by
+          if (!salesPersonId) {
+            notifyError('Missing Property Consultant for this deal.')
+            return
+          }
+          setCalcCommissionLoading(true)
+          try {
+            const resp = await fetchWithAuth(
+              `${API_URL}/api/commissions/calc-and-save`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  deal_id: deal.id,
+                  sales_person_id: salesPersonId
+                })
+              }
+            )
+            const data = await resp.json()
+            if (!resp.ok) {
+              notifyError(
+                data?.error?.message || 'Failed to calculate commission'
+              )
+            } else {
+              notifySuccess(
+                `Commission calculated: ${Number(
+                  data.commission.amount || 0
+                ).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+              )
+              await load()
+            }
+          } catch (err) {
+            notifyError(err, 'Failed to calculate commission')
+          } finally {
+            setCalcCommissionLoading(false)
+          }
+        }}
+      />
+
+      <DealAuditTrail
+        history={history}
+        expandedNotes={expandedNotes}
+        onToggleNote={(noteId) =>
+          setExpandedNotes(s => ({ ...s, [noteId]: !s[noteId] }))
+        }
+      />
+
+      <DealEditRequestModal
+        open={showEditModal}
+        editFields={editFields}
+        editReason={editReason}
+        onChangeFields={setEditFields}
+        onChangeReason={setEditReason}
+        onCancel={() => {
+          setShowEditModal(false)
+          setEditFields({
+            address: false,
+            payment_plan: false,
+            maintenance_date: false,
+            offer_dates: false,
+            other: ''
+          })
+          setEditReason('')
+        }}
+        onSubmit={async () => {
+          const fields = ['address', 'payment_plan', 'maintenance_date', 'offer_dates'].filter(
+            k => editFields[k]
+          )
+          if (editFields.other && editFields.other.trim()) {
+            fields.push(editFields.other.trim())
+          }
+          try {
+            const resp = await fetchWithAuth(
+              `${API_URL}/api/deals/${id}/request-edits`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  reason: editReason || '',
+                  fields,
+                  comment: editReason || ''
+                })
+              }
+            )
+            const data = await resp.json().catch(() => null)
+            if (!resp.ok) {
+              notifyError(
+                data?.error?.message || 'Failed to request edits'
+              )
+            } else {
+              notifySuccess('Edit request sent to consultant.')
+              setShowEditModal(false)
+              setEditFields({
+                address: false,
+                payment_plan: false,
+                maintenance_date: false,
+                offer_dates: false,
+                other: ''
+              })
+              setEditReason('')
+              await load()
+            }
+          } catch (err) {
+            notifyError(err, 'Failed to request edits')
+          }
+        }}
+      />
 
     </div>
   )

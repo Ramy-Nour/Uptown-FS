@@ -21,15 +21,16 @@ import UnitModelChanges from './admin/UnitModelChanges.jsx'
 import CommissionPolicies from './admin/CommissionPolicies.jsx'
 import CommissionsReport from './admin/CommissionsReport.jsx'
 import StandardPricing from './admin/StandardPricing.jsx'
-import StandardPricingApprovals from './admin/StandardPricingApprovals.jsx'; // THIS LINE IS NEW
-import RejectedPricings from './admin/RejectedPricings.jsx';
-import InventoryDrafts from './admin/InventoryDrafts.jsx';
+import StandardPricingApprovals from './admin/StandardPricingApprovals.jsx' // THIS LINE IS NEW
+import RejectedPricings from './admin/RejectedPricings.jsx'
+import InventoryDrafts from './admin/InventoryDrafts.jsx'
 import HoldsFM from './admin/HoldsFM.jsx'
 import HoldsCEO from './admin/HoldsCEO.jsx'
 import WorkflowLogs from './admin/WorkflowLogs.jsx'
 import PaymentThresholds from './admin/PaymentThresholds.jsx'
 import InventoryChanges from './admin/InventoryChanges.jsx'
 import InventoryChangeHistory from './admin/InventoryChangeHistory.jsx'
+import UnitHistory from './admin/UnitHistory.jsx'
 
 function RoleBasedRoute({ children, allowedRoles }) {
   const token = localStorage.getItem('auth_token');
@@ -166,6 +167,26 @@ createRoot(document.getElementById('root')).render(
             element={
               <RoleBasedRoute allowedRoles={['crm_admin', 'superadmin']}>
                 <Units />
+              </RoleBasedRoute>
+            }
+          />
+          <Route
+            path="/admin/unit-history"
+            element={
+              <RoleBasedRoute
+                allowedRoles={[
+                  'crm_admin',
+                  'financial_manager',
+                  'financial_admin',
+                  'admin',
+                  'superadmin',
+                  'ceo',
+                  'chairman',
+                  'vice_chairman',
+                  'top_management'
+                ]}
+              >
+                <UnitHistory />
               </RoleBasedRoute>
             }
           />

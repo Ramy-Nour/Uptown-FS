@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { fetchWithAuth, API_URL } from '../lib/apiClient.js'
 import { generateReservationFormPdf } from '../lib/docExports.js'
+import BlockHistoryModal from '../components/BlockHistoryModal.jsx'
 
 const th = { textAlign: 'left', padding: 10, borderBottom: '1px solid #eef2f7', fontSize: 13, color: '#475569', background: '#f9fbfd' }
 const td = { padding: 10, borderBottom: '1px solid #f2f5fa', fontSize: 14 }
@@ -24,6 +25,7 @@ export default function CurrentBlocks() {
   const [creating, setCreating] = useState(new Set())
   // keyed by block id: { selectedPlanId, reservationDate, preliminaryPayment, language, plans: [] }
   const [form, setForm] = useState({})
+  const [historyTarget, setHistoryTarget] = useState(null) // { unitId, unitCode }
 
   async function load() {
     try {
@@ -239,6 +241,13 @@ export default function CurrentBlocks() {
                         >
                           Print Reservation PDF
                         </button>
+                        <button
+                          style={{ ...btn, borderColor: '#9ca3af', color: '#374151' }}
+                          onClick={() => setHistoryTarget({ unitId: r.unit_id, unitCode: r.unit_code })}
+                          title="View full block/unblock history for this unit"
+                        >
+                          Block History
+                        </button>
                       </div>
                     </div>
                   </td>
@@ -249,6 +258,12 @@ export default function CurrentBlocks() {
           </tbody>
         </table>
       </div>
+      <BlockHistoryModal
+        open={!!historyTarget}
+        unitId={historyTarget?.unitId || null}
+        unitCode={historyTarget?.unitCode || ''}
+        onClose={() => setHistoryTarget(null)}
+      />
     </div>
   )
 }

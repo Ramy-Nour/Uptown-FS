@@ -261,7 +261,6 @@ router.post(
         `SELECT * FROM blocks
          WHERE unit_id = $1
            AND status = 'approved'
-           AND blocked_until > NOW()
          ORDER BY id DESC
          LIMIT 1`,
         [unitId]
@@ -742,7 +741,7 @@ router.get('/current', authMiddleware, async (req, res) => {
       FROM blocks b
       JOIN units u ON b.unit_id = u.id
       JOIN users usr ON b.requested_by = usr.id
-      WHERE b.status = 'approved' AND b.blocked_until > NOW()
+      WHERE b.status = 'approved'
     `
     const params = []
     if (req.user.role === 'property_consultant') {
@@ -755,6 +754,8 @@ router.get('/current', authMiddleware, async (req, res) => {
   } catch (error) {
     console.error('Current blocks error:', error)
     return res.status(500).json({ error: { message: 'Internal error' } })
+  }
+})
   }
 })
 
@@ -795,6 +796,76 @@ router.get('/pending', authMiddleware, async (req, res) => {
     return res.status(500).json({ error: { message: 'Internal error' } })
   }
 })
+
+// Per-unit block/unblock audit history for finance / top management roles
+router.get(
+  '/history',
+  authMiddleware,
+  requireRole(['financial_admin','financial_manager','ceo','chairman','vice_chairman','top_management']),
+  async (req, res) => {
+    try {
+      const unitId = Number(req.query.unit_id)
+      if (!Number.isFinite(unitId) || unitId <= 0) {
+        return res.status(400).json({ error: { message: 'unit_id is required and must be a positive integer' } })
+      }
+
+      const q = `
+        SELECT
+          b.id,
+          b.unit_id,
+          u.code AS unit_code,
+          u.unit_type,
+          b.status,
+          b.reason,
+          b.duration_days,
+          b.blocked_until,
+          b.created_at,
+          b.updated_at,
+          b.extension_count,
+          b.last_extension_reason,
+          b.last_extended_at,
+          b.override_status,
+          b.financial_decision,
+          b.financial_checked_at,
+          b.requested_by,
+          ru.email AS requested_by_email,
+          b.approved_by,
+          au.email AS approved_by_email,
+          b.approved_at,
+          b.rejected_by,
+          rj.email AS rejected_by_email,
+          b.rejected_at,
+          b.rejection_reason,
+          b.unblock_status,
+          b.unblock_requested_by,
+          ur.email AS unblock_requested_by_email,
+          b.unblock_requested_at,
+          b.unblock_reason,
+          b.unblock_fm_id,
+          uf.email AS unblock_fm_email,
+          b.unblock_fm_at,
+          b.unblock_tm_id,
+          ut.email AS unblock_tm_email,
+          b.unblock_tm_at
+        FROM blocks b
+        JOIN units u ON u.id = b.unit_id
+        LEFT JOIN users ru ON ru.id = b.requested_by
+        LEFT JOIN users au ON au.id = b.approved_by
+        LEFT JOIN users rj ON rj.id = b.rejected_by
+        LEFT JOIN users ur ON ur.id = b.unblock_requested_by
+        LEFT JOIN users uf ON uf.id = b.unblock_fm_id
+        LEFT JOIN users ut ON ut.id = b.unblock_tm_id
+        WHERE b.unit_id = $1
+        ORDER BY b.created_at ASC, b.id ASC
+      `
+      const r = await pool.query(q, [unitId])
+      return res.json({ ok: true, history: r.rows })
+    } catch (e) {
+      console.error('GET /api/blocks/history error:', e)
+      return res.status(500).json({ error: { message: 'Internal error' } })
+    }
+  }
+)
 
 // Cancel a pending block request
 router.patch('/:id/cancel', authMiddleware, async (req, res) => {
@@ -877,31 +948,42 @@ router.patch('/:id/extend', authMiddleware, requireRole(['financial_manager']), 
 })
 
 // Automatic block expiry job (daily)
+// Instead of auto-unblocking units, convert any overdue approved block into an
+// unblock request for Financial Manager review (FM → TM workflow).
 async function processBlockExpiry() {
   try {
     const expiredBlocks = await pool.query(
       `
-      UPDATE blocks
-      SET status = 'expired', updated_at=NOW()
-      WHERE status = 'approved' AND blocked_until < NOW()
-      RETURNING id, unit_id
+      UPDATE blocks b
+      SET unblock_status = 'pending_fm',
+          unblock_requested_by = COALESCE(b.unblock_requested_by, b.requested_by),
+          unblock_requested_at = NOW(),
+          unblock_reason = COALESCE(b.unblock_reason, 'Block duration expired; please review'),
+          updated_at = NOW()
+      FROM units u
+      WHERE b.unit_id = u.id
+        AND b.status = 'approved'
+        AND b.blocked_until &lt; NOW()
+        AND (b.unblock_status IS NULL OR b.unblock_status = 'rejected')
+      RETURNING b.id, b.unit_id, u.code AS unit_code
       `
     )
+
     for (const block of expiredBlocks.rows) {
-      await pool.query(
-        `
-        UPDATE units
-        SET available = TRUE,
-            unit_status = 'AVAILABLE',
-            updated_at = NOW()
-        WHERE id = $1
-        `,
-        [block.unit_id]
-      )
-      await createNotification('block_expired', null, 'blocks', block.id, 'Block expired automatically')
+      try {
+        await pool.query(
+          `INSERT INTO notifications (user_id, type, ref_table, ref_id, message)
+           SELECT u.id, 'unblock_request_pending_fm', 'blocks', $1,
+                  'Block duration expired for unit ' || $2 || '; unblock decision required.'
+           FROM users u
+           WHERE u.role = 'financial_manager' AND u.active = TRUE`,
+          [block.id, block.unit_code || block.unit_id]
+        )
+      } catch (_) {}
     }
-    if (expiredBlocks.rows.length > 0) {
-      console.log(`[blocks] Processed ${expiredBlocks.rows.length} expired blocks`)
+
+    if (expiredBlocks.rows.length &gt; 0) {
+      console.log(`[blocks] Created unblock requests for ${expiredBlocks.rows.length} expired blocks`)
     }
   } catch (error) {
     console.error('Block expiry job error:', error)

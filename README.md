@@ -121,6 +121,9 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-12-31 05:00] Workflow Logs — fix user name lookups and parameter placeholders in reports route
+  - API: Updated GET /api/reports/workflow-logs in api/src/reportsRoutes.js so all user display names are derived from users.meta->>'name' with a fallback to email (COALESCE(u.meta->>'name', u.email)) instead of a non-existent users.name column. This removes the “column u.name does not exist” (42703) error when TM/Admin loads the Workflow Logs page.
+  - API: Corrected SQL parameter placeholders in reportsRoutes so the WHERE clauses use $1/$2… style bindings again (e.g., pp.created_by = $1), matching the established pattern and preventing potential SQL parsing issues as filters are applied.
 - [2025-12-31 04:45] Block management backup files removed to avoid confusion
   - API: Deleted api/src/blockManagement.fixed.js and api/src/blockManagement.backup.js from the codebase. These were historical snapshots of the blocks router that were no longer imported anywhere; all live behaviour now comes from api/src/blockManagement.js (including the new unblock workflow, TM overrides, and unit history). This reduces the risk that future edits are made to the wrong file or that outdated logic is accidentally reintroduced.
 - [2025-12-31 04:30] Workflow Logs — unit info and per-status breakdown for TM/Admin

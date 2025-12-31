@@ -878,31 +878,42 @@ router.patch('/:id/extend', authMiddleware, requireRole(['financial_manager']), 
 })
 
 // Automatic block expiry job (daily)
+// Instead of auto-unblocking units, convert any overdue approved block into an
+// unblock request for Financial Manager review (FM → TM workflow).
 async function processBlockExpiry() {
   try {
     const expiredBlocks = await pool.query(
       `
-      UPDATE blocks
-      SET status = 'expired', updated_at=NOW()
-      WHERE status = 'approved' AND blocked_until < NOW()
-      RETURNING id, unit_id
+      UPDATE blocks b
+      SET unblock_status = 'pending_fm',
+          unblock_requested_by = COALESCE(b.unblock_requested_by, b.requested_by),
+          unblock_requested_at = NOW(),
+          unblock_reason = COALESCE(b.unblock_reason, 'Block duration expired; please review'),
+          updated_at = NOW()
+      FROM units u
+      WHERE b.unit_id = u.id
+        AND b.status = 'approved'
+        AND b.blocked_until &lt; NOW()
+        AND (b.unblock_status IS NULL OR b.unblock_status = 'rejected')
+      RETURNING b.id, b.unit_id, u.code AS unit_code
       `
     )
+
     for (const block of expiredBlocks.rows) {
-      await pool.query(
-        `
-        UPDATE units
-        SET available = TRUE,
-            unit_status = 'AVAILABLE',
-            updated_at = NOW()
-        WHERE id = $1
-        `,
-        [block.unit_id]
-      )
-      await createNotification('block_expired', null, 'blocks', block.id, 'Block expired automatically')
+      try {
+        await pool.query(
+          `INSERT INTO notifications (user_id, type, ref_table, ref_id, message)
+           SELECT u.id, 'unblock_request_pending_fm', 'blocks', $1,
+                  'Block duration expired for unit ' || $2 || '; unblock decision required.'
+           FROM users u
+           WHERE u.role = 'financial_manager' AND u.active = TRUE`,
+          [block.id, block.unit_code || block.unit_id]
+        )
+      } catch (_) {}
     }
-    if (expiredBlocks.rows.length > 0) {
-      console.log(`[blocks] Processed ${expiredBlocks.rows.length} expired blocks`)
+
+    if (expiredBlocks.rows.length &gt; 0) {
+      console.log(`[blocks] Created unblock requests for ${expiredBlocks.rows.length} expired blocks`)
     }
   } catch (error) {
     console.error('Block expiry job error:', error)

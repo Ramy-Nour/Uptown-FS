@@ -121,6 +121,9 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-12-31 04:00] Workflow Logs report wired and enabled for TM/Admin
+  - API: Mounted reportsRoutes under /api/reports in api/src/app.js so GET /api/reports/workflow-logs returns JSON instead of a 404 HTML page. This fixes the “Unexpected token '<', '&lt;!DOCTYPE' is not valid JSON” error when opening Workflow Logs from the TM header and ensures the report is available to ceo/chairman/vice_chairman/admin/superadmin (plus any front-end roles that reuse this route).
+  - Client: Left the Workflow Logs UI (client/src/admin/WorkflowLogs.jsx) unchanged; it now successfully loads the offers/reservations/contracts throughput report and supports date filters, consultant/manager filters, and XLSX/CSV exports for top-management oversight.
 - [2025-12-31 03:30] Deal Detail refactor (header, actions, audit trail, and Unit History integration)
   - Client: Refactored the top of Deal Detail (client/src/deals/DealDetail.jsx) to delegate the header and status summary into a dedicated DealHeaderSection component (client/src/deals/components/DealHeaderSection.jsx). This component now renders the Deal #, Back / View Deals for This Unit / View Unit History buttons (based on unit_id and role), plus the compact badges for deal status, override status, unit availability, and rejection notes, keeping the main page leaner without changing behaviour.
   - Client: Extracted the audit trail table into DealAuditTrail (client/src/deals/components/DealAuditTrail.jsx), a reusable component that renders the deal_history entries with the same JSON expand/collapse behaviour as before. DealDetail now simply passes history and expandedNotes state into this component, making it easier to evolve the page layout without touching the underlying audit logic.

@@ -136,6 +136,7 @@ export default function BrandHeader({ title, onLogout }) {
       case 'superadmin':
         return [
           { label: 'Users', href: '/admin/users' },
+          { label: 'Unit History', href: '/admin/unit-history' },
           { label: 'Sales Team', href: '/admin/sales-team' },
           { label: 'Team Proposals', href: '/deals/team-proposals' },
           { label: 'Holds', href: '/admin/holds' },
@@ -144,6 +145,7 @@ export default function BrandHeader({ title, onLogout }) {
       case 'admin':
         return [
           { label: 'Users', href: '/admin/users' },
+          { label: 'Unit History', href: '/admin/unit-history' },
           { label: 'Sales Team', href: '/admin/sales' },
           { label: 'Contracts Team', href: '/admin/contracts-team' },
           { label: 'Finance Team', href: '/admin/finance-team' },
@@ -167,6 +169,7 @@ export default function BrandHeader({ title, onLogout }) {
           { label: 'Expired Blocks', href: '/deals/block-requests?expired=1' },
           { label: 'Current Blocks', href: '/deals/current-blocks' },
           { label: 'Reservations', href: '/deals/reservations-queue' },
+          { label: 'Unit History', href: '/admin/unit-history' },
           { label: 'Inventory Changes', href: '/admin/inventory-changes' },
           { label: 'Rejected Requests', href: '/admin/rejected-pricings' },
           { label: 'Finance Team', href: '/admin/finance-team' },
@@ -186,6 +189,7 @@ export default function BrandHeader({ title, onLogout }) {
         return [
           ...baseWithCalc,
           { label: 'Inventory', href: '/admin/inventory' },
+          { label: 'Unit History', href: '/admin/unit-history' },
           { label: 'My Inventory Requests', href: '/admin/inventory-change-history' }
         ]
       case 'property_consultant':
@@ -215,6 +219,7 @@ export default function BrandHeader({ title, onLogout }) {
           { label: 'Unit Model Queue', href: '/deals/queues' },
           { label: 'Pricing Queue', href: '/admin/standard-pricing-approvals' },
           { label: 'Inventory Drafts', href: '/admin/inventory-drafts' },
+          { label: 'Unit History', href: '/admin/unit-history' },
           { label: 'Payment Threshold Approvals', href: '/admin/payment-thresholds' },
           { label: 'Workflow Logs', href: '/admin/workflow-logs' },
           { label: 'Hold Approvals', href: '/admin/hold-approvals' },

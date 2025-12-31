@@ -1418,6 +1418,365 @@ router.patch('/units/changes/:id/reject', authMiddleware, requireRole(['financia
   }
 })
 
+// Unit lifecycle history: blocks + reservations + contracts for a single unit
+router.get(
+  '/unit-history',
+  authMiddleware,
+  requireRole([
+    'crm_admin',
+    'financial_manager',
+    'financial_admin',
+    'admin',
+    'superadmin',
+    'ceo',
+    'chairman',
+    'vice_chairman',
+    'top_management'
+  ]),
+  async (req, res) => {
+    try {
+      const unitId = num(req.query.unit_id)
+      if (!unitId) {
+        return bad(res, 400, 'unit_id is required and must be a positive integer')
+      }
+
+      // Load basic unit info
+      const u = await pool.query(
+        `SELECT id, code, unit_status, available, unit_type
+         FROM units
+         WHERE id=$1`,
+        [unitId]
+      )
+      if (u.rows.length === 0) {
+        return bad(res, 404, 'Unit not found')
+      }
+      const unit = u.rows[0]
+
+      // Blocks history for this unit
+      const blocksRes = await pool.query(
+        `
+        SELECT
+          b.id,
+          b.status,
+          b.reason,
+          b.duration_days,
+          b.blocked_until,
+          b.created_at,
+          b.updated_at,
+          b.extension_count,
+          b.last_extension_reason,
+          b.last_extended_at,
+          b.override_status,
+          b.financial_decision,
+          b.financial_checked_at,
+          b.requested_by,
+          ru.email AS requested_by_email,
+          b.approved_by,
+          au.email AS approved_by_email,
+          b.approved_at,
+          b.rejected_by,
+          rj.email AS rejected_by_email,
+          b.rejected_at,
+          b.rejection_reason,
+          b.unblock_status,
+          b.unblock_requested_by,
+          ur.email AS unblock_requested_by_email,
+          b.unblock_requested_at,
+          b.unblock_reason,
+          b.unblock_fm_id,
+          uf.email AS unblock_fm_email,
+          b.unblock_fm_at,
+          b.unblock_tm_id,
+          ut.email AS unblock_tm_email,
+          b.unblock_tm_at
+        FROM blocks b
+        LEFT JOIN users ru ON ru.id = b.requested_by
+        LEFT JOIN users au ON au.id = b.approved_by
+        LEFT JOIN users rj ON rj.id = b.rejected_by
+        LEFT JOIN users ur ON ur.id = b.unblock_requested_by
+        LEFT JOIN users uf ON uf.id = b.unblock_fm_id
+        LEFT JOIN users ut ON ut.id = b.unblock_tm_id
+        WHERE b.unit_id = $1
+        ORDER BY b.created_at ASC, b.id ASC
+        `,
+        [unitId]
+      )
+      const blocks = blocksRes.rows
+
+      // Reservation forms for this unit
+      const rfRes = await pool.query(
+        `
+        SELECT
+          rf.id,
+          rf.status,
+          rf.reservation_date,
+          rf.preliminary_payment,
+          rf.language,
+          rf.created_at,
+          rf.updated_at,
+          rf.created_by,
+          cu.email AS created_by_email,
+          rf.approved_by,
+          au.email AS approved_by_email,
+          rf.approved_at,
+          rf.rejected_by,
+          rj.email AS rejected_by_email,
+          rf.rejected_at
+        FROM reservation_forms rf
+        LEFT JOIN users cu ON cu.id = rf.created_by
+        LEFT JOIN users au ON au.id = rf.approved_by
+        LEFT JOIN users rj ON rj.id = rf.rejected_by
+        WHERE rf.unit_id = $1
+        ORDER BY rf.id ASC
+        `,
+        [unitId]
+      )
+      const reservations = rfRes.rows
+
+      // Contracts linked via reservation forms for this unit
+      const contractsRes = await pool.query(
+        `
+        SELECT
+          c.id,
+          c.status,
+          c.created_at,
+          c.updated_at,
+          c.created_by,
+          cu.email AS created_by_email,
+          c.approved_by,
+          au.email AS approved_by_email,
+          c.reservation_form_id
+        FROM contracts c
+        JOIN reservation_forms rf ON rf.id = c.reservation_form_id
+        LEFT JOIN users cu ON cu.id = c.created_by
+        LEFT JOIN users au ON au.id = c.approved_by
+        WHERE rf.unit_id = $1
+        ORDER BY c.id ASC
+        `,
+        [unitId]
+      )
+      const contracts = contractsRes.rows
+
+      const events = []
+
+      const addEvent = (at, domain, label, detail, badges) => {
+        if (!at) return
+        const ts = new Date(at)
+        if (!Number.isFinite(ts.getTime())) return
+        events.push({
+          at: ts.toISOString(),
+          domain,
+          label,
+          detail: detail || '',
+          badges: Array.isArray(badges) ? badges : []
+        })
+      }
+
+      // Block events
+      for (const b of blocks) {
+        const ref = `Block #${b.id}`
+
+        if (b.created_at) {
+          addEvent(
+            b.created_at,
+            'block',
+            `${ref} requested`,
+            `Requested by ${b.requested_by_email || 'Unknown'}` + (b.reason ? ` — Reason: ${b.reason}` : ''),
+            []
+          )
+        }
+
+        if (b.approved_at) {
+          const badges = []
+          const fin = (b.financial_decision || '').toUpperCase()
+          if (fin === 'ACCEPT') {
+            badges.push({ text: 'Financial: ACCEPT', bg: '#ecfdf5', color: '#065f46' })
+          } else if (fin) {
+            badges.push({ text: `Financial: ${fin}`, bg: '#fef2f2', color: '#991b1b' })
+          }
+          const ov = (b.override_status || '').toLowerCase()
+          if (ov) {
+            const map = {
+              pending_sm: { text: 'Override: Pending SM', bg: '#eff6ff', color: '#1e40af' },
+              pending_fm: { text: 'Override: Pending FM', bg: '#eff6ff', color: '#1e40af' },
+              pending_tm: { text: 'Override: Pending TM', bg: '#eff6ff', color: '#1e40af' },
+              approved: { text: 'Override: Approved', bg: '#ecfdf5', color: '#065f46' },
+              rejected: { text: 'Override: Rejected', bg: '#fef2f2', color: '#991b1b' }
+            }
+            badges.push(map[ov] || { text: `Override: ${ov}`, bg: '#f8fafc', color: '#334155' })
+          }
+          addEvent(
+            b.approved_at,
+            'block',
+            `${ref} approved`,
+            `Approved by ${b.approved_by_email || 'Unknown'}`,
+            badges
+          )
+        }
+
+        if (b.rejected_at) {
+          addEvent(
+            b.rejected_at,
+            'block',
+            `${ref} rejected`,
+            `Rejected by ${b.rejected_by_email || 'Unknown'}` + (b.rejection_reason ? ` — Reason: ${b.rejection_reason}` : ''),
+            []
+          )
+        }
+
+        if (b.extension_count && b.extension_count > 0 && b.last_extended_at) {
+          addEvent(
+            b.last_extended_at,
+            'block',
+            `${ref} extended`,
+            `Total extensions: ${b.extension_count}` + (b.last_extension_reason ? ` — Reason: ${b.last_extension_reason}` : ''),
+            []
+          )
+        }
+
+        if (b.unblock_requested_at) {
+          const isExpired = (b.unblock_reason || '').startsWith('Block duration expired')
+          const badges = []
+          if (isExpired) {
+            badges.push({ text: 'Expired block – system-created request', bg: '#fffbeb', color: '#92400e' })
+          }
+          addEvent(
+            b.unblock_requested_at,
+            'block',
+            `${ref} unblock requested`,
+            `Requested by ${b.unblock_requested_by_email || 'Unknown'}` + (b.unblock_reason ? ` — Reason: ${b.unblock_reason}` : ''),
+            badges
+          )
+        }
+
+        if (b.unblock_fm_at) {
+          addEvent(
+            b.unblock_fm_at,
+            'block',
+            `${ref} unblock approved by FM`,
+            `Financial Manager: ${b.unblock_fm_email || 'Unknown'}`,
+            []
+          )
+        }
+
+        if (b.unblock_tm_at) {
+          const isOverride = !b.unblock_fm_id && String(b.unblock_status || '').toLowerCase() === 'approved'
+          const badges = []
+          if (isOverride) {
+            badges.push({ text: 'TM override: FM stage bypassed', bg: '#fee2e2', color: '#b91c1c' })
+          } else if (b.unblock_fm_id) {
+            badges.push({ text: 'FM approved before TM', bg: '#e0f2fe', color: '#075985' })
+          }
+          addEvent(
+            b.unblock_tm_at,
+            'block',
+            `${ref} unblock approved by TM`,
+            `Top Management: ${b.unblock_tm_email || 'Unknown'}`,
+            badges
+          )
+        }
+      }
+
+      // Reservation form events
+      for (const rf of reservations) {
+        const ref = `Reservation Form #${rf.id}`
+
+        if (rf.created_at) {
+          addEvent(
+            rf.created_at,
+            'reservation',
+            `${ref} created`,
+            `Created by ${rf.created_by_email || 'Unknown'}`,
+            []
+          )
+        }
+
+        if (rf.approved_at) {
+          addEvent(
+            rf.approved_at,
+            'reservation',
+            `${ref} approved`,
+            `Approved by ${rf.approved_by_email || 'Unknown'}`,
+            []
+          )
+        }
+
+        if (rf.rejected_at) {
+          addEvent(
+            rf.rejected_at,
+            'reservation',
+            `${ref} rejected`,
+            `Rejected by ${rf.rejected_by_email || 'Unknown'}`,
+            []
+          )
+        }
+      }
+
+      // Contract events
+      for (const c of contracts) {
+        const ref = `Contract #${c.id}`
+        if (c.created_at) {
+          addEvent(
+            c.created_at,
+            'contract',
+            `${ref} created`,
+            `Created by ${c.created_by_email || 'Unknown'} (from Reservation Form #${c.reservation_form_id})`,
+            []
+          )
+        }
+
+        const status = String(c.status || '').toLowerCase()
+        if (status === 'pending_tm') {
+          addEvent(
+            c.updated_at || c.created_at,
+            'contract',
+            `${ref} approved by Contract Manager (pending TM)`,
+            `Approved by ${c.approved_by_email || 'Unknown'}`,
+            []
+          )
+        } else if (status === 'approved') {
+          addEvent(
+            c.updated_at || c.created_at,
+            'contract',
+            `${ref} approved by Top Management`,
+            `Approved by ${c.approved_by_email || 'Unknown'}`,
+            []
+          )
+        } else if (status === 'rejected') {
+          addEvent(
+            c.updated_at || c.created_at,
+            'contract',
+            `${ref} rejected`,
+            `Rejected by ${c.approved_by_email || 'Unknown'}`,
+            []
+          )
+        } else if (status === 'executed') {
+          addEvent(
+            c.updated_at || c.created_at,
+            'contract',
+            `${ref} executed`,
+            `Executed (finalized and printed)`,
+            []
+          )
+        }
+      }
+
+      // Sort all events by timestamp
+      events.sort((a, b) => {
+        const ta = new Date(a.at).getTime()
+        const tb = new Date(b.at).getTime()
+        if (ta === tb) return 0
+        return ta < tb ? -1 : 1
+      })
+
+      return ok(res, { unit, events })
+    } catch (e) {
+      console.error('GET /api/inventory/unit-history error:', e)
+      return bad(res, 500, 'Internal error')
+    }
+  }
+)
+
 // Progress endpoint: show unit status across Blocked → Reserved → Contracted for sales roles
 router.get('/progress', authMiddleware, requireRole(['property_consultant','sales_manager']), async (req, res) => {
   try {

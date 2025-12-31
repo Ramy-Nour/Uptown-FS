@@ -566,44 +566,48 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
     language = language.startsWith('ar') ? 'ar' : 'en'
     const rtl = language === 'ar'
 
-    // Reservation date: prefer reservation_form_date from the request (dd/MM/YYYY or ISO-like),
-    // then any stored reservation date, then today.
+    // Reservation date:
+    // - Once an approved reservation form exists, always use its stored reservation_date.
+    // - Otherwise prefer reservation_form_date from the request (dd/MM/YYYY or ISO-like),
+    //   then fall back to today.
     let reservationDateDisplay = null
     let reservationDateIso = null
 
-    const rawReservationFormDate = req.body?.reservation_form_date
-    if (typeof rawReservationFormDate === 'string' && rawReservationFormDate.trim()) {
-      const trimmed = rawReservationFormDate.trim()
-      const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(trimmed)
-      if (m) {
-        const [, dd, mm, yyyy] = m
+    const dbReservationDateRaw =
+      approvedReservation?.reservation_date || approvedReservation?.details?.reservation_date
+
+    if (dbReservationDateRaw) {
+      const d = new Date(dbReservationDateRaw)
+      if (!Number.isNaN(d.getTime())) {
+        const dd = String(d.getUTCDate()).padStart(2, '0')
+        const mm = String(d.getUTCMonth() + 1).padStart(2, '0')
+        const yyyy = d.getUTCFullYear()
         reservationDateDisplay = `${dd}/${mm}/${yyyy}`
-        const d = new Date(Date.UTC(Number(yyyy), Number(mm) - 1, Number(dd)))
         reservationDateIso = `${yyyy}-${mm}-${dd}`
-      } else {
-        const d = new Date(trimmed)
-        if (!Number.isNaN(d.getTime())) {
-          const dd = String(d.getUTCDate()).padStart(2, '0')
-          const mm = String(d.getUTCMonth() + 1).padStart(2, '0')
-          const yyyy = d.getUTCFullYear()
-          reservationDateDisplay = `${dd}/${mm}/${yyyy}`
-          reservationDateIso = `${yyyy}-${mm}-${dd}`
-        } else {
-          reservationDateDisplay = trimmed
-        }
       }
     }
 
     if (!reservationDateIso) {
-      const rawDbDate = approvedReservation?.reservation_date || approvedReservation?.details?.reservation_date
-      if (rawDbDate) {
-        const d = new Date(rawDbDate)
-        if (!Number.isNaN(d.getTime())) {
-          const dd = String(d.getUTCDate()).padStart(2, '0')
-          const mm = String(d.getUTCMonth() + 1).padStart(2, '0')
-          const yyyy = d.getUTCFullYear()
-          reservationDateDisplay = reservationDateDisplay || `${dd}/${mm}/${yyyy}`
+      const rawReservationFormDate = req.body?.reservation_form_date
+      if (typeof rawReservationFormDate === 'string' && rawReservationFormDate.trim()) {
+        const trimmed = rawReservationFormDate.trim()
+        const m = /^(\\d{2})\\/(\\d{2})\\/(\\d{4})$/.exec(trimmed)
+        if (m) {
+          const [, dd, mm, yyyy] = m
+          reservationDateDisplay = `${dd}/${mm}/${yyyy}`
+          const d = new Date(Date.UTC(Number(yyyy), Number(mm) - 1, Number(dd)))
           reservationDateIso = `${yyyy}-${mm}-${dd}`
+        } else {
+          const d = new Date(trimmed)
+          if (!Number.isNaN(d.getTime())) {
+            const dd = String(d.getUTCDate()).padStart(2, '0')
+            const mm = String(d.getUTCMonth() + 1).padStart(2, '0')
+            const yyyy = d.getUTCFullYear()
+            reservationDateDisplay = `${dd}/${mm}/${yyyy}`
+            reservationDateIso = `${yyyy}-${mm}-${dd}`
+          } else {
+            reservationDateDisplay = trimmed
+          }
         }
       }
     }

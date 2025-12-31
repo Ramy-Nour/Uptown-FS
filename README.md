@@ -121,6 +121,9 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-12-31 06:10] Reservation Form flow — lock reservation date and Preliminary Payment after FM approval (Current Blocks)
+  - Client: Updated the Financial Admin “Current Blocks” page (client/src/deals/CurrentBlocks.jsx) so Preliminary Payment and Reservation Date are required when creating a reservation form, and the “Print Reservation PDF” action is only enabled when there is an approved reservation_forms row for the selected payment plan. After approval, the inputs show the approved values as read-only and the “Create Reservation Form” button is disabled to prevent changes from this view.
+  - API: Adjusted POST /api/documents/reservation-form in api/src/documentsRoutes.js so that when an approved reservation_forms row exists, the Reservation Form PDF always uses reservation_forms.reservation_date (or details.reservation_date) instead of any reservation_form_date sent from the client, keeping the reservation date and Preliminary Payment consistent across reprints while the header “Generated” timestamp still reflects the actual print time.
 - [2025-12-31 05:40] Workflow Logs — label refinements for counts and XLSX totals
   - Client: Simplified the Workflow Logs summary footer labels so each line now displays “Offers: N — Total”, “Reservations: N — Total”, and “Contracts: N — Total” without “deals”/“records” suffixes, keeping the focus on counts and monetary values.
   - Client: Updated the XLSX “Totals” sheet header row to use “Type | Count | Total Value” instead of “Section | Count | Total”, matching the semantics of the three workflow stages (Offers, Reservations, Contracts).

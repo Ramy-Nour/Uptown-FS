@@ -797,6 +797,76 @@ router.get('/pending', authMiddleware, async (req, res) => {
   }
 })
 
+// Per-unit block/unblock audit history for finance / top management roles
+router.get(
+  '/history',
+  authMiddleware,
+  requireRole(['financial_admin','financial_manager','ceo','chairman','vice_chairman','top_management']),
+  async (req, res) => {
+    try {
+      const unitId = Number(req.query.unit_id)
+      if (!Number.isFinite(unitId) || unitId <= 0) {
+        return res.status(400).json({ error: { message: 'unit_id is required and must be a positive integer' } })
+      }
+
+      const q = `
+        SELECT
+          b.id,
+          b.unit_id,
+          u.code AS unit_code,
+          u.unit_type,
+          b.status,
+          b.reason,
+          b.duration_days,
+          b.blocked_until,
+          b.created_at,
+          b.updated_at,
+          b.extension_count,
+          b.last_extension_reason,
+          b.last_extended_at,
+          b.override_status,
+          b.financial_decision,
+          b.financial_checked_at,
+          b.requested_by,
+          ru.email AS requested_by_email,
+          b.approved_by,
+          au.email AS approved_by_email,
+          b.approved_at,
+          b.rejected_by,
+          rj.email AS rejected_by_email,
+          b.rejected_at,
+          b.rejection_reason,
+          b.unblock_status,
+          b.unblock_requested_by,
+          ur.email AS unblock_requested_by_email,
+          b.unblock_requested_at,
+          b.unblock_reason,
+          b.unblock_fm_id,
+          uf.email AS unblock_fm_email,
+          b.unblock_fm_at,
+          b.unblock_tm_id,
+          ut.email AS unblock_tm_email,
+          b.unblock_tm_at
+        FROM blocks b
+        JOIN units u ON u.id = b.unit_id
+        LEFT JOIN users ru ON ru.id = b.requested_by
+        LEFT JOIN users au ON au.id = b.approved_by
+        LEFT JOIN users rj ON rj.id = b.rejected_by
+        LEFT JOIN users ur ON ur.id = b.unblock_requested_by
+        LEFT JOIN users uf ON uf.id = b.unblock_fm_id
+        LEFT JOIN users ut ON ut.id = b.unblock_tm_id
+        WHERE b.unit_id = $1
+        ORDER BY b.created_at ASC, b.id ASC
+      `
+      const r = await pool.query(q, [unitId])
+      return res.json({ ok: true, history: r.rows })
+    } catch (e) {
+      console.error('GET /api/blocks/history error:', e)
+      return res.status(500).json({ error: { message: 'Internal error' } })
+    }
+  }
+)
+
 // Cancel a pending block request
 router.patch('/:id/cancel', authMiddleware, async (req, res) => {
   try {

@@ -121,6 +121,8 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-12-31 04:45] Block management backup files removed to avoid confusion
+  - API: Deleted api/src/blockManagement.fixed.js and api/src/blockManagement.backup.js from the codebase. These were historical snapshots of the blocks router that were no longer imported anywhere; all live behaviour now comes from api/src/blockManagement.js (including the new unblock workflow, TM overrides, and unit history). This reduces the risk that future edits are made to the wrong file or that outdated logic is accidentally reintroduced.
 - [2025-12-31 04:30] Workflow Logs — unit info and per-status breakdown for TM/Admin
   - API: Extended GET /api/reports/workflow-logs in api/src/reportsRoutes.js to join units for each offer, reservation, and contract, exposing unit_id/unit_code/unit_type plus a per-status breakdown (counts and total_nominal) for each section so Top Management can see which units are moving and how volume is distributed across approved/pending/rejected states.
   - Client: Updated Workflow Logs UI (client/src/admin/WorkflowLogs.jsx) to show per-status summary chips above each section and to include unit columns in the Offers/Reservations/Contracts tables and XLSX/CSV exports, without changing the existing filters or role access.

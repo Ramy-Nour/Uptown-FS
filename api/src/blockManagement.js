@@ -261,7 +261,6 @@ router.post(
         `SELECT * FROM blocks
          WHERE unit_id = $1
            AND status = 'approved'
-           AND blocked_until > NOW()
          ORDER BY id DESC
          LIMIT 1`,
         [unitId]
@@ -742,7 +741,7 @@ router.get('/current', authMiddleware, async (req, res) => {
       FROM blocks b
       JOIN units u ON b.unit_id = u.id
       JOIN users usr ON b.requested_by = usr.id
-      WHERE b.status = 'approved' AND b.blocked_until > NOW()
+      WHERE b.status = 'approved'
     `
     const params = []
     if (req.user.role === 'property_consultant') {
@@ -755,6 +754,8 @@ router.get('/current', authMiddleware, async (req, res) => {
   } catch (error) {
     console.error('Current blocks error:', error)
     return res.status(500).json({ error: { message: 'Internal error' } })
+  }
+})
   }
 })
 

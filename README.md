@@ -121,6 +121,9 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-12-31 00:30] Current Blocks visibility — ignore blocked_until for listing and unblock requests
+  - API: Updated GET /api/blocks/current in api/src/blockManagement.js to list all approved blocks regardless of whether blocked_until is in the past. The Current Blocks page for Financial Admin now always shows units that are still logically BLOCKED, even if their “Blocked Until” date has passed while the stack was offline.
+  - API: Relaxed the active-block lookup in POST /api/blocks/request-unblock so it no longer requires blocked_until > NOW(). Consultants and Sales Managers can request unblocking for any unit that still has an approved block, preventing the situation where units remain BLOCKED in Inventory but disappear from Current Blocks due to a stale blocked_until timestamp.
 - [2025-12-13 16:30] Reservation Form PDF — define language/reservation date and lock Preliminary Payment source
   - API: Updated POST /api/documents/reservation-form in api/src/documentsRoutes.js to derive `language` from the request body (with fallback to the calculator snapshot) and to compute `reservationDate` from `reservation_form_date` or the approved reservation row. This removes the “ReferenceError: language is not defined” / “reservationDate is not defined” 500 errors when Financial Admin clicks “Print Reservation PDF”.
   - API: Aligned the Preliminary Reservation Payment source with the workflow: when an approved row exists in `reservation_forms`, the PDF now always uses its `preliminary_payment` value; otherwise it uses `preliminary_payment_amount` from the client request. This matches the behaviour already documented for locking preliminary payments after FM approval.

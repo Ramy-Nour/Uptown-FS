@@ -25,6 +25,17 @@ export default function DealDetail() {
   const { setShow, setMessage } = useLoader()
   const user = JSON.parse(localStorage.getItem('auth_user') || '{}')
   const role = user?.role || 'user'
+  const canViewUnitHistory = [
+    'crm_admin',
+    'financial_manager',
+    'financial_admin',
+    'admin',
+    'superadmin',
+    'ceo',
+    'chairman',
+    'vice_chairman',
+    'top_management'
+  ].includes(role)
 
   // Conflict visibility: other deals for the same unit (for managers)
   const [unitDeals, setUnitDeals] = useState([])
@@ -260,6 +271,8 @@ export default function DealDetail() {
 
   if (error) return <p style={{ color: '#e11d48' }}>{error}</p>
   if (!deal) return <p>Loading…</p>
+
+  const dealUnitId = Number(deal?.details?.calculator?.unitInfo?.unit_id) || null
 
   const schedule = deal?.details?.calculator?.generatedPlan?.schedule || []
   const totals = deal?.details?.calculator?.generatedPlan?.totals || null
@@ -544,12 +557,20 @@ export default function DealDetail() {
         <h2 style={{ marginTop: 0 }}>Deal #{deal.id}</h2>
         <div style={{ display: 'flex', gap: 8 }}>
           <LoadingButton onClick={() => navigate('/deals')}>Back to Dashboard</LoadingButton>
-          {deal?.details?.calculator?.unitInfo?.unit_id && (
+          {dealUnitId && (
             <LoadingButton
-              onClick={() => navigate(`/deals?unitId=${Number(deal.details.calculator.unitInfo.unit_id)}`)}
+              onClick={() => navigate(`/deals?unitId=${dealUnitId}`)}
               title="View all deals created for this unit"
             >
               View Deals for This Unit
+            </LoadingButton>
+          )}
+          {dealUnitId && canViewUnitHistory && (
+            <LoadingButton
+              onClick={() => navigate(`/admin/unit-history?unitId=${dealUnitId}`)}
+              title="Open full lifecycle history for this unit (blocks, reservations, contracts)"
+            >
+              View Unit History
             </LoadingButton>
           )}
         </div>

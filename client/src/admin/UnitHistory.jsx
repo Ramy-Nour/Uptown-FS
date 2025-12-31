@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import { fetchWithAuth, API_URL } from '../lib/apiClient.js'
 import BrandHeader from '../lib/BrandHeader.jsx'
 import { pageContainer, pageTitle, ctrl, btn, metaText, errorText } from '../lib/ui.js'
@@ -77,6 +78,7 @@ export default function UnitHistory() {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [searchLoading, setSearchLoading] = useState(false)
+  const location = useLocation()
 
   const handleLogout = async () => {
     try {
@@ -152,6 +154,21 @@ export default function UnitHistory() {
       setSearchLoading(false)
     }
   }
+
+  // When opened with /admin/unit-history?unitId=123, auto-load that unit
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(location.search || '')
+      const fromQuery = params.get('unitId') || params.get('unit_id')
+      if (fromQuery && Number(fromQuery) > 0) {
+        setUnitIdInput(fromQuery)
+        loadHistory(null, fromQuery)
+      }
+    } catch {
+      // ignore malformed query strings
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search])
 
   return (
     <div>

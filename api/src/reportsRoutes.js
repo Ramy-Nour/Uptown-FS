@@ -64,9 +64,12 @@ router.get('/workflow-logs', authMiddleware, requireRole(['ceo', 'chairman', 'vi
                (SELECT stm.manager_user_id FROM sales_team_members stm WHERE stm.consultant_user_id=pp.created_by AND stm.active=TRUE LIMIT 1) AS manager_user_id,
                (SELECT um.email FROM users um WHERE um.id = (SELECT stm.manager_user_id FROM sales_team_members stm WHERE stm.consultant_user_id=pp.created_by AND stm.active=TRUE LIMIT 1)) AS manager_email,
                (SELECT COALESCE(um.meta->>'name', um.email) FROM users um WHERE um.id = (SELECT stm.manager_user_id FROM sales_team_members stm WHERE stm.consultant_user_id=pp.created_by AND stm.active=TRUE LIMIT 1)) AS manager_name,
-               COALESCE( (pp.details->>'totalNominalPrice')::numeric,
-                         (pp.details->'data'->>'totalNominalPrice')::numeric,
-                         0) AS total_nominal
+               COALESCE(
+                 (pp.details->'calculator'->'generatedPlan'->'totals'->>'totalNominal')::numeric,
+                 (pp.details->>'totalNominalPrice')::numeric,
+                 (pp.details->'data'->>'totalNominalPrice')::numeric,
+                 0
+               ) AS total_nominal
         FROM payment_plans pp
         LEFT JOIN deals d ON d.id = pp.deal_id
         LEFT JOIN units un ON un.id = (d.details->'calculator'->'unitInfo'->>'unit_id')::int
@@ -110,9 +113,12 @@ router.get('/workflow-logs', authMiddleware, requireRole(['ceo', 'chairman', 'vi
                (SELECT stm.manager_user_id FROM sales_team_members stm WHERE stm.consultant_user_id=pp.created_by AND stm.active=TRUE LIMIT 1) AS manager_user_id,
                (SELECT um.email FROM users um WHERE um.id = (SELECT stm.manager_user_id FROM sales_team_members stm WHERE stm.consultant_user_id=pp.created_by AND stm.active=TRUE LIMIT 1)) AS manager_email,
                (SELECT COALESCE(um.meta->>'name', um.email) FROM users um WHERE um.id = (SELECT stm.manager_user_id FROM sales_team_members stm WHERE stm.consultant_user_id=pp.created_by AND stm.active=TRUE LIMIT 1)) AS manager_name,
-               COALESCE( (pp.details->>'totalNominalPrice')::numeric,
-                         (pp.details->'data'->>'totalNominalPrice')::numeric,
-                         0) AS total_nominal
+               COALESCE(
+                 (pp.details->'calculator'->'generatedPlan'->'totals'->>'totalNominal')::numeric,
+                 (pp.details->>'totalNominalPrice')::numeric,
+                 (pp.details->'data'->>'totalNominalPrice')::numeric,
+                 0
+               ) AS total_nominal
         FROM reservation_forms rf
         JOIN payment_plans pp ON pp.id = rf.payment_plan_id
         LEFT JOIN units un ON un.id = rf.unit_id
@@ -156,9 +162,12 @@ router.get('/workflow-logs', authMiddleware, requireRole(['ceo', 'chairman', 'vi
                (SELECT stm.manager_user_id FROM sales_team_members stm WHERE stm.consultant_user_id=pp.created_by AND stm.active=TRUE LIMIT 1) AS manager_user_id,
                (SELECT um.email FROM users um WHERE um.id = (SELECT stm.manager_user_id FROM sales_team_members stm WHERE stm.consultant_user_id=pp.created_by AND stm.active=TRUE LIMIT 1)) AS manager_email,
                (SELECT COALESCE(um.meta->>'name', um.email) FROM users um WHERE um.id = (SELECT stm.manager_user_id FROM sales_team_members stm WHERE stm.consultant_user_id=pp.created_by AND stm.active=TRUE LIMIT 1)) AS manager_name,
-               COALESCE( (pp.details->>'totalNominalPrice')::numeric,
-                         (pp.details->'data'->>'totalNominalPrice')::numeric,
-                         0) AS total_nominal
+               COALESCE(
+                 (pp.details->'calculator'->'generatedPlan'->'totals'->>'totalNominal')::numeric,
+                 (pp.details->>'totalNominalPrice')::numeric,
+                 (pp.details->'data'->>'totalNominalPrice')::numeric,
+                 0
+               ) AS total_nominal
         FROM contracts c
         JOIN reservation_forms rf ON rf.id = c.reservation_form_id
         JOIN payment_plans pp ON pp.id = rf.payment_plan_id

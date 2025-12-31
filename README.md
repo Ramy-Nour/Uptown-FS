@@ -121,6 +121,8 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-12-31 05:55] Workflow Logs — reportsRoutes.js cleanup and parameterised filters
+  - API: Reimplemented GET /api/reports/workflow-logs in api/src/reportsRoutes.js to use proper $1/$2-style parameter bindings for consultant/manager/date filters in all three sections (Offers, Reservations, Contracts), and to consistently derive total_nominal from payment_plans.details.calculator.generatedPlan.totals.totalNominal with fallbacks to legacy totalNominalPrice fields. This replaces the earlier partially patched version of the route that still had inline numeric placeholders and a corrupted intermediate edit, ensuring filters work reliably without SQL binding errors.
 - [2025-12-31 05:40] Workflow Logs — label refinements for counts and XLSX totals
   - Client: Simplified the Workflow Logs summary footer labels so each line now displays “Offers: N — Total”, “Reservations: N — Total”, and “Contracts: N — Total” without “deals”/“records” suffixes, keeping the focus on counts and monetary values.
   - Client: Updated the XLSX “Totals” sheet header row to use “Type | Count | Total Value” instead of “Section | Count | Total”, matching the semantics of the three workflow stages (Offers, Reservations, Contracts).

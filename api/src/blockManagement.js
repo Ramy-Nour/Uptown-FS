@@ -756,8 +756,6 @@ router.get('/current', authMiddleware, async (req, res) => {
     return res.status(500).json({ error: { message: 'Internal error' } })
   }
 })
-  }
-})
 
 // Pending requests (role-aware)
 router.get('/pending', authMiddleware, async (req, res) => {
@@ -963,7 +961,7 @@ async function processBlockExpiry() {
       FROM units u
       WHERE b.unit_id = u.id
         AND b.status = 'approved'
-        AND b.blocked_until &lt; NOW()
+        AND b.blocked_until < NOW()
         AND (b.unblock_status IS NULL OR b.unblock_status = 'rejected')
       RETURNING b.id, b.unit_id, u.code AS unit_code
       `
@@ -982,7 +980,7 @@ async function processBlockExpiry() {
       } catch (_) {}
     }
 
-    if (expiredBlocks.rows.length &gt; 0) {
+    if (expiredBlocks.rows.length > 0) {
       console.log(`[blocks] Created unblock requests for ${expiredBlocks.rows.length} expired blocks`)
     }
   } catch (error) {

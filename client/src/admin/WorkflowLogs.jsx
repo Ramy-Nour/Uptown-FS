@@ -159,12 +159,12 @@ export default function WorkflowLogs() {
       const contractsCount = contracts.length
 
       const sumSheet = XLSX.utils.aoa_to_sheet([
-        ['Section', 'Count', 'Total'],
+        ['Type', 'Count', 'Total Value'],
         ['Offers', offersCount, offersTotal],
         ['Reservations', reservationsCount, reservationsTotal],
         ['Contracts', contractsCount, contractsTotal]
       ])
-      sumSheet['!cols'] = [{ wch: 24 }, { wch: 10 }, { wch: 18 }]
+      sumSheet['!cols'] = [{ wch: 20 }, { wch: 10 }, { wch: 18 }]
       XLSX.utils.book_append_sheet(wb, sumSheet, 'Totals')
 
       const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
@@ -367,13 +367,13 @@ function SummaryFooter({ data }) {
   return (
     <div style={{ marginTop: 12, fontWeight: 700 }}>
       <div>
-        Offers: {offersCount} deals — {formatTotal(offersTotal)}
+        Offers: {offersCount} — {formatTotal(offersTotal)}
       </div>
       <div>
-        Reservations: {reservationsCount} records — {formatTotal(reservationsTotal)}
+        Reservations: {reservationsCount} — {formatTotal(reservationsTotal)}
       </div>
       <div>
-        Contracts: {contractsCount} records — {formatTotal(contractsTotal)}
+        Contracts: {contractsCount} — {formatTotal(contractsTotal)}
       </div>
     </div>
   )

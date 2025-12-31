@@ -80,7 +80,11 @@ export default function WorkflowLogs() {
 
       const offerHeaders = [
         { key: 'id', label: 'ID' },
-        { key: 'deal_id', label: 'Deal' },
+        { key: 'deal_id', label: 'Deal ID' },
+        { key: 'deal_title', label: 'Deal Title' },
+        { key: 'unit_id', label: 'Unit ID' },
+        { key: 'unit_code', label: 'Unit Code' },
+        { key: 'unit_type', label: 'Unit Type' },
         { key: 'status', label: 'Status' },
         { key: 'version', label: 'Version' },
         { key: 'accepted', label: 'Accepted' },
@@ -94,6 +98,9 @@ export default function WorkflowLogs() {
       const resHeaders = [
         { key: 'id', label: 'ID' },
         { key: 'payment_plan_id', label: 'Offer ID' },
+        { key: 'unit_id', label: 'Unit ID' },
+        { key: 'unit_code', label: 'Unit Code' },
+        { key: 'unit_type', label: 'Unit Type' },
         { key: 'status', label: 'Status' },
         { key: 'created_by', label: 'Consultant ID' },
         { key: 'created_by_email', label: 'Consultant Email' },
@@ -105,6 +112,9 @@ export default function WorkflowLogs() {
       const conHeaders = [
         { key: 'id', label: 'ID' },
         { key: 'reservation_form_id', label: 'Reservation ID' },
+        { key: 'unit_id', label: 'Unit ID' },
+        { key: 'unit_code', label: 'Unit Code' },
+        { key: 'unit_type', label: 'Unit Type' },
         { key: 'status', label: 'Status' },
         { key: 'created_by', label: 'Consultant ID' },
         { key: 'created_by_email', label: 'Consultant Email' },
@@ -227,10 +237,31 @@ export default function WorkflowLogs() {
 
         {data && (
           <>
-            <Section title="Offers" rows={data.offers?.rows} total={data.offers?.total} />
-            <Section title="Reservations" rows={data.reservations?.rows} total={data.reservations?.total} />
-            <Section title="Contracts" rows={data.contracts?.rows} total={data.contracts?.total} />
-            <div style={{ marginTop: 12, fontWeight: 700 }}>Grand Total: {Number(data.grandTotal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            <Section
+              title="Offers"
+              rows={data.offers?.rows}
+              total={data.offers?.total}
+              byStatus={data.offers?.byStatus}
+            />
+            <Section
+              title="Reservations"
+              rows={data.reservations?.rows}
+              total={data.reservations?.total}
+              byStatus={data.reservations?.byStatus}
+            />
+            <Section
+              title="Contracts"
+              rows={data.contracts?.rows}
+              total={data.contracts?.total}
+              byStatus={data.contracts?.byStatus}
+            />
+            <div style={{ marginTop: 12, fontWeight: 700 }}>
+              Grand Total:{' '}
+              {Number(data.grandTotal || 0).toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+              })}
+            </div>
           </>
         )}
       </div>
@@ -238,14 +269,38 @@ export default function WorkflowLogs() {
   )
 }
 
-function Section({ title, rows, total }) {
+function Section({ title, rows, total, byStatus }) {
   const list = rows || []
   const numCols = list.length > 0 ? Object.keys(list[0]).length : 1
+
+  const breakdown =
+    Array.isArray(byStatus) && byStatus.length
+      ? byStatus
+      : buildStatusBreakdown(list)
+
   return (
     <div style={{ marginTop: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h3 style={{ margin: 0 }}>{title}</h3>
-        <div style={{ fontWeight: 700 }}>Total: {Number(total || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontWeight: 700 }}>
+            Total:{' '}
+            {Number(total || 0).toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2
+            })}
+          </div>
+          {breakdown.length > 0 && (
+            <div style={{ marginTop: 4, fontSize: 12, opacity: 0.9 }}>
+              {breakdown.map((b, idx) => (
+                <span key={b.status || idx} style={{ marginLeft: idx ? 12 : 0 }}>
+                  {(b.status || 'unknown').toUpperCase()}: {b.count} /{' '}
+                  {formatTotal(b.total_nominal)}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
       <div style={tableWrap}>
         <table style={table}>
@@ -270,13 +325,29 @@ function Section({ title, rows, total }) {
   )
 }
 
+function buildStatusBreakdown(rows) {
+  const map = new Map()
+  for (const r of rows || []) {
+    const status = r.status || 'unknown'
+    const existing = map.get(status) || { status, count: 0, total_nominal: 0 }
+    existing.count += 1
+    existing.total_nominal += Number(r.total_nominal) || 0
+    map.set(status, existing)
+  }
+  return Array.from(map.values())
+}
+
+function formatTotal(v) {
+  const n = Number(v) || 0
+  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
 function formatCell(k, v) {
   if (k.includes('created_at') || k.includes('updated_at')) {
     return v ? new Date(v).toLocaleString() : ''
   }
   if (k.includes('total')) {
-    const n = Number(v) || 0
-    return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    return formatTotal(v)
   }
   return String(v ?? '')
 }

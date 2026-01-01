@@ -121,6 +121,10 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2026-01-01 01:40] Reservation Forms — FA can cancel pending requests; approved reservations support FM-approved amendments
+  - Client: Updated the Financial Admin “Current Blocks” page (client/src/deals/CurrentBlocks.jsx) to (a) detect pending reservation forms per payment plan, disable “Create Reservation Form” while a request is pending, and expose a “Cancel Reservation Request” button so FA can withdraw a mistaken pending reservation and recreate it with corrected date/preliminary payment; and (b) add a “Request Change to Approved Reservation” action for plans that already have an approved reservation, which prompts FA for a new Reservation Date and Preliminary Payment plus a reason and sends an amendment request to the Financial Manager instead of editing locked fields directly.
+  - Client: Extended the Financial Manager Reservations Queue (client/src/deals/ReservationsQueue.jsx) with a second section, “Approved Reservations — Amendment Requests”, that lists approved reservations whose details include a pending amendment_request. FM can now “Approve Change” (which updates reservation_date and preliminary_payment and records an amendment_history entry) or “Reject Change” (which archives the request into amendment_history without changing the approved values).
+  - API: Enhanced /api/workflow/reservation-forms (api/src/reservationFormsRoutes.js) with: (1) PATCH /api/workflow/reservation-forms/:id/cancel for Financial Admin to cancel pending reservations (status must be pending_approval; status becomes cancelled and cancellation metadata is stored in details); (2) POST /api/workflow/reservation-forms/:id/request-amendment so FA can request changes to an approved reservation’s date and Preliminary Payment with a reason; (3) GET /api/workflow/reservation-forms/amendments so FM can list approved reservations that have pending amendment_request; and (4) PATCH /api/workflow/reservation-forms/:id/approve-amendment and .../:id/reject-amendment so FM can apply or reject requested changes, with all amendments recorded in details.amendment_history while the core “lock after approval” rule still prevents direct editing of approved values from the FA UI.
 - [2026-01-01 00:35] Calculator Inputs — fix stray JSX braces and duplicate SubsequentYears block
   - Client: Corrected client/src/components/calculator/InputsForm.jsx by removing an extra `)}` line and a duplicate `<SubsequentYears>` block that caused Vite/esbuild to warn “The character '}' is not valid inside a JSX element.” The SubsequentYears section is now rendered exactly once, only when `!isStandardMode`, and the calculator form JSX parses cleanly again.
 - [2026-01-01 00:25] Current Blocks — remove duplicate fetch block and legacy PDF call causing parse errors
@@ -1891,8 +1895,8 @@ Key endpoints reference
 - Deals/Offers: /api/deals, /api/deals/:id/submit
 - Payment Plans: /api/workflow/payment-plans, /api/workflow/payment-plans/approved-for-unit
 - Blocks: /api/blocks/request, /api/blocks/:id/approve, /api/blocks/current
-- Reservations: /api/workflow/reservation-forms (create/approve)
-- Contracts: [Planned] /api/contracts… routes
+- Reservations: /api/workflow/reservation-forms (create/list/approve/reject/cancel), /api/workflow/reservation-forms/amendments, /api/workflow/reservation-forms/:id/request-amendment, /api/workflow/reservation-forms/:id/approve-amendment, /api/workflow/reservation-forms/:id/reject-amendment
+- Contracts: [Planned] /api/contracts… ro_codeutnewe</s
 
 Open decisions before enforcement
 - Should deal submission be blocked when evaluation='REJECT' (with override path), or keep current “auto-flag only”?

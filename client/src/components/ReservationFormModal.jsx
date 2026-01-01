@@ -4,7 +4,7 @@ import LoadingButton from './LoadingButton.jsx'
 export default function ReservationFormModal({
   open,
   defaultDate = new Date().toISOString().slice(0,10),
-  defaultLanguage = 'en',
+  defaultLanguage = 'ar',
   defaultCurrency = '',
   defaultPreliminaryPayment = '',
   preliminaryLocked = false,
@@ -117,7 +117,7 @@ export default function ReservationFormModal({
                   reservation_form_date: date || new Date().toISOString().slice(0,10),
                   preliminary_payment_amount,
                   currency_override: currency || '',
-                  language: language || 'en'
+                  language: language || 'ar'
                 })
               }}
             >

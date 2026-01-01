@@ -121,6 +121,8 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2026-01-01 00:35] Calculator Inputs — fix stray JSX braces and duplicate SubsequentYears block
+  - Client: Corrected client/src/components/calculator/InputsForm.jsx by removing an extra `)}` line and a duplicate `<SubsequentYears>` block that caused Vite/esbuild to warn “The character '}' is not valid inside a JSX element.” The SubsequentYears section is now rendered exactly once, only when `!isStandardMode`, and the calculator form JSX parses cleanly again.
 - [2026-01-01 00:25] Current Blocks — remove duplicate fetch block and legacy PDF call causing parse errors
   - Client: Cleaned up client/src/deals/CurrentBlocks.jsx by removing a stray duplicated fetch block after the load() function and an orphaned legacy Reservation Form PDF call fragment after printReservationPdf. The duplicate block left `${API_URL}/api/blocks/current` partially detached, which Babel parsed as a RegExp with invalid flags (the “Invalid regular expression flag” overlay). Behaviour of the Current Blocks page is unchanged: it still loads current blocks, prefetches approved plans and reservation forms, and gates Reservation PDF printing on FM approval.
 - [2026-01-01 00:15] Reservation Form PDF date parsing — fix syntax crash in documentsRoutes and harden dd/MM/YYYY handling

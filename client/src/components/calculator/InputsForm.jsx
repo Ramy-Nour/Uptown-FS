@@ -433,16 +433,6 @@ export default function InputsForm({
             removeSubsequentYear={removeSubsequentYear}
           />
         )}
-        )}
-
-        <SubsequentYears
-          styles={styles}
-          subsequentYears={subsequentYears}
-          errors={errors}
-          addSubsequentYear={addSubsequentYear}
-          updateSubsequentYear={updateSubsequentYear}
-          removeSubsequentYear={removeSubsequentYear}
-        />
 
         {/* Display solved New Price for target-PV modes when preview is available */}
         {['calculateForTargetPV','customYearlyThenEqual_targetPV'].includes(mode) && summaries?.totalNominalPrice != null && (

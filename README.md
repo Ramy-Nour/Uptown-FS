@@ -121,6 +121,8 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2026-01-01 00:25] Current Blocks — remove duplicate fetch block and legacy PDF call causing parse errors
+  - Client: Cleaned up client/src/deals/CurrentBlocks.jsx by removing a stray duplicated fetch block after the load() function and an orphaned legacy Reservation Form PDF call fragment after printReservationPdf. The duplicate block left `${API_URL}/api/blocks/current` partially detached, which Babel parsed as a RegExp with invalid flags (the “Invalid regular expression flag” overlay). Behaviour of the Current Blocks page is unchanged: it still loads current blocks, prefetches approved plans and reservation forms, and gates Reservation PDF printing on FM approval.
 - [2026-01-01 00:15] Reservation Form PDF date parsing — fix syntax crash in documentsRoutes and harden dd/MM/YYYY handling
   - API: Updated the reservation_form_date parsing in POST /api/documents/reservation-form (api/src/documentsRoutes.js) to remove a broken, over-escaped regular expression that caused a “SyntaxError: Invalid or unexpected token” during Node.js startup. The handler now detects dd/MM/YYYY dates via simple string splitting and digit checks (with a safe regex only on individual parts), then falls back to Date parsing and finally to today’s date. Behaviour for valid dd/MM/YYYY strings and ISO-like dates is unchanged; the API now starts cleanly and continues to normalize reservation dates for the PDF.
 - [2025-12-31 06:10] Reservation Form flow — lock reservation date and Preliminary Payment after FM approval (Current Blocks)

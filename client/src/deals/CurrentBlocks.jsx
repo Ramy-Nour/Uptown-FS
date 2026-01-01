@@ -49,22 +49,6 @@ export default function CurrentBlocks() {
     } finally {
       setLoading(false)
     }
-  }/api/blocks/current`)
-      const data = await resp.json()
-      if (!resp.ok) throw new Error(data?.error?.message || 'Failed to load current blocks')
-      const blocks = data.blocks || []
-      setRows(blocks)
-      // load approved reservation forms once so we can gate PDF generation on FM approval
-      await loadApprovedReservations()
-      // prefetch plans per unit
-      for (const b of blocks) {
-        await loadPlansForBlock(b)
-      }
-    } catch (e) {
-      setError(e.message || String(e))
-    } finally {
-      setLoading(false)
-    }
   }
 
   useEffect(() => { load() }, [])
@@ -203,26 +187,6 @@ export default function CurrentBlocks() {
         // the API ignores client-sent values when an approved reservation exists.
         currency_override: '',
         language: f.language || approved.language || 'en'
-      }
-      const { blob, filename } = await generateReservationFormPdf(body, API_URL)
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = filename
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-    } catch (e) {
-      alert(e.message || String(e))
-    }
-  }
-      const body = {
-        deal_id: Number(dealId),
-        reservation_form_date: toDdMmYyyy(f.reservationDate || new Date().toISOString().slice(0, 10)),
-        preliminary_payment_amount: prelim,
-        currency_override: '',
-        language: f.language || 'en'
       }
       const { blob, filename } = await generateReservationFormPdf(body, API_URL)
       const url = URL.createObjectURL(blob)

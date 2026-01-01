@@ -591,7 +591,7 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
       const rawReservationFormDate = req.body?.reservation_form_date
       if (typeof rawReservationFormDate === 'string' && rawReservationFormDate.trim()) {
         const trimmed = rawReservationFormDate.trim()
-        const m = /^(\\d{2})\\/(\\d{2})\\/(\\d{4})$/.exec(trimmed)
+        const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(trimmed)
         if (m) {
           const [, dd, mm, yyyy] = m
           reservationDateDisplay = `${dd}/${mm}/${yyyy}`

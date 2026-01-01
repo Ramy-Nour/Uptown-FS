@@ -175,6 +175,8 @@ router.get(
       const params = []
       if (status) {
         params.push(String(status))
+        // Use positional parameter placeholders so Postgres compares text-to-text,
+        // e.g. rf.status = $1 with ['pending_approval'], instead of rf.status = 1.
         clauses.push(`rf.status = ${params.length}`)
       }
       const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''

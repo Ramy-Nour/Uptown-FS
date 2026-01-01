@@ -89,17 +89,17 @@ export default function CurrentBlocks() {
         label: `Approved Payment Plan #${p.id}${p.version ? ` (v${p.version})` : ''}`,
         dealId: p.deal_id || null
       }))
-      // Auto-select the latest plan (first in DESC list) and default language
+      // Auto-select the latest plan (first in DESC list) and default language (Arabic)
       const first = plans[0] || {}
       setBlockForm(blockRow.id, {
         plans,
         selectedPlanId: first.id || '',
         selectedPlanDealId: first.dealId || null,
-        language: 'en'
+        language: 'ar'
       })
     } catch (e) {
       // keep silent; form will show empty selector
-      setBlockForm(blockRow.id, { plans: [], selectedPlanId: '', selectedPlanDealId: null, language: 'en' })
+      setBlockForm(blockRow.id, { plans: [], selectedPlanId: '', selectedPlanDealId: null, language: 'ar' })
     }
   }
 
@@ -142,14 +142,17 @@ export default function CurrentBlocks() {
           payment_plan_id: paymentPlanId,
           reservation_date: f.reservationDate,
           preliminary_payment: prelim,
-          language: f.language || 'en',
+          language: f.language || 'ar',
           details
         })
       })
       const data = await resp.json().catch(() => ({}))
       if (!resp.ok) throw new Error(data?.error?.message || 'Failed to create reservation form')
-      alert(`Reservation Form #${data?.reservation_form?.id} created and sent for Financial Manager approval.`)
-      setForm(fm => ({ ...fm, [id]: { ...fm[id], reservationDate: '', preliminaryPayment: '', language: 'en' } }))
+      alert(
+        `Reservation Form #${data?.reservation_form?.id} created. The request has been sent to the Financial Manager for approval. ` +
+        'Please wait for their decision before creating another reservation for this payment plan.'
+      )
+      setForm(fm => ({ ...fm, [id]: { ...fm[id], reservationDate: '', preliminaryPayment: '', language: 'ar' } }))
     } catch (e) {
       alert(e.message || String(e))
     } finally {
@@ -186,7 +189,7 @@ export default function CurrentBlocks() {
         // Reservation date and Preliminary Payment come from the approved reservation_form row;
         // the API ignores client-sent values when an approved reservation exists.
         currency_override: '',
-        language: f.language || approved.language || 'en'
+        language: f.language || approved.language || 'ar'
       }
       const { blob, filename } = await generateReservationFormPdf(body, API_URL)
       const url = URL.createObjectURL(blob)
@@ -256,6 +259,11 @@ export default function CurrentBlocks() {
                 }
               }
 
+              let languageValue = f.language || ''
+              if (!languageValue) {
+                languageValue = (approvedForPlan && approvedForPlan.language) || 'ar'
+              }
+
               return (
                 <tr key={r.id}>
                   <td style={td}>{r.id}</td>
@@ -300,15 +308,12 @@ export default function CurrentBlocks() {
                       />
                       <select
                         style={ctrl}
-                        value={f.language || 'en'}
+                        value={languageValue}
                         onChange={e => setBlockForm(r.id, { language: e.target.value })}
-                        disabled={isApproved}
-                        title={isApproved
-                          ? 'Language is locked for the approved reservation form.'
-                          : 'Language to use for the Reservation Form PDF.'}
+                        title="Language to use for the Reservation Form PDF (can be changed even after approval)."
                       >
-                        <option value="en">English</option>
                         <option value="ar">العربية</option>
+                        <option value="en">English</option>
                       </select>
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                         <button

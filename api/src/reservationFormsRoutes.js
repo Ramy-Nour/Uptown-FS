@@ -77,6 +77,24 @@ router.post(
         )
       }
 
+      // Prevent duplicate reservation forms for the same payment plan while one is pending or approved.
+      const existingRes = await pool.query(
+        `SELECT id, status
+         FROM reservation_forms
+         WHERE payment_plan_id = $1
+           AND status IN ('pending_approval', 'approved')
+         ORDER BY id DESC
+         LIMIT 1`,
+        [planId]
+      )
+      if (existingRes.rows.length > 0) {
+        return bad(
+          res,
+          400,
+          'A reservation form for this payment plan has already been created and is pending Financial Manager decision or already approved.'
+        )
+      }
+
       let reservationDateIso = null
       if (reservation_date) {
         if (typeof reservation_date === 'string') {
@@ -108,7 +126,7 @@ router.post(
         unit_id: unitId,
         reservation_date: reservationDateIso,
         preliminary_payment: preliminary_payment != null ? Number(preliminary_payment) : 0,
-        language: language || 'en',
+        language: language || 'ar',
         deal_id: plan.deal_id ?? null,
         calculator: calc || null
       }
@@ -124,7 +142,7 @@ router.post(
           unitId,
           reservationDateIso,
           preliminary_payment != null ? Number(preliminary_payment) : 0,
-          language || 'en',
+          language || 'ar',
           req.user.id,
           details
         ]

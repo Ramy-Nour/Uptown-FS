@@ -560,9 +560,9 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
     // Determine language and reservation date for the Reservation Form layout.
     const calcForLanguage = deal.details?.calculator || {}
 
-    // Language: prefer explicit request, then calculator snapshot, then default to English.
-    let language = req.body?.language || calcForLanguage?.language || calcForLanguage?.inputs?.language || ''
-    language = String(language || 'en').toLowerCase()
+    // Language: prefer explicit request, then calculator snapshot, then default to Arabic.
+    let language = req.body?.language || calcForLanguage?.language || calcForLanguage?.inputs?.language || 'ar'
+    language = String(language).toLowerCase()
     language = language.startsWith('ar') ? 'ar' : 'en'
     const rtl = language === 'ar'
 

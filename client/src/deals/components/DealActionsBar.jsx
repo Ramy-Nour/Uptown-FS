@@ -101,7 +101,7 @@ export default function DealActionsBar({
                     .slice(0, 10)
                 : new Date().toISOString().slice(0, 10)
             }
-            defaultLanguage={approvedReservation?.language || 'en'}
+            defaultLanguage={approvedReservation?.language || 'ar'}
             defaultCurrency=""
             defaultPreliminaryPayment={
               approvedReservation

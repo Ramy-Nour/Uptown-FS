@@ -121,6 +121,10 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2026-01-01 01:05] Reservation Forms — keep language selectable, default to Arabic, and prevent duplicate FA submissions
+  - Client: Updated the Financial Admin “Current Blocks” page (client/src/deals/CurrentBlocks.jsx) so Reservation Date and Preliminary Payment stay locked after Financial Manager approval, but the Language dropdown remains editable. Language now defaults to Arabic for new reservation requests and Reservation Form PDFs, and the success message explicitly tells Financial Admin that the request has been sent to the Financial Manager to discourage duplicate submissions.
+  - Client: Updated Deal Detail actions (client/src/deals/components/DealActionsBar.jsx and client/src/components/ReservationFormModal.jsx) so the Reservation Form modal defaults to Arabic when no prior reservation exists, while still respecting the language stored on an approved reservation_forms row; Financial Admin can override to English before generating the PDF.
+  - API: Updated POST /api/documents/reservation-form (api/src/documentsRoutes.js) so language falls back to Arabic when not provided, and strengthened POST /api/workflow/reservation-forms (api/src/reservationFormsRoutes.js) to refuse creating more than one pending/approved reservation_form for the same payment plan, returning a clear 400 error if a duplicate request is made.
 - [2026-01-01 00:35] Calculator Inputs — fix stray JSX braces and duplicate SubsequentYears block
   - Client: Corrected client/src/components/calculator/InputsForm.jsx by removing an extra `)}` line and a duplicate `<SubsequentYears>` block that caused Vite/esbuild to warn “The character '}' is not valid inside a JSX element.” The SubsequentYears section is now rendered exactly once, only when `!isStandardMode`, and the calculator form JSX parses cleanly again.
 - [2026-01-01 00:25] Current Blocks — remove duplicate fetch block and legacy PDF call causing parse errors

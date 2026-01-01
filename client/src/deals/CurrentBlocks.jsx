@@ -26,6 +26,8 @@ export default function CurrentBlocks() {
   // keyed by block id: { selectedPlanId, reservationDate, preliminaryPayment, language, plans: [] }
   const [form, setForm] = useState({})
   const [historyTarget, setHistoryTarget] = useState(null) // { unitId, unitCode }
+  // keyed by payment_plan_id: latest approved reservation form row
+  const [approvedReservationsByPlanId, setApprovedReservationsByPlanId] = useState({})
 
   async function load() {
     try {
@@ -36,6 +38,24 @@ export default function CurrentBlocks() {
       if (!resp.ok) throw new Error(data?.error?.message || 'Failed to load current blocks')
       const blocks = data.blocks || []
       setRows(blocks)
+      // load approved reservation forms once so we can gate PDF generation on FM approval
+      await loadApprovedReservations()
+      // prefetch plans per unit
+      for (const b of blocks) {
+        await loadPlansForBlock(b)
+      }
+    } catch (e) {
+      setError(e.message || String(e))
+    } finally {
+      setLoading(false)
+    }
+  }/api/blocks/current`)
+      const data = await resp.json()
+      if (!resp.ok) throw new Error(data?.error?.message || 'Failed to load current blocks')
+      const blocks = data.blocks || []
+      setRows(blocks)
+      // load approved reservation forms once so we can gate PDF generation on FM approval
+      await loadApprovedReservations()
       // prefetch plans per unit
       for (const b of blocks) {
         await loadPlansForBlock(b)
@@ -51,6 +71,26 @@ export default function CurrentBlocks() {
 
   function setBlockForm(id, patch) {
     setForm(f => ({ ...f, [id]: { ...(f[id] || {}), ...patch } }))
+  }
+
+  async function loadApprovedReservations() {
+    try {
+      const resp = await fetchWithAuth(`${API_URL}/api/workflow/reservation-forms?status=approved`)
+      const data = await resp.json()
+      if (!resp.ok) throw new Error(data?.error?.message || 'Failed to load approved reservations')
+      const map = {}
+      const rows = Array.isArray(data.reservation_forms) ? data.reservation_forms : []
+      for (const rf of rows) {
+        const planId = Number(rf.payment_plan_id)
+        if (Number.isFinite(planId)) {
+          map[planId] = rf
+        }
+      }
+      setApprovedReservationsByPlanId(map)
+    } catch (e) {
+      console.error('Failed to load approved reservation forms for CurrentBlocks:', e)
+      setApprovedReservationsByPlanId({})
+    }
   }
 
   async function loadPlansForBlock(blockRow) {
@@ -87,10 +127,23 @@ export default function CurrentBlocks() {
         alert('No approved payment plan is available for this unit.')
         return
       }
-      // Validate preliminary payment as a non-negative number
-      const prelim = f.preliminaryPayment === '' || f.preliminaryPayment == null ? 0 : Number(f.preliminaryPayment)
+      if (approvedReservationsByPlanId[paymentPlanId]) {
+        alert(
+          'This reservation has already been approved by the Financial Manager. You cannot create another reservation form for the same payment plan from this view.'
+        )
+        return
+      }
+      if (f.preliminaryPayment === '' || f.preliminaryPayment == null) {
+        alert('Preliminary Payment is required (enter 0 if there is no upfront payment).')
+        return
+      }
+      const prelim = Number(f.preliminaryPayment)
       if (!Number.isFinite(prelim) || prelim < 0) {
         alert('Preliminary Payment must be a non-negative number.')
+        return
+      }
+      if (!f.reservationDate) {
+        alert('Reservation Date is required.')
         return
       }
       setCreating(s => new Set([...s, id]))
@@ -103,7 +156,7 @@ export default function CurrentBlocks() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           payment_plan_id: paymentPlanId,
-          reservation_date: f.reservationDate || null,
+          reservation_date: f.reservationDate,
           preliminary_payment: prelim,
           language: f.language || 'en',
           details
@@ -116,7 +169,11 @@ export default function CurrentBlocks() {
     } catch (e) {
       alert(e.message || String(e))
     } finally {
-      setCreating(s => { const n = new Set(s); n.delete(id); return n })
+      setCreating(s => {
+        const n = new Set(s)
+        n.delete(id)
+        return n
+      })
     }
   }
 
@@ -130,11 +187,36 @@ export default function CurrentBlocks() {
         alert('Unable to determine the related deal for this plan. Reservation PDF requires a deal_id.')
         return
       }
-      const prelim = f.preliminaryPayment === '' || f.preliminaryPayment == null ? 0 : Number(f.preliminaryPayment)
-      if (!Number.isFinite(prelim) || prelim < 0) {
-        alert('Preliminary Payment must be a non-negative number.')
+      const paymentPlanId = Number(plan?.id) || 0
+      if (!paymentPlanId) {
+        alert('No approved payment plan is available for this unit.')
         return
       }
+      const approved = approvedReservationsByPlanId[paymentPlanId]
+      if (!approved) {
+        alert('Reservation Form must be approved by the Financial Manager before printing the Reservation PDF.')
+        return
+      }
+      const body = {
+        deal_id: Number(dealId),
+        // Reservation date and Preliminary Payment come from the approved reservation_form row;
+        // the API ignores client-sent values when an approved reservation exists.
+        currency_override: '',
+        language: f.language || approved.language || 'en'
+      }
+      const { blob, filename } = await generateReservationFormPdf(body, API_URL)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      alert(e.message || String(e))
+    }
+  }
       const body = {
         deal_id: Number(dealId),
         reservation_form_date: toDdMmYyyy(f.reservationDate || new Date().toISOString().slice(0, 10)),
@@ -183,6 +265,33 @@ export default function CurrentBlocks() {
             {!loading && rows.map(r => {
               const f = form[r.id] || {}
               const plans = f.plans || []
+              const selectedPlanId = f.selectedPlanId || (plans[0] && plans[0].id)
+              const selectedPlan = plans.find(p => p.id === selectedPlanId) || plans[0]
+              const selectedPlanLabel = selectedPlan ? selectedPlan.label : 'No approved payment plans for this unit'
+              const approvedForPlan = selectedPlan ? approvedReservationsByPlanId[selectedPlan.id] : null
+              const isApproved = !!approvedForPlan
+
+              let reservationDateValue = f.reservationDate || ''
+              if (isApproved) {
+                const raw = approvedForPlan.reservation_date || approvedForPlan.details?.reservation_date
+                if (raw) {
+                  const d = new Date(raw)
+                  if (!Number.isNaN(d.getTime())) {
+                    reservationDateValue = d.toISOString().slice(0, 10)
+                  }
+                }
+              }
+
+              let preliminaryValue = f.preliminaryPayment || ''
+              if (isApproved) {
+                const fromColumn = approvedForPlan.preliminary_payment
+                const fromDetails = approvedForPlan.details?.preliminary_payment
+                const v = fromColumn != null ? fromColumn : fromDetails
+                if (v != null) {
+                  preliminaryValue = String(v)
+                }
+              }
+
               return (
                 <tr key={r.id}>
                   <td style={td}>{r.id}</td>
@@ -196,31 +305,43 @@ export default function CurrentBlocks() {
                       {/* Approved plan is auto-fetched and locked; show as read-only */}
                       <input
                         style={{ ...ctrl, background: '#f8fafc' }}
-                        value={plans.length ? (plans.find(p => p.id === f.selectedPlanId)?.label || plans[0].label) : 'No approved payment plans for this unit'}
+                        value={selectedPlanLabel}
                         readOnly
                         title="Approved payment plan for this blocked unit (auto-selected)"
                         onFocus={() => { if (!plans.length) loadPlansForBlock(r) }}
                       />
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                         <input
-                          style={ctrl}
+                          style={{ ...ctrl, background: isApproved ? '#f8fafc' : '#fff' }}
                           type="date"
                           placeholder="Reservation Date"
-                          value={f.reservationDate || ''}
+                          value={reservationDateValue}
                           onChange={e => setBlockForm(r.id, { reservationDate: e.target.value })}
+                          disabled={isApproved}
+                          title={isApproved
+                            ? 'Reservation Date is locked after Financial Manager approval.'
+                            : 'Reservation Date for this reservation request.'}
                         />
                         <span style={{ fontSize: 11, color: '#64748b' }}>Format: dd/MM/YYYY</span>
                       </div>
                       <input
-                        style={ctrl}
+                        style={{ ...ctrl, background: isApproved ? '#f8fafc' : '#fff' }}
                         placeholder="Preliminary Payment"
-                        value={f.preliminaryPayment || ''}
+                        value={preliminaryValue}
                         onChange={e => setBlockForm(r.id, { preliminaryPayment: e.target.value })}
+                        disabled={isApproved}
+                        title={isApproved
+                          ? 'Preliminary Payment is locked after Financial Manager approval.'
+                          : 'Preliminary Reservation Payment to be approved by the Financial Manager (enter 0 if none).'}
                       />
                       <select
                         style={ctrl}
                         value={f.language || 'en'}
                         onChange={e => setBlockForm(r.id, { language: e.target.value })}
+                        disabled={isApproved}
+                        title={isApproved
+                          ? 'Language is locked for the approved reservation form.'
+                          : 'Language to use for the Reservation Form PDF.'}
                       >
                         <option value="en">English</option>
                         <option value="ar">العربية</option>
@@ -229,15 +350,20 @@ export default function CurrentBlocks() {
                         <button
                           style={btn}
                           onClick={() => createReservation(r.id)}
-                          disabled={creating.has(r.id)}
-                          title="Create reservation form for this blocked unit (sends to Financial Manager for approval)"
+                          disabled={creating.has(r.id) || isApproved}
+                          title={isApproved
+                            ? 'Reservation has already been approved by the Financial Manager for this plan.'
+                            : 'Create reservation form for this blocked unit (sends to Financial Manager for approval)'}
                         >
-                          {creating.has(r.id) ? 'Creating…' : 'Create Reservation Form'}
+                          {isApproved ? 'Reservation Approved' : (creating.has(r.id) ? 'Creating…' : 'Create Reservation Form')}
                         </button>
                         <button
                           style={btn}
                           onClick={() => printReservationPdf(r.id)}
-                          title="Generate Reservation Form PDF using the linked deal and plan"
+                          disabled={!isApproved}
+                          title={isApproved
+                            ? 'Generate Reservation Form PDF using the approved reservation (date and Preliminary Payment are locked).'
+                            : 'Reservation PDF can only be printed after the reservation is approved by the Financial Manager.'}
                         >
                           Print Reservation PDF
                         </button>

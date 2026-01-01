@@ -8,6 +8,7 @@ const btn = { padding: '8px 10px', borderRadius: 8, border: '1px solid #d1d9e6',
 
 export default function ReservationsQueue() {
   const [rows, setRows] = useState([])
+  const [amendments, setAmendments] = useState([])
   const [loading, setLoading] = useState(false)
   const [acting, setActing] = useState(new Set())
   const [error, setError] = useState('')
@@ -16,10 +17,19 @@ export default function ReservationsQueue() {
     try {
       setLoading(true)
       setError('')
-      const resp = await fetchWithAuth(`${API_URL}/api/workflow/reservation-forms?status=pending_approval`)
-      const data = await resp.json()
-      if (!resp.ok) throw new Error(data?.error?.message || 'Failed to load reservations')
-      setRows(data.reservation_forms || [])
+      const [pendingResp, amendmentsResp] = await Promise.all([
+        fetchWithAuth(`${API_URL}/api/workflow/reservation-forms?status=pending_approval`),
+        fetchWithAuth(`${API_URL}/api/workflow/reservation-forms/amendments`)
+      ])
+
+      const pendingData = await pendingResp.json().catch(() => ({}))
+      if (!pendingResp.ok) throw new Error(pendingData?.error?.message || 'Failed to load reservations')
+
+      const amendmentsData = await amendmentsResp.json().catch(() => ({}))
+      if (!amendmentsResp.ok) throw new Error(amendmentsData?.error?.message || 'Failed to load amendment requests')
+
+      setRows(pendingData.reservation_forms || [])
+      setAmendments(amendmentsData.reservation_forms || [])
     } catch (e) {
       setError(e.message || String(e))
     } finally {
@@ -33,14 +43,45 @@ export default function ReservationsQueue() {
     try {
       setActing(s => new Set([...s, id]))
       const url = `${API_URL}/api/workflow/reservation-forms/${id}/${action}`
-      const resp = await fetchWithAuth(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
+      const resp = await fetchWithAuth(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      })
       const data = await resp.json().catch(() => ({}))
       if (!resp.ok) throw new Error(data?.error?.message || `Failed to ${action}`)
       setRows(rs => rs.filter(r => r.id !== id))
     } catch (e) {
       alert(e.message || String(e))
     } finally {
-      setActing(s => { const n = new Set(s); n.delete(id); return n })
+      setActing(s => {
+        const n = new Set(s)
+        n.delete(id)
+        return n
+      })
+    }
+  }
+
+  async function fmAmendmentDecision(id, action) {
+    try {
+      setActing(s => new Set([...s, id]))
+      const url = `${API_URL}/api/workflow/reservation-forms/${id}/${action}-amendment`
+      const resp = await fetchWithAuth(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      })
+      const data = await resp.json().catch(() => ({}))
+      if (!resp.ok) throw new Error(data?.error?.message || `Failed to ${action} amendment`)
+      setAmendments(rs => rs.filter(r => r.id !== id))
+    } catch (e) {
+      alert(e.message || String(e))
+    } finally {
+      setActing(s => {
+        const n = new Set(s)
+        n.delete(id)
+        return n
+      })
     }
   }
 
@@ -71,7 +112,7 @@ export default function ReservationsQueue() {
         </div>
       </div>
       {error ? <p style={{ color: '#e11d48' }}>{error}</p> : null}
-      <div style={{ overflow: 'auto', border: '1px solid #e6eaf0', borderRadius: 12 }}>
+      <div style={{ overflow: 'auto', border: '1px solid #e6eaf0', borderRadius: 12, marginBottom: 24 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
@@ -86,7 +127,7 @@ export default function ReservationsQueue() {
             </tr>
           </thead>
           <tbody>
-            {loading && <tr><td style={td} colSpan={7}>Loading…</td></tr>}
+            {loading && <tr><td style={td} colSpan={8}>Loading…</td></tr>}
             {!loading && rows.map(r => {
               const d = r.details || {}
               return (
@@ -134,7 +175,70 @@ export default function ReservationsQueue() {
                 </tr>
               )
             })}
-            {!loading && rows.length === 0 && <tr><td style={td} colSpan={7}>No reservations pending approval.</td></tr>}
+            {!loading && rows.length === 0 && <tr><td style={td} colSpan={8}>No reservations pending approval.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+
+      <h2 style={{ marginTop: 0 }}>Approved Reservations — Amendment Requests</h2>
+      <div style={{ overflow: 'auto', border: '1px solid #e6eaf0', borderRadius: 12 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              <th style={th}>ID</th>
+              <th style={th}>Payment Plan</th>
+              <th style={th}>Unit</th>
+              <th style={th}>Current Date</th>
+              <th style={th}>Current Preliminary</th>
+              <th style={th}>Requested Date</th>
+              <th style={th}>Requested Preliminary</th>
+              <th style={th}>Reason</th>
+              <th style={th}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading && <tr><td style={td} colSpan={9}>Loading…</td></tr>}
+            {!loading && amendments.map(r => {
+              const d = r.details || {}
+              const ar = d.amendment_request || {}
+              const currentDate = d.reservation_date || r.reservation_date || '-'
+              const currentPrelim = d.preliminary_payment != null
+                ? d.preliminary_payment
+                : (r.preliminary_payment != null ? r.preliminary_payment : 0)
+              const requestedDate = ar.reservation_date_iso || '-'
+              const requestedPrelim = ar.preliminary_payment != null ? ar.preliminary_payment : '-'
+              return (
+                <tr key={r.id}>
+                  <td style={td}>{r.id}</td>
+                  <td style={td}>{r.payment_plan_id}</td>
+                  <td style={td}>{r.unit_code || '-'}</td>
+                  <td style={td}>{currentDate}</td>
+                  <td style={td}>{Number(currentPrelim || 0).toLocaleString()}</td>
+                  <td style={td}>{requestedDate}</td>
+                  <td style={td}>{requestedPrelim === '-' ? '-' : Number(requestedPrelim).toLocaleString()}</td>
+                  <td style={td}>{ar.reason || '-'}</td>
+                  <td style={{ ...td, display: 'flex', gap: 8 }}>
+                    <LoadingButton
+                      onClick={() => fmAmendmentDecision(r.id, 'approve')}
+                      loading={acting.has(r.id)}
+                      style={{ ...btn, border: '1px solid #16a34a', color: '#16a34a' }}
+                    >
+                      Approve Change
+                    </LoadingButton>
+                    <LoadingButton
+                      onClick={() => fmAmendmentDecision(r.id, 'reject')}
+                      loading={acting.has(r.id)}
+                      style={{ ...btn, border: '1px solid #dc2626', color: '#dc2626' }}
+                    >
+                      Reject Change
+                    </LoadingButton>
+                  </td>
+                </tr>
+              )
+            })}
+            {!loading && amendments.length === 0 && (
+              <tr><td style={td} colSpan={9}>No amendment requests at the moment.</td></tr>
+            )}
           </tbody>
         </table>
       </div>

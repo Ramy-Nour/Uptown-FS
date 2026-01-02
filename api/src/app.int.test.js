@@ -1,6 +1,6 @@
 // Integration tests using supertest without external runner
 import request from 'supertest'
-import app from './app.js'
+import app from './app2.js'
 import { pool } from './db.js'
 
 function assert(cond, msg) {

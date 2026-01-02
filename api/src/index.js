@@ -1,4 +1,4 @@
-import app from './app.js';
+import app from './app2.js';
 import { initDb, pool } from './db.js';
 import { runMigrations } from './migrate.js';
 import { recordCleanup } from './runtimeMetrics.js';

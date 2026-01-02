@@ -121,6 +121,1920 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2026-01-02 02:30] API document-generation startup fix and safe app2 router
+  - API: Introduced a clean app router in api/src/app2.js and wired api/src/index.js and api/src/app.int.test.js to import it instead of the previously corrupted api/src/app.js. The new router preserves all existing mounts (auth, deals, units, pricing, workflow, reports, planning, blocks, contracts, documents) and keeps the POST /api/generate-document handler with contract down-payment enrichment, but without the duplicated/partial blocks and HTML-escaped operators that were causing “SyntaxError: Unexpected token” on Node startup.
+  - API: The POST /api/generate-document handler in app2.js now uses proper && operators and a correctly terminated regex (`rf.details->>'deal_id' ~ '^[0-9]+
+  - API: Added GET /api/deals/:id/financial-summary (api/src/dealsRoutes.js), which locates the latest approved reservation_forms row linked to a deal and returns a normalized financial summary for the contract: total unit price excluding maintenance, maintenance deposit, total including maintenance, total down payment from the offer, preliminary payment amount and date, paid-down-payment amount and date, remaining down payment, and remaining price after the full down payment (total_excl - dp_total). This summary reuses the same dp breakdown stored in reservation_forms.details.dp and the unitPricingBreakdown snapshot used by Reservation Form and Contract documents, avoiding reimplementation of the math on the client.
+  - Client: Updated the Deal Detail page (client/src/deals/DealDetail.jsx) to call the new endpoint and render a “Reservation / Down Payment Summary” card next to the Payment Schedule. The card shows the same figures that drive the contract clauses, making it clear that the “total amount” in the contract’s opening line refers to the total price excluding maintenance and that the down payment is split into preliminary, additional paid amount, and remaining balance consistent with the reservation form.
+  - API: Clarified the Arabic contract DP mapping in POST /api/generate-document (api/src/app.js) for documentType='contract' so that «دفعة التعاقد» is treated as the full down payment amount and the remaining portion of the down payment is taken from the same dp breakdown used by Reservation Forms. Contract DOCX templates should bind «الدفعة التعاقد بالأرقام» / «الدفعة التعاقد كتابتا» to the total down payment, and use either «بيان الباقي من دفعة التعاقد» or dp_remaining (and its *_words variant) to display the remaining down payment (باقي المقدم) with whatever exact Arabic sentence is written in the template.
+  - Next step (process): Before building the Contracts Queue UI (draft → CM review → TM approval → executed), the team should first test the updated Reservation Form + Contract PDF flows end-to-end on real deals (including split and fully-paid down payments). Once the contract PDFs and DP wording are validated with legal/finance, the next major build is to surface the existing /api/contracts workflow in the UI as a contracts queue for contract_person, contract_manager, and top-management roles.
+- [2026-01-02 00:30] Reservation Form DP breakdown and Contract DP data enrichment
+  - Client: Extended the Financial Admin “Current Blocks” page (client/src/deals/CurrentBlocks.jsx) so reservation requests now capture a full down-payment breakdown: Preliminary Payment amount and date, an optional “Paid Down Payment before reservation” amount and date, and the business Reservation Form date. After FM approval, all four values render read-only next to the approved plan, while language remains editable for PDFs. The create payload now sends preliminary_payment_date, paid_down_payment_amount, and paid_down_payment_date to the API for each reservation.
+  - API: Updated POST /api/workflow/reservation-forms (api/src/reservationFormsRoutes.js) to derive the total down payment from the calculator snapshot (generatedPlan.downPaymentAmount or the “down payment” schedule row), then store a structured dp object in reservation_forms.details with total, preliminary_amount, preliminary_date, paid_amount, paid_date, and remaining (computed as total - preliminary - paid). This makes the Reservation Form the canonical source of down-payment breakdown for both the RF PDF and downstream contract documents, without changing existing reservation status/approval flows.
+  - API: Adjusted POST /api/documents/reservation-form (api/src/documentsRoutes.js) so the Arabic financial section uses the stored dp breakdown when available: the Preliminary Payment line shows its own date, the new “Paid from Down Payment” line shows the additional paid part and its date, “Remaining Down Payment” uses dp.remaining, and the global “Remaining Amount” now subtracts the full down payment (dp.total) instead of just the net-of-preliminary value. Older reservations without dp.details still fall back to the previous calculator-based logic, so existing data continues to print correctly.
+  - API: Enriched POST /api/generate-document (api/src/app.js) for documentType='contract' so, when a deal_id is provided, it looks up the latest approved reservation_forms row linked to that deal and attaches dp_total and dp_remaining fields from reservation_forms.details.dp into the document data before rendering. Contract DOCX templates can now bind directly to these values (and their *_words auto-variants) to show total and remaining down payment without re-implementing the reservation math inside the contract template.
+- [2026-01-01 03:00] Reservation Forms listing — fix FM queue “Internal error” and FA Create/Cancel gating
+  - API: Corrected the status filter in GET /api/workflow/reservation-forms (api/src/reservationFormsRoutes.js) to use proper $1-style parameter placeholders (`rf.status = $1`) instead of comparing the text status column to a bare integer (e.g. `rf.status = 1`). This removes the “operator does not exist: text = integer” (42883) error from the API logs, restores the Financial Manager Reservations Queue page so pending approvals and amendment requests load without the red “Internal error” banner, and re-enables the Financial Admin “Current Blocks” view to correctly detect approved/pending reservations per payment plan so “Create Reservation Form”, “Pending FM Approval”, and “Cancel Reservation Request” buttons behave as designed.
+- [2026-01-01 02:10] Deal Detail schedule table and Offer Progress API binding — fix PC block/unblock page crash
+  - Client: Updated Deal Detail (client/src/deals/DealDetail.jsx) to import shared table cell styles (th, td) from client/src/lib/ui.js so the Payment Schedule table no longer references undefined variables. This removes the “ReferenceError: th is not defined” blank-page crash when Property Consultants open a deal to block/unblock a unit.
+  - API: Corrected GET /api/inventory/progress in api/src/inventoryRoutes.js to use proper $1-style parameter placeholders (`b.requested_by = $1`, `stm.manager_user_id = $1`) instead of bare numeric values. This resolves the “bind message supplies 1 parameters, but prepared statement \\\"\\\" requires 0” (08P01) error in the API logs and allows the Offer Progress / block visibility page to load successfully for property_consultant and sales_manager roles.
+- [2026-01-01 01:40] Reservation Forms — FA can cancel pending requests; approved reservations support FM-approved amendments
+  - Client: Updated the Financial Admin “Current Blocks” page (client/src/deals/CurrentBlocks.jsx) to (a) detect pending reservation forms per payment plan, disable “Create Reservation Form” while a request is pending, and expose a “Cancel Reservation Request” button so FA can withdraw a mistaken pending reservation and recreate it with corrected date/preliminary payment; and (b) add a “Request Change to Approved Reservation” action for plans that already have an approved reservation, which prompts FA for a new Reservation Date and Preliminary Payment plus a reason and sends an amendment request to the Financial Manager instead of editing locked fields directly.
+  - Client: Extended the Financial Manager Reservations Queue (client/src/deals/ReservationsQueue.jsx) with a second section, “Approved Reservations — Amendment Requests”, that lists approved reservations whose details include a pending amendment_request. FM can now “Approve Change” (which updates reservation_date and preliminary_payment and records an amendment_history entry) or “Reject Change” (which archives the request into amendment_history without changing the approved values).
+  - API: Enhanced /api/workflow/reservation-forms (api/src/reservationFormsRoutes.js) with: (1) PATCH /api/workflow/reservation-forms/:id/cancel for Financial Admin to cancel pending reservations (status must be pending_approval; status becomes cancelled and cancellation metadata is stored in details); (2) POST /api/workflow/reservation-forms/:id/request-amendment so FA can request changes to an approved reservation’s date and Preliminary Payment with a reason; (3) GET /api/workflow/reservation-forms/amendments so FM can list approved reservations that have pending amendment_request; and (4) PATCH /api/workflow/reservation-forms/:id/approve-amendment and .../:id/reject-amendment so FM can apply or reject requested changes, with all amendments recorded in details.amendment_history while the core “lock after approval” rule still prevents direct editing of approved values from the FA UI.
+- [2026-01-01 00:35] Calculator Inputs — fix stray JSX braces and duplicate SubsequentYears block
+  - Client: Corrected client/src/components/calculator/InputsForm.jsx by removing an extra `)}` line and a duplicate `<SubsequentYears>` block that caused Vite/esbuild to warn “The character '}' is not valid inside a JSX element.” The SubsequentYears section is now rendered exactly once, only when `!isStandardMode`, and the calculator form JSX parses cleanly again.
+- [2026-01-01 00:25] Current Blocks — remove duplicate fetch block and legacy PDF call causing parse errors
+  - Client: Cleaned up client/src/deals/CurrentBlocks.jsx by removing a stray duplicated fetch block after the load() function and an orphaned legacy Reservation Form PDF call fragment after printReservationPdf. The duplicate block left `${API_URL}/api/blocks/current` partially detached, which Babel parsed as a RegExp with invalid flags (the “Invalid regular expression flag” overlay). Behaviour of the Current Blocks page is unchanged: it still loads current blocks, prefetches approved plans and reservation forms, and gates Reservation PDF printing on FM approval.
+- [2026-01-01 00:15] Reservation Form PDF date parsing — fix syntax crash in documentsRoutes and harden dd/MM/YYYY handling
+  - API: Updated the reservation_form_date parsing in POST /api/documents/reservation-form (api/src/documentsRoutes.js) to remove a broken, over-escaped regular expression that caused a “SyntaxError: Invalid or unexpected token” during Node.js startup. The handler now detects dd/MM/YYYY dates via simple string splitting and digit checks (with a safe regex only on individual parts), then falls back to Date parsing and finally to today’s date. Behaviour for valid dd/MM/YYYY strings and ISO-like dates is unchanged; the API now starts cleanly and continues to normalize reservation dates for the PDF.
+- [2025-12-31 06:10] Reservation Form flow — lock reservation date and Preliminary Payment after FM approval (Current Blocks)
+  - Client: Updated the Financial Admin “Current Blocks” page (client/src/deals/CurrentBlocks.jsx) so Preliminary Payment and Reservation Date are required when creating a reservation form, and the “Print Reservation PDF” action is only enabled when there is an approved reservation_forms row for the selected payment plan. After approval, the inputs show the approved values as read-only and the “Create Reservation Form” button is disabled to prevent changes from this view.
+  - API: Adjusted POST /api/documents/reservation-form in api/src/documentsRoutes.js so that when an approved reservation_forms row exists, the Reservation Form PDF always uses reservation_forms.reservation_date (or details.reservation_date) instead of any reservation_form_date sent from the client, keeping the reservation date and Preliminary Payment consistent across reprints while the header “Generated” timestamp still reflects the actual print time.
+- [2025-12-31 05:40] Workflow Logs — label refinements for counts and XLSX totals
+  - Client: Simplified the Workflow Logs summary footer labels so each line now displays “Offers: N — Total”, “Reservations: N — Total”, and “Contracts: N — Total” without “deals”/“records” suffixes, keeping the focus on counts and monetary values.
+  - Client: Updated the XLSX “Totals” sheet header row to use “Type | Count | Total Value” instead of “Section | Count | Total”, matching the semantics of the three workflow stages (Offers, Reservations, Contracts).
+- [2025-12-31 05:30] Workflow Logs — section totals, counts, and grand-summary UI semantics
+  - Client: Updated Workflow Logs UI (client/src/admin/WorkflowLogs.jsx) so each section (Offers/Reservations/Contracts) now recomputes its Total from the rows when the API total field is missing or zero, avoiding cases where per-row values were displayed but the section header showed “Total: 0.00”. Added a bottom summary footer that shows, for each stage, both the count and the stage Total (nominal amount) instead of a single combined “Grand Total”, to prevent double counting of units that progress from offer → reservation → contract.
+  - Client: Adjusted the XLSX export “Totals” sheet to list Offers, Reservations, and Contracts with both Count and Total columns computed directly from the exported rows, and removed the previous “Grand Total” row for the same reason (to avoid misleading sum-of-sums across stages).
+- [2025-12-31 05:15] Workflow Logs — wire nominal totals from calculator snapshots
+  - API: Updated GET /api/reports/workflow-logs in api/src/reportsRoutes.js so Offers/Reservations/Contracts now derive total_nominal from payment_plans.details.calculator.generatedPlan.totals.totalNominal, with fallbacks to the older totalNominalPrice fields when present. This matches how deals and PDFs already compute the nominal offer amount and fixes the “0.00” totals previously shown in the Workflow Logs report despite valid approved plans.
+  - API: Kept the previous fixes for user display names (users.meta->>'name' with email fallback) and restored proper $1/$2-style parameter bindings for consultant/manager/date filters in the same route.
+- [2025-12-31 05:00] Workflow Logs — fix user name lookups and parameter placeholders in reports route
+  - API: Updated GET /api/reports/workflow-logs in api/src/reportsRoutes.js so all user display names are derived from users.meta->>'name' with a fallback to email (COALESCE(u.meta->>'name', u.email)) instead of a non-existent users.name column. This removes the “column u.name does not exist” (42703) error when TM/Admin loads the Workflow Logs page.
+  - API: Corrected SQL parameter placeholders in reportsRoutes so the WHERE clauses use $1/$2… style bindings again (e.g., pp.created_by = $1), matching the established pattern and preventing potential SQL parsing issues as filters are applied.
+- [2025-12-31 04:45] Block management backup files removed to avoid confusion
+  - API: Deleted api/src/blockManagement.fixed.js and api/src/blockManagement.backup.js from the codebase. These were historical snapshots of the blocks router that were no longer imported anywhere; all live behaviour now comes from api/src/blockManagement.js (including the new unblock workflow, TM overrides, and unit history). This reduces the risk that future edits are made to the wrong file or that outdated logic is accidentally reintroduced.
+- [2025-12-31 04:30] Workflow Logs — unit info and per-status breakdown for TM/Admin
+  - API: Extended GET /api/reports/workflow-logs in api/src/reportsRoutes.js to join units for each offer, reservation, and contract, exposing unit_id/unit_code/unit_type plus a per-status breakdown (counts and total_nominal) for each section so Top Management can see which units are moving and how volume is distributed across approved/pending/rejected states.
+  - Client: Updated Workflow Logs UI (client/src/admin/WorkflowLogs.jsx) to show per-status summary chips above each section and to include unit columns in the Offers/Reservations/Contracts tables and XLSX/CSV exports, without changing the existing filters or role access.
+- [2025-12-31 04:00] Workflow Logs report wired and enabled for TM/Admin
+  - API: Mounted reportsRoutes under /api/reports in api/src/app.js so GET /api/reports/workflow-logs returns JSON instead of a 404 HTML page. This fixes the “Unexpected token '<', '&lt;!DOCTYPE' is not valid JSON” error when opening Workflow Logs from the TM header and ensures the report is available to ceo/chairman/vice_chairman/admin/superadmin (plus any front-end roles that reuse this route).
+  - Client: Left the Workflow Logs UI (client/src/admin/WorkflowLogs.jsx) unchanged; it now successfully loads the offers/reservations/contracts throughput report and supports date filters, consultant/manager filters, and XLSX/CSV exports for top-management oversight.
+- [2025-12-31 03:30] Deal Detail refactor (header, actions, audit trail, and Unit History integration)
+  - Client: Refactored the top of Deal Detail (client/src/deals/DealDetail.jsx) to delegate the header and status summary into a dedicated DealHeaderSection component (client/src/deals/components/DealHeaderSection.jsx). This component now renders the Deal #, Back / View Deals for This Unit / View Unit History buttons (based on unit_id and role), plus the compact badges for deal status, override status, unit availability, and rejection notes, keeping the main page leaner without changing behaviour.
+  - Client: Extracted the audit trail table into DealAuditTrail (client/src/deals/components/DealAuditTrail.jsx), a reusable component that renders the deal_history entries with the same JSON expand/collapse behaviour as before. DealDetail now simply passes history and expandedNotes state into this component, making it easier to evolve the page layout without touching the underlying audit logic.
+  - Client: Extracted the main action bar (Edit Offer, Submit, SM Approve, Override request, Client Offer PDF, unit Block/Unblock, Reservation Form, Contract PDF, Checks Sheet, Calculate Commission) into DealActionsBar (client/src/deals/components/DealActionsBar.jsx) and the “Request Edits From Consultant” modal into DealEditRequestModal (client/src/deals/components/DealEditRequestModal.jsx). The refactor keeps all existing behaviours and backend calls intact, but makes it easier to further adjust per-role visibility and flows as the program requirements evolve.
+  - Client: Kept the Unit History integration from the previous step — the “View Unit History” button on Deal Detail still navigates to /admin/unit-history?unitId=… for roles allowed to view the lifecycle history — while wiring UnitHistory (client/src/admin/UnitHistory.jsx) to load that unit automatically based on the unitId/unit_id query parameter.
+- [2025-12-31 03:00] Deal Detail → Unit History linking and query-parameter support
+  - Client: Deal Detail (client/src/deals/DealDetail.jsx) now shows a “View Unit History” button for roles that can access the Unit History page (crm_admin, financial_manager, financial_admin, admin, superadmin, ceo, chairman, vice_chairman, top_management). When a deal has a linked unit_id in its calculator snapshot, this button navigates to /admin/unit-history?unitId=… so reviewers can jump directly from a deal to the unit’s lifecycle history (blocks, reservations, contracts).
+  - Client: The Unit Lifecycle History page (client/src/admin/UnitHistory.jsx) now accepts an optional unitId or unit_id query parameter. When opened as /admin/unit-history?unitId=123, it automatically loads that unit’s history without requiring manual ID entry, and still supports searching units by code/name via /api/inventory/units.
+- [2025-12-31 02:30] Unit lifecycle history page (blocks, reservations, contracts)
+  - API: Added GET /api/inventory/unit-history in api/src/inventoryRoutes.js for crm_admin, financial_manager, financial_admin, admin, superadmin, and top-management roles. Given a unit_id, this endpoint returns the unit’s basic info plus a merged, time-ordered list of lifecycle events across Blocks (block/unblock, overrides, expiry-driven unblocks), Reservation Forms (created/approved/rejected), and Contracts (created plus current status transitions such as pending_tm, approved, rejected, executed).
+  - Client: Introduced a Unit Lifecycle History admin page at /admin/unit-history (client/src/admin/UnitHistory.jsx), accessible from BrandHeader for CRM, FM, TM, and Super Admin. The page lets you either enter a Unit ID directly or search units by code/name via /api/inventory/units, then shows a “history book” style timeline with timestamps, labels, and badges indicating key transitions like “Expired block – system-created request” and “TM override: FM stage bypassed”.
+  - Client: Updated BrandHeader navigation (client/src/lib/BrandHeader.jsx) and main router (client/src/main.jsx) so the new Unit History page is one click away for crm_admin, financial_manager, financial_admin, admin, superadmin, and top-management roles.
+- [2025-12-31 02:00] Block/unblock audit history per unit and Expired Blocks shortcut refinements
+  - API: Added GET /api/blocks/history in api/src/blockManagement.js for finance and top-management roles. Given a unit_id, this returns all blocks for that unit with request, approval/rejection, extension, and unblock fields (including FM/TM actors and timestamps) so the client can build a chronological block/unblock timeline without additional SQL joins.
+  - Client: Introduced BlockHistoryModal (client/src/components/BlockHistoryModal.jsx), a reusable modal that fetches /api/blocks/history?unit_id=… and renders a time-ordered list of events such as “Block requested”, “Block approved”, “Unblock requested”, “Unblock approved by FM”, and “Unblock approved by TM”, with badges for financial decisions, override status, TM overrides (FM stage bypassed), and expiry-based unblock requests.
+  - Client: Wired the Financial Admin “Current Blocks” page (client/src/deals/CurrentBlocks.jsx) to show a “Block History” button per row. Clicking it opens BlockHistoryModal for that unit so FA can see the full block/unblock audit trail before creating reservations or escalating issues.
+  - Client: Extended the earlier Expired Blocks shortcut work (client/src/lib/BrandHeader.jsx, client/src/deals/BlockRequests.jsx) so that expired-block unblock requests are both filterable via /deals/block-requests?expired=1 and clearly annotated in the audit timeline as “Expired block – system-created request”.
+- [2025-12-31 01:30] Expired Blocks shortcut for FM/TM and visual hint for system-created requests
+  - Client: Updated the global BrandHeader navigation (client/src/lib/BrandHeader.jsx) so Financial Managers and Top Management roles now see a dedicated “Expired Blocks” shortcut that links to /deals/block-requests?expired=1. This opens the Block Requests page directly in the Unblock view and focuses attention on expired-block unblock requests.
+  - Client: Enhanced the Block Requests page (client/src/deals/BlockRequests.jsx) so that when the expired=1 query parameter is present, the Unblock tab is shown and the table filters to requests whose unblock_reason starts with “Block duration expired…”, i.e., those auto-created by the block expiry job. These rows now display an “Expired block – system-created request” badge in the Override Note column, while still surfacing the existing “TM override if approved (FM stage bypassed)” hint for Top Management.
+- [2025-12-31 01:00] Block expiry → unblock workflow and TM override audit
+  - API: Updated the automatic block expiry job in api/src/blockManagement.js so that approved blocks whose blocked_until has passed are no longer auto-unblocked. Instead, the job now converts any such block (with no existing unblock request or a previously rejected one) into an unblock request by setting unblock_status='pending_fm', unblock_requested_by to the original requester, and unblock_reason to “Block duration expired; please review”, then notifies all Financial Managers via the existing /api/blocks/unblock-pending queue.
+  - API: Kept the existing Top Management override path in PATCH /api/blocks/:id/unblock-tm-approve: TM can still approve an unblock directly while unblock_status='pending_fm' (FM stage bypassed). These cases are already flagged as tm_override in the JSON response and include the “TM override: FM stage bypassed.” suffix in notifications, so the audit trail clearly shows when a unit was unblocked by TM without FM approval, along with the unblock_tm_at timestamp.
+- [2025-12-31 00:30] Current Blocks visibility — ignore blocked_until for listing and unblock requests
+  - API: Updated GET /api/blocks/current in api/src/blockManagement.js to list all approved blocks regardless of whether blocked_until is in the past. The Current Blocks page for Financial Admin now always shows units that are still logically BLOCKED, even if their “Blocked Until” date has passed while the stack was offline.
+  - API: Relaxed the active-block lookup in POST /api/blocks/request-unblock so it no longer requires blocked_until > NOW(). Consultants and Sales Managers can request unblocking for any unit that still has an approved block, preventing the situation where units remain BLOCKED in Inventory but disappear from Current Blocks due to a stale blocked_until timestamp.
+- [2025-12-13 16:30] Reservation Form PDF — define language/reservation date and lock Preliminary Payment source
+  - API: Updated POST /api/documents/reservation-form in api/src/documentsRoutes.js to derive `language` from the request body (with fallback to the calculator snapshot) and to compute `reservationDate` from `reservation_form_date` or the approved reservation row. This removes the “ReferenceError: language is not defined” / “reservationDate is not defined” 500 errors when Financial Admin clicks “Print Reservation PDF”.
+  - API: Aligned the Preliminary Reservation Payment source with the workflow: when an approved row exists in `reservation_forms`, the PDF now always uses its `preliminary_payment` value; otherwise it uses `preliminary_payment_amount` from the client request. This matches the behaviour already documented for locking preliminary payments after FM approval.
+- [2025-12-13 15:10] Deals by unit and Reservation Form PDF — parameter binding, consultant lookup, and currency source hardened
+  - API: Corrected GET /api/deals/by-unit/:unitId in api/src/dealsRoutes.js so the created_by filter for non-elevated users uses a proper $2-style placeholder (`d.created_by = $2`) instead of interpolating the raw parameter index. This prevents Postgres from seeing only one bind placeholder while the driver supplies two parameters and eliminates “bind message supplies 2 parameters, but prepared statement \\\"\\\" requires 1” errors when consultants hit the endpoint.
+  - API: Updated the Reservation Form consultant lookup in api/src/documentsRoutes.js to derive the consultant name from users.meta->>'name' (with a fallback to email) instead of a non‑existent users.name column. This removes the “column u.name does not exist” error while keeping the header’s “Property Consultant” line populated.
+  - API: Removed the stray UIcurrency reference from the Reservation Form PDF route and now derive currency solely from the calculator snapshot / deal details. This avoids “ReferenceError: UIcurrency is not defined” during POST /api/documents/reservation-form and keeps all amount‑in‑words logic using the same currency source as the numeric fields.
+- [2025-12-13 14:05] Reservation Form modal — prefill and lock Preliminary Payment after approval; agent rules updated for root-cause fixes only
+  - Client: On Deal Detail, the Reservation Form modal now pre-fills the Preliminary Payment, reservation date, and language from the latest approved `reservation_forms` row for that deal (if one exists). In this case, the Preliminary Payment input is disabled so Financial Admin can see the approved amount but cannot change it when printing the Reservation Form PDF.
+  - API: `POST /api/documents/reservation-form` already locks Preliminary Reservation Payment to `reservation_forms.preliminary_payment` once a reservation is approved; the UI now matches this behaviour and avoids suggesting that the value can be edited post-approval.
+  - Process: Updated the AI/Agent Contribution Rules to state that fixes should focus on root-cause changes for future flows; no retroactive data fixes or ad-hoc migrations should be added unless explicitly requested, since the system is still in the design phase.
+- [2025-12-13 13:45] Reservation Form — lock Preliminary Reservation Payment after FM approval
+  - API: Updated `POST /api/documents/reservation-form` so that once a reservation form has been approved (an `approved` row exists in `reservation_forms` linked to the deal), the Reservation Form PDF always uses the `reservation_forms.preliminary_payment` value. Any `preliminary_payment_amount` sent from the client is ignored in this case, so Financial Admin cannot change the Preliminary Reservation Payment during PDF generation after FM approval.
+  - Behaviour: When no approved `reservation_forms` row exists for the deal, the endpoint keeps the existing behaviour and uses the manually entered Preliminary Payment from the client request. This preserves flexibility before reservation approval while enforcing immutability afterwards.
+- [2025-12-13 12:30] Reservation Form pricing — calculator snapshot now persists unitPricingBreakdown
+  - Client: Updated `useCalculatorEmbedding` and the Deal Detail edit flow so calculator snapshots stored in deals always include `unitPricingBreakdown` and `feeSchedule`. New and re-saved deals now persist the full unit price breakdown used by the calculator.
+  - API: Reservation Form PDFs (`POST /api/documents/reservation-form`) continue to take Base Price, Maintenance Deposit, and Total strictly from `details.calculator.unitPricingBreakdown`, so the RF reflects the agreed offer values instead of live pricing. Previously, missing `unitPricingBreakdown` in the snapshot caused Base Price / Maintenance / Total to render as 0.00 even when the deal used a valid unit price breakdown.
+- [2025-12-09 16:15] Reservation Form PDF header variables defined; consultant and dates wired from deal snapshot
+  - API: Updated api/src/documentsRoutes.js /reservation-form handler to define title, date labels, unit, and consultant variables explicitly, removing the ReferenceError that occurred when generating Reservation Form PDFs. Header now uses reservationDate for the “Reservation Date” field, firstPaymentDate from the calculator snapshot, and the deal creator’s email for the Property Consultant line, while preserving Preliminary Payment and related fields in the document body.
+- [2025-12-07 16:25] Reservation Form PDF header decoupled from Client Offer variables to prevent 500s
+  - API: Updated api/src/documentsRoutes.js so the /api/documents/reservation-form handler uses its own headerTemplate based on reservationDate and unit fields only. Removed references to Client Offer-only variables (title, tOfferDate, offer_date, consultant, etc.) that were not defined in this route and caused “ReferenceError: title is not defined” and HTTP 500 responses whenever Financial Admin clicked “Print Reservation PDF” from Deals → Current Blocks, even for newly RESERVED units.
+- [2025-12-04 00:30] Documents router parse error removed; single clean ES module restored
+  - API: Replaced the corrupted api/src/documentsRoutes.js (which contained duplicated TypeScript fragments and repeated /reservation-form handlers) with a single valid ES module. The file now exports one router with /api/documents/client-offer and /api/documents/reservation-form only, matching the policies already documented in this README.
+  - API: Kept the Client Offer and Reservation Form business rules intact (buyers/unit hydration from the deal snapshot, pricing strictly from calc.unitPricingBreakdown for RF, unit metadata from units, Cairo-local timestamps, Arabic/English layouts, and FM-approval/RESERVED relaxations) while removing all stray duplicated blocks that were causing “SyntaxError: missing ) after argument list” on API startup.
+  - Tests: Extended src/app.int.test.js to:
+    - Hit /api/documents/client-offer and /api/documents/reservation-form unauthenticated (401 smoke checks) so any future syntax/route wiring errors in api/src/documentsRoutes.js surface via `npm run test:integration`.
+    - Run a DB-backed flow that registers a user, promotes them to financial_admin, inserts an approved fm_review_at deal with a calculator snapshot, and calls POST /api/documents/reservation-form end-to-end, asserting a 200 response with application/pdf and a non-trivial PDF body. This protects the FM-approval relaxation and snapshot-based pricing logic from silent regressions.
+- [2025-12-03 20:00] Documents router cleaned to valid JS; Reservation Form PDF kept snapshot-only pricing
+  - API: Replaced the corrupted api/src/documentsRoutes.js with a single, valid ES module: kept the existing /api/documents/client-offer logic, removed all duplicate/partial route blocks and stray TypeScript-style annotations that were causing parse errors, and ensured there is exactly one /api/documents/reservation-form handler.
+  - API: The Reservation Form endpoint now enforces the documented FM-approval rules in one place (deal.fm_review_at OR an approved reservation_form linked by payment_plans.deal_id/details.deal_id OR the unit already RESERVED) and generates the RF PDF using multi-buyer support, bilingual layout, and amounts-in-words while taking all price components strictly from the deal’s calculator snapshot (unitPricingBreakdown). Unit metadata (area/building/block/zone) still comes from the live units table for display only.
+- [2025-12-03 19:30] Documents router syntax repaired; Reservation Form FM-approval logic deduplicated
+  - API: Rebuilt api/src/documentsRoutes.js to remove corrupted/duplicated blocks and fix the malformed SQL/template literal that was breaking Node’s parser (“missing ) after argument list”). The /api/documents/client-offer implementation is preserved, and /api/documents/reservation-form now has a single, clean handler.
+  - API: Kept the intended policy for Reservation Form PDF generation: allow when (a) deal.fm_review_at is set, (b) there is at least one approved reservation_forms row linked to the deal via payment_plans.deal_id or details.deal_id, or (c) the unit tied to the deal is already RESERVED in inventory. The FM-approval checks now run once, with clear SQL and guard paths, instead of being partially duplicated in the file.
+- [2025-12-03 18:10] Reservation PDF generation allowed after FM approves reservation; FA preliminary payment wired into FM queue
+  - API: Relaxed the guard in POST /api/documents/reservation-form (api/src/documentsRoutes.js) so that a Reservation Form PDF can be generated when either (a) the underlying deal has fm_review_at set (existing behavior) or (b) there is at least one approved reservation_forms row linked to that deal (via payment_plans.deal_id or details.deal_id). Previously, Financial Admin trying to print the Reservation Form from Deals → Current Blocks would see “Financial Manager approval required before generating Reservation Form” even after the reservation itself had been approved and the unit marked RESERVED.
+  - Client/API: Updated Deals → Current Blocks (client/src/deals/CurrentBlocks.jsx) to send reservation_date, preliminary_payment, and language as top-level fields in POST /api/workflow/reservation-forms, matching api/src/reservationFormsRoutes.js. Financial Admin entries for Preliminary Payment now persist correctly into reservation_forms.preliminary_payment and appear on the Financial Manager “Reservation Forms — Pending Approval” queue instead of always showing 0.
+- [2025-12-03 17:40] Migration runner race — prevent double execution of migrations on API startup
+  - API: Updated api/src/migrate.js so that runMigrations() only auto-executes when migrate.js is run directly (node src/migrate.js), not when it is imported by api/src/index.js. Previously, the top-level IIFE in migrate.js ran once on import and a second time from index.js calling runMigrations(), which could trigger a race where the same migration filename was inserted twice into schema_migrations and crashed the API with “duplicate key value violates unique constraint \"schema_migrations_filename_key\"” for 046_reservation_forms_approval_audit.sql on startup.
+  - Runtime: With this change, migrations still run once on normal API startup via index.js → runMigrations(), and the standalone CLI usage remains available for manual runs. The schema_migrations table remains the source of truth, but we no longer see duplicate-key errors during container restarts.
+- [2025-12-03 16:55] Reservation Forms schema aligned with workflow routes to prevent 500s on FA Current Blocks
+  - DB: Added migration 045_reservation_forms_unit_fields.sql to extend reservation_forms with unit_id, reservation_date, preliminary_payment, and language columns (plus an index on unit_id). This matches the insert used by api/src/reservationFormsRoutes.js so Financial Admin can create reservation forms from Deals → Current Blocks without hitting “column \"unit_id\" does not exist” internal errors after selecting an Approved Payment Plan.
+  - API: No behavior change to roles or endpoints; POST /api/workflow/reservation-forms remains restricted to financial_admin. Existing reservation_forms rows continue to work with NULL values for the new columns.
+- [2025-12-03 17:10] Reservation Forms creation — details JSONB and dd/MM/YYYY reservation date from FA Current Blocks
+  - API: Updated POST /api/workflow/reservation-forms in api/src/reservationFormsRoutes.js to always populate the mandatory details JSONB column with a structured payload (payment_plan_id, unit_id, normalized reservation_date, preliminary_payment, language, deal_id, and the calculator snapshot). The handler now also accepts a human-entered reservation_date in dd/MM/YYYY format and normalizes it to a TIMESTAMPTZ before inserting, preventing “null value in column \"details\" of relation \"reservation_forms\"” (23502) and keeping reservation_forms rows consistent for downstream PDFs and history.
+  - Client: On Deals → Current Blocks (client/src/deals/CurrentBlocks.jsx), kept Reservation Date as a date picker but added an explicit “Format: dd/MM/YYYY” hint under the control so Financial Admin know which format is used when typing or reviewing dates before creating a reservation form. The “Print Reservation PDF” action now sends reservation_form_date to /api/documents/reservation-form in dd/MM/YYYY format (converted from the native yyyy-MM-dd picker value) so the generated Reservation Form PDF shows dates consistently as dd/MM/YYYY.
+- [2025-12-03 17:30] Reservation Forms approval — add approved_at / rejected_* audit fields to match API
+  - DB: Added migration 046_reservation_forms_approval_audit.sql to extend reservation_forms with approved_at, rejected_by, and rejected_at columns (all IF NOT EXISTS). This brings the schema back in line with api/src/reservationFormsRoutes.js, which updates approved_at when Financial Manager approves a reservation and rejected_by/rejected_at when they reject.
+  - API: No code changes required in the approval/rejection handlers; PATCH /api/workflow/reservation-forms/:id/approve and :id/reject now execute without “column \"approved_at\" does not exist” (42703) errors, allowing Financial Manager to approve or reject reservation forms normally and transition units to RESERVED on approval.
+- [2025-12-02 12:00] Workflow modularization — split monolithic workflowRoutes into domain routers and removed duplicate payment-plan routes
+  - API: Extracted shared helpers (bad/ok/ensureNumber and policy-limit resolvers) into api/src/workflowUtils.js so they can be reused without duplicating logic across workflow modules.
+  - API: Moved Standard Pricing endpoints from api/src/workflowRoutes.js into api/src/standardPricingRoutes.js and mounted them back under /api/workflow via the parent router, preserving all existing paths (e.g., /api/workflow/standard-pricing, /:id/approve, /:id/reject).
+  - API: Moved Payment Plan workflow endpoints into api/src/paymentPlansRoutes.js (create/list/queues/my/team/:id/approve*/mark-accepted/policy-limit-for-deal). This removed the accidental duplicate definitions of GET /api/workflow/payment-plans/my and GET /api/workflow/payment-plans/team while keeping all URL paths and behavior intact, including the “approved-for-unit” helper used by Current Blocks and Reservations.
+  - API: Moved Reservation Form workflow endpoints into api/src/reservationFormsRoutes.js (create/list/:id/approve/:id/reject) so Financial Admin / Financial Manager responsibilities are encapsulated separately but still exposed under the original /api/workflow/reservation-forms paths.
+  - API: Moved Sales/Finance/Contracts team membership routes into api/src/teamsRoutes.js (sales-teams/*, finance-teams/*, contracts-teams/*) to isolate team management concerns from pricing and payment plan logic.
+  - API: Simplified api/src/workflowRoutes.js to a thin domain router that mounts standardPricingRoutes, paymentPlansRoutes, reservationFormsRoutes, and teamsRoutes at '/', ensuring all existing /api/workflow URLs still resolve correctly while making the workflow layer easier to read, test, and extend without introducing new route-order conflicts.
+- [2025-11-29 21:15] Block Approval — guarantee consultant plan exists before blocking unit
+  - API: Updated PATCH /api/blocks/:id/approve in api/src/blockManagement.js so that when a Financial Manager approves a normal block (financial_decision='ACCEPT' and no override), the server first tries to find an existing approved consultant-created payment plan for the same unit. If none exists, it looks up the most recent ACCEPT deal for that consultant/unit, auto-approves the deal if still draft/pending_approval, and inserts an approved payment_plans row using the deal’s calculator snapshot. If no suitable plan or ACCEPT deal snapshot can be found, the endpoint returns 400 "Cannot approve block: no consultant payment plan could be created for this unit. Ensure the deal has a valid ACCEPT plan and try again." and the block remains pending. This keeps consultants able to request blocks as soon as the calculator evaluation is ACCEPT while ensuring newly approved blocks always have at least one consultant-created approved payment plan available for FA Current Blocks and Reservation flows.
+- [2025-11-29 20:25] Consultant terminology — unify "Sales Rep" to "Property Consultant" and align Current Blocks wording with payment plan terms
+  - API: Updated POST /api/deals in api/src/dealsRoutes.js so that when a new deal is created without an explicit salesRepId, the system automatically sets sales_rep_id to the authenticated user id (the Property Consultant creating the offer). This ensures commission calculations have a default consultant and avoids "unassigned" deals in the database.
+  - API: Clarified comments in api/src/dashboardRoutes.js and api/src/customerRoutes.js so internal documentation consistently talks about Property Consultants instead of generic "Sales reps" for the sales-rep dashboards and customer scoping rules.
+  - Client: In client/src/deals/DealDetail.jsx, relabeled the "Sales Rep" field to "Property Consultant" and, for non-admin roles, replaced the editable dropdown with a read-only label showing the offer creator (created_by_email). Admins still have a dropdown to override the mapping if needed, with a clearer "Use Offer Creator (default)" option.
+  - Client: Adjusted the "Calculate Commission" button so that when sales_rep_id is null it automatically uses the deal creator (created_by) as the sales_person_id, eliminating the "Assign a Sales Rep first" error for normal offers where the Property Consultant is implicitly the salesperson.
+  - Client: Updated dashboards so manager views also use the same terminology: in client/src/components/dashboards/SalesManagerDashboard.jsx the "Sales Rep" columns are now labeled "Property Consultant", keeping the language consistent with Deal Detail and the PDFs.
+  - Client: On the Financial Admin "Current Blocks" page (client/src/deals/CurrentBlocks.jsx), renamed the "No approved consultant plans" messaging and field tooltip to "Approved payment plan" / "No approved payment plans for this unit", matching the financial terms in the Payment Plan workflow (Approved Plan vs Accepted Plan) instead of referring to a non-existent "consultant plan" terminology. The underlying API still filters to consultant-created approved payment plans; only the wording presented to FM/FA has changed.0:10] Deal Detail / Deals API — \"Sales Rep\" terminology and default assignment aligned with Property Consultant
+  - API: Updated POST /api/deals in api/src/dealsRoutes.js so that when a new deal is created without an explicit salesRepId, the system automatically sets sales_rep_id to the authenticated user id (the Property Consultant creating the offer). This ensures commission calculations have a default consultant and avoids \"unassigned\" deals in the database.
+  - Client: In client/src/deals/DealDetail.jsx, relabeled the \"Sales Rep\" field to \"Property Consultant\" and, for non-admin roles, replaced the editable dropdown with a read-only label showing the offer creator (created_by_email). Admins still have a dropdown to override the mapping if needed, with a clearer \"Use Offer Creator (default)\" option.
+  - Client: Adjusted the \"Calculate Commission\" button so that when sales_rep_id is null it automatically uses the deal creator (created_by) as the sales_person_id, eliminating the \"Assign a Sales Rep first\" error for normal offers where the Property Consultant is implicitly the salesperson.
+- [2025-11-29 19:35] Deal Detail — fix React hooks order error when conflict banner loads
+  - Client: In client/src/deals/DealDetail.jsx, moved the unitDeals useState hook (used to display “Other deals exist for this unit…”) up with the other hooks so it is always called before any early return. Previously, the hook was declared after the early `if (error) return…` / `if (!deal) return…` branches, so some renders executed fewer hooks than others and triggered “Rendered more hooks than during the previous render” in the Deal Detail view after loading /api/deals/by-unit/:unitId.
+- [2025-11-29 19:25] /api/deals/by-unit/:unitId SQL placeholder fixed to prevent parameter-count error
+  - API: Corrected the WHERE clause in api/src/dealsRoutes.js so that the created_by filter in GET /api/deals/by-unit/:unitId uses a proper $2-style placeholder when adding the current user id for non-elevated roles. Previously it appended the raw parameter index without the $ prefix (e.g., d.created_by = 2), causing Postgres to see a prepared statement with one bind placeholder while the driver supplied two parameters and log “bind message supplies 2 parameters, but prepared statement \"\" requires 1” whenever the endpoint was called by consultants.
+- [2025-11-29 13:30] Terminology updated to “Default Financing Policy” and “List Price Configuration”; canonical end-to-end Mermaid diagram added under Operational Workflow
+- [2025-11-29 12:00] Discount authority limits centralized; deal-by-unit helper added; evaluation guidance clarified; end-to-end offer→contract flow documented
+  - API: Centralized role-based discount authority limits in api/src/planningRoutes.js via getRoleDiscountLimit(role). /api/calculate now returns authorityLimit/overAuthority using this helper instead of hard-coded 2% and 5%, and /api/generate-plan enforces the same limits when generating plans. The defaults remain 2% for property_consultant and 5% for financial_manager, but the logic is now in one place and ready to be wired to database configuration in a future iteration.
+  - API: Added GET /api/deals/by-unit/:unitId in api/src/dealsRoutes.js to list deals for a specific unit based on details.calculator.unitInfo.unit_id. This endpoint is role-aware (non-elevated users only see their own deals for that unit) and is intended for UX checks and reporting around “multiple offers on the same unit” without introducing hard locking at deal creation.
+  - Client: Updated Create Deal (client/src/deals/CreateDeal.jsx) to call the new /api/deals/by-unit/:unitId helper when a unit is loaded, surfacing in logs whenever there are existing deals on that unit. This keeps the current “allow multiple deals” business policy while giving sales/ops context about potential conflicts. Future UI iterations can display this as a visible banner instead of a console-only note.
+  - Client: Improved rejection guidance in the calculator EvaluationPanel (client/src/components/calculator/EvaluationPanel.jsx) by expanding the “Unmet criteria” summary. For each failed condition, the banner now includes both the condition label and the minimum required percentage (when available), making it clearer why a plan was rejected and what threshold it failed to meet (e.g., “Payment by Handover (requires at least 65%)”).
+  - Documentation: Added a concise “End-to-End Offer → Contract Flow (Implementation)” description inside the Operational Workflow section, summarizing the implemented pipeline from Standard Pricing/Standard Plan → Inventory → Calculator modes → /api/generate-plan → Deals (offers) → Payment Plans workflow → Blocks → Reservations. This flow uses the same terminology as the application (Standard Mode, Payment Plans, Blocks, Reservations, Contracts) and aligns with the existing backend routes and business rules described elsewhere in the README.
+- [2025-11-27 16:15] Sales Manager queues page now shows payment plans instead of Unit Model approvals; Offer Progress internal error resolved
+  - Client: Updated client/src/deals/PaymentPlanQueues.jsx so that /deals/queues becomes role-aware. Sales Managers now load GET /api/workflow/payment-plans/queue/sm and see a “Payment Plan Approval Queue” table (plan id, deal id, status) instead of the Unit Model Approval Queue. Only Financial Manager and Top Management roles (ceo/chairman/vice_chairman/top_management) continue to call GET /api/inventory/unit-models/changes and see the Unit Model approval list with Approve/Reject actions. This removes the confusing 403 “Forbidden” errors Sales Managers previously saw when the page tried to hit the unit-models endpoint, without changing FM/TM behavior.
+  - Client: Kept the BrandHeader “Queues (N)” shortcut unchanged for Sales Managers; the count still reflects the number of pending payment plans from /api/workflow/payment-plans/queue/sm, but the underlying page now aligns its content and title with that queue instead of unit models.
+  - API: Confirmed that the Offer Progress internal error on the Sales Manager page was caused by the incorrect parameterization of GET /api/inventory/progress (fixed in the 15:45 entry below). With the query now using proper $ placeholders, both property_consultant and sales_manager roles can load Offer Progress without triggering “bind message supplies X parameters, but prepared statement \"\" requires 0” in the API logs.
+- [2025-11-27 15:45] Inventory progress SQL placeholders fixed; block approval helper made more tolerant when auto-linking deals
+  - API: Corrected the /api/inventory/progress query in api/src/inventoryRoutes.js so that the WHERE clause uses proper $1/$2-style placeholders for b.requested_by and stm.manager_user_id. Previously these were emitted as plain “1”/“2” literals, so Postgres saw a prepared statement with zero parameters while the driver still supplied one bind value, triggering “bind message supplies 1 parameters, but prepared statement \\\"\\\" requires 0” in the logs whenever the Offer Progress view loaded for consultants or sales managers.
+  - API: Relaxed the helper inside PATCH /api/blocks/:id/approve in api/src/blockManagement.js so that when a Financial Manager approves a normal block (financial_decision='ACCEPT' and no override approved), we no longer require the deal snapshot to also have generatedPlan.evaluation.decision='ACCEPT' in its JSON. The lookup now uses creator + unit_id/unit_code matching only, then auto-approves the most recent matching deal if it is still draft/pending_approval and ensures an approved consultant payment_plans row exists. This makes the auto-created plan more robust when evaluation metadata is missing or stored slightly differently, and helps the FA “Current Blocks” flow find an approved consultant plan for newly approved blocks.
+- [2025-11-27 00:30] Block approval creates approved consultant payment plan snapshot for FA Reservation flow
+  - API: Updated PATCH /api/blocks/:id/approve in api/src/blockManagement.js so that when a Financial Manager approves a normal block (financial_decision='ACCEPT' and no override approval present), the server finds the most recent ACCEPT deal for the same consultant and unit, auto-approves it if still draft/pending_approval, and ensures there is an approved payment_plans row whose details JSON mirrors the deal snapshot. This makes the “approved-for-unit” lookup return a consultant plan for newly approved blocks even when the original block was requested off a deal without a prior payment_plans record.
+  - API: Fixed the unit update inside the same handler to run as a separate UPDATE units ... WHERE id = unit_id, instead of the previously broken SQL that mixed block rejection fields into the units update. Approving a block now reliably sets units.available=FALSE and unit_status='BLOCKED' without touching unrelated columns.
+  - Impact: On the Financial Admin “Currently Blocked Units” page, blocks approved on a clean ACCEPT decision now surface an auto-created approved consultant plan via GET /api/workflow/payment-plans/approved-for-unit?unit_id=…, so FA sees a populated “Approved consultant plan” field instead of “No approved consultant plans” and can create Reservation Forms without the “No approved consultant plan is available for this unit.” alert.
+- [2025-11-26 21:30] Reservation Form PDF aligned with multi-owner legal template and deal snapshot data
+  - API: Enhanced /api/documents/reservation-form in api/src/documentsRoutes.js so that all client and unit details rendered in the Reservation Form PDF are pulled directly from the deal’s saved calculator snapshot (no manual entry by Financial Admin beyond reservation date and preliminary payment). The RF now shows, per buyer (up to 4): name, nationality, ID/passport, ID issue date, address, phones, and email, matching the multi-owner legal template structure.
+  - API: Adjusted the Reservation Form pricing source so that unit totals (base, garden, roof, storage, garage, maintenance, totals) come strictly from calc.unitPricingBreakdown stored in the deal snapshot, not from the latest unit_model_pricing rows. This ensures the RF reflects the agreed offer values even if standard pricing changes later. We still read units.area to display “مساحة الوحدة” alongside unit_code and unit_type, but no price fields are taken from live pricing tables.
+  - API: Added amount-in-words rendering for key RF monetary fields (unit total excluding/including maintenance, maintenance deposit, preliminary reservation payment, contract down payment net of reservation, and remaining amount) using convertToWords in the selected RF language. Each numeric value now shows its Arabic/English written form directly under the number, in line with the legal template placeholders like “ثمن كتابتا”، “إجمالي الثمن كتابتا”، “دفعة حجز كتابتا”، و“باقي الثمن كتابتا”.
+- [2025-11-26 21:45] Reservation Form unit metadata (building/block/zone) and Arabic legal-text alignment
+  - API: Extended the Reservation Form generator to hydrate structural unit metadata (area, building_number, block_sector, zone) from the units table and render them in the Arabic header lines as: “نوع الوحدة / شقة سكنية (<<نوع الوحدة>>) (مساحة الوحدة / <<مساحة الوحدة>> م2)” and “كود الوحدة (<<كود الوحدة>>) رقم المبنى (<<مبنى رقم>>) رقم البلوك (<<قطاع>>) رقم المجاورة (<<مجاورة>>) بمشروع ابتاون ريزيدنس – حى ابتاون ٦ أكتوبر”. These fields are read-only from the DB and never re-typed by the Financial Admin.
+  - API: Reworked the Arabic RF financial section to follow the exact legal wording provided: “ثمن الوحدة شامل المساحة الإضافية والجراج وغرفة التخزين/ <<ثمن بالأرقام>> جم (<<ثمن كتابتا>> لاغير)”, “وديعة الصيانة/ <<مصاريف الصيانة بالأرقام>> جم (<<مصاريف الصيانة كتابتا>> لاغير)”, “إجمالي المطلوب سداده/ <<إجمالي الثمن بالأرقام>> جم (<<إجمالي الثمن كتابتا>> لاغير)”, “دفعة حجز مبدئي : <<دفعة حجز بالأرقام>> جم (<<دفعة حجز كتابتا>> لاغير) تم سدادها بتاريخ <<تاريخ سداد دفعة الحجز>>”, “دفعة المقدم: <<إجمالي دفعة التعاقد بدون دفعة الحجز بالارقام>> جم (<<إجمالي دفعة التعاقد بدون دفعة الحجز كتابتا>> لاغير)”, و“باقي المبلغ :<<باقي الثمن بالأرقام>> جم (<<باقي الثمن كتابتا>> لاغير) يتم سداد باقي المبلغ طبقا لملحق السداد المرفق”، with all placeholders computed from the deal snapshot and preliminary payment.
+  - API: Implemented the policy that the preliminary reservation payment is deducted from the contractual down payment when presenting “دفعة المقدم” in the RF: the RF shows “إجمالي دفعة التعاقد بدون دفعة الحجز” as (downPaymentAmount − preliminaryPayment), never re-typed by FA. This ensures, for example, that when the plan down payment is 20% and the preliminary payment is 50,000 EGP, the RF’s “دفعة المقدم” is exactly “20% − 50,000” in both numbers and words.
+- [2025-11-26 21:10] Reservation approval moves unit from BLOCKED to RESERVED
+  - API: Updated Financial Manager approval for reservation forms in api/src/workflowRoutes.js so that when a reservation_form is approved (PATCH /api/workflow/reservation-forms/:id/approve), the related unit is resolved from the reservation/payment plan snapshot and its unit_status is set to 'RESERVED' with available=FALSE. This aligns the workflow with the policy that a unit remains BLOCKED while the reservation is initiated by Financial Admin but only becomes RESERVED after Financial Manager approval.
+- [2025-11-26 20:25] API Parameter Mismatch — syntax correction and Customer Routes fixes
+  - API: Corrected the syntax in `api/src/dealsRoutes.js` where the previous fix for `LIMIT`/`OFFSET` placeholders was missing the `# Uptown-FS — Full Stack Financial System
+
+This repository contains a Dockerized full‑stack app for Uptown’s financial workflows:
+
+- Client: React + Vite (client/)
+- API: Node.js + Express (api/)
+- Database: PostgreSQL 16 (containerized)
+- Orchestration: Docker Compose (docker-compose.yml)
+- Dev environment: GitHub Codespaces with auto‑forwarded ports (.devcontainer/)
+
+The README is the living source of truth. Every significant change must be reflected here. See “AI/Agent Contribution Rules” below.
+
+---
+
+## Quick Start (local machine)
+
+Prerequisites: Docker Desktop.
+
+1) Create your environment file
+- Copy .env.example to .env and adjust if needed
+  - ADMIN_EMAIL / ADMIN_PASSWORD (for initial seed)
+  - DB_PASSWORD (already set to apppass for dev)
+
+2) Start the stack
+- docker compose up -d --build
+
+3) Access locally
+- Client: http://localhost:5173
+- API Health: http://localhost:3000/api/health
+- API Message: http://localhost:3000/api/message
+
+Stop everything:
+- docker compose down
+Note: Do NOT use docker compose down -v unless you want to wipe the database volume.
+
+---
+
+## Quick Start (GitHub Codespaces)
+
+This repo is configured for Codespaces.
+
+- Auto‑forwarded ports: 3001 (API), 5173 (Client)
+- Auto‑start stack: docker compose up -d runs on container start (postStartCommand)
+
+First run in a Codespace:
+1) Rebuild the container so devcontainer settings take effect
+- F1 → “Codespaces: Rebuild Container”
+2) The stack will start automatically (postStartCommand).
+3) Open the Ports panel and click:
+- 5173 → Client
+- 3001 → API
+
+Notes:
+- We expose the API container’s port 3000 to the host port 3001 to avoid conflicts (compose uses 3001:3000).
+- The client is configured for Codespaces HMR and uses the forwarded hosts, not localhost.
+- If you open a public port URL, GitHub may show a one‑time safety warning; click “Continue.”
+
+Health checks:
+- curl -sS https://<codespace>-3001.app.github.dev/api/health
+- Client should hot‑reload without ws://localhost references.
+
+---
+
+## Ports and Environment
+
+- API container listens on 0.0.0.0:3000.
+- Host forwards to:
+  - 3001 → API (container:3000)
+  - 5173 → Client (container:5173)
+- Vite config (client/vite.config.js) detects Codespaces and:
+  - Sets HMR over wss to the forwarded 5173 host
+  - Sets origin to the public 5173 host
+  - Sets VITE_API_URL to the public 3001 host
+- docker-compose.yml passes CODESPACE_NAME and GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN to client so the config can compute public URLs.
+
+---
+
+## Current Features and Status
+
+1) Calculation Service and API
+- Endpoint: POST /api/calculate
+- Modes include:
+  - evaluateCustomPrice
+  - calculateForTargetPV
+  - customYearlyThenEqual_useStdPrice
+  - customYearlyThenEqual_targetPV
+- Returns totals, PV, and metadata to drive the UI.
+
+2) Generator and Documents
+- Endpoint: POST /api/generate-plan
+- Document generation endpoint scaffolded: POST /api/generate-document
+- Client can export schedule to CSV/XLSX and generate a checks sheet XLSX.
+
+3) Inventory/Units (stubs for integration)
+- Basic endpoints scaffolded; UI has type and unit pickers with server calls.
+
+4) OCR Module (scaffold)
+- OCR upload endpoint design (tesseract primary; Google Cloud Vision optional via GCV_API_KEY) documented for future enablement.
+
+5) Auth and Roles (client side)
+- Role-aware UI sections (e.g., thresholds, contract sections).
+- Client persists session/role in localStorage.
+
+6) Codespaces Integration
+- Devcontainer auto‑forwards 3001/5173 and auto‑starts the stack.
+- Vite HMR configured to work behind Codespaces.
+
+## Configuration Requirements
+
+For calculations to work correctly, the following must be configured:
+
+- Per-Pricing Financial Settings are required for unit/model flows:
+  - std_financial_rate_percent: numeric percent (annual), must be > 0
+  - plan_duration_years: integer ≥ 1
+  - installment_frequency: one of { monthly, quarterly, biannually, annually } (normalized to 'bi-annually' internally)
+  - The calculator and plan generation will not fall back to Active Standard Plan when a unit/model is selected; per-pricing terms must exist and be approved.
+
+If no active Standard Plan exists or its values are invalid, the server will attempt to use the Financial Manager’s stored “Calculated PV” for the selected unit/model. If that is not present, the API returns 422 with a clear message.
+
+---
+
+ prefix (e.g., `LIMIT ${limitIdx}` vs `LIMIT ${limitIdx}`), which still caused parameter mismatch errors.
+  - API: Proactively fixed identical missing-`# Uptown-FS — Full Stack Financial System
+
+This repository contains a Dockerized full‑stack app for Uptown’s financial workflows:
+
+- Client: React + Vite (client/)
+- API: Node.js + Express (api/)
+- Database: PostgreSQL 16 (containerized)
+- Orchestration: Docker Compose (docker-compose.yml)
+- Dev environment: GitHub Codespaces with auto‑forwarded ports (.devcontainer/)
+
+The README is the living source of truth. Every significant change must be reflected here. See “AI/Agent Contribution Rules” below.
+
+---
+
+## Quick Start (local machine)
+
+Prerequisites: Docker Desktop.
+
+1) Create your environment file
+- Copy .env.example to .env and adjust if needed
+  - ADMIN_EMAIL / ADMIN_PASSWORD (for initial seed)
+  - DB_PASSWORD (already set to apppass for dev)
+
+2) Start the stack
+- docker compose up -d --build
+
+3) Access locally
+- Client: http://localhost:5173
+- API Health: http://localhost:3000/api/health
+- API Message: http://localhost:3000/api/message
+
+Stop everything:
+- docker compose down
+Note: Do NOT use docker compose down -v unless you want to wipe the database volume.
+
+---
+
+## Quick Start (GitHub Codespaces)
+
+This repo is configured for Codespaces.
+
+- Auto‑forwarded ports: 3001 (API), 5173 (Client)
+- Auto‑start stack: docker compose up -d runs on container start (postStartCommand)
+
+First run in a Codespace:
+1) Rebuild the container so devcontainer settings take effect
+- F1 → “Codespaces: Rebuild Container”
+2) The stack will start automatically (postStartCommand).
+3) Open the Ports panel and click:
+- 5173 → Client
+- 3001 → API
+
+Notes:
+- We expose the API container’s port 3000 to the host port 3001 to avoid conflicts (compose uses 3001:3000).
+- The client is configured for Codespaces HMR and uses the forwarded hosts, not localhost.
+- If you open a public port URL, GitHub may show a one‑time safety warning; click “Continue.”
+
+Health checks:
+- curl -sS https://<codespace>-3001.app.github.dev/api/health
+- Client should hot‑reload without ws://localhost references.
+
+---
+
+## Ports and Environment
+
+- API container listens on 0.0.0.0:3000.
+- Host forwards to:
+  - 3001 → API (container:3000)
+  - 5173 → Client (container:5173)
+- Vite config (client/vite.config.js) detects Codespaces and:
+  - Sets HMR over wss to the forwarded 5173 host
+  - Sets origin to the public 5173 host
+  - Sets VITE_API_URL to the public 3001 host
+- docker-compose.yml passes CODESPACE_NAME and GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN to client so the config can compute public URLs.
+
+---
+
+## Current Features and Status
+
+1) Calculation Service and API
+- Endpoint: POST /api/calculate
+- Modes include:
+  - evaluateCustomPrice
+  - calculateForTargetPV
+  - customYearlyThenEqual_useStdPrice
+  - customYearlyThenEqual_targetPV
+- Returns totals, PV, and metadata to drive the UI.
+
+2) Generator and Documents
+- Endpoint: POST /api/generate-plan
+- Document generation endpoint scaffolded: POST /api/generate-document
+- Client can export schedule to CSV/XLSX and generate a checks sheet XLSX.
+
+3) Inventory/Units (stubs for integration)
+- Basic endpoints scaffolded; UI has type and unit pickers with server calls.
+
+4) OCR Module (scaffold)
+- OCR upload endpoint design (tesseract primary; Google Cloud Vision optional via GCV_API_KEY) documented for future enablement.
+
+5) Auth and Roles (client side)
+- Role-aware UI sections (e.g., thresholds, contract sections).
+- Client persists session/role in localStorage.
+
+6) Codespaces Integration
+- Devcontainer auto‑forwards 3001/5173 and auto‑starts the stack.
+- Vite HMR configured to work behind Codespaces.
+
+## Configuration Requirements
+
+For calculations to work correctly, the following must be configured:
+
+- Per-Pricing Financial Settings are required for unit/model flows:
+  - std_financial_rate_percent: numeric percent (annual), must be > 0
+  - plan_duration_years: integer ≥ 1
+  - installment_frequency: one of { monthly, quarterly, biannually, annually } (normalized to 'bi-annually' internally)
+  - The calculator and plan generation will not fall back to Active Standard Plan when a unit/model is selected; per-pricing terms must exist and be approved.
+
+If no active Standard Plan exists or its values are invalid, the server will attempt to use the Financial Manager’s stored “Calculated PV” for the selected unit/model. If that is not present, the API returns 422 with a clear message.
+
+---
+
+ issues in `api/src/customerRoutes.js` across search filters, pagination, and update queries to prevent similar crashes and SQL injection vulnerabilities.
+- [2025-11-26 16:05] All Deals listing — fix SQL parameter mismatch causing internal error
+  - API: Corrected the GET /api/deals listing query in api/src/dealsRoutes.js so that LIMIT/OFFSET use their own bound placeholders instead of reusing the filter parameters array length directly. Previously, the prepared statement expected only the WHERE-clause parameters while the code supplied three parameters (filters + limit + offset), triggering “bind message supplies 3 parameters, but prepared statement \\\"\\\" requires 1” and showing “Internal error” on the consultant’s All Deals page. The listing now executes without parameter count errors across all filter combinations.ent Fixes and Changes
+Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2025-11-26 20:25] API Parameter Mismatch — syntax correction and Customer Routes fixes
+  - API: Corrected the syntax in `api/src/dealsRoutes.js` where the previous fix for `LIMIT`/`OFFSET` placeholders was missing the `$` prefix (e.g., `LIMIT ${limitIdx}` vs `LIMIT $${limitIdx}`), which still caused parameter mismatch errors.
+  - API: Proactively fixed identical missing-`$` issues in `api/src/customerRoutes.js` across search filters, pagination, and update queries to prevent similar crashes and SQL injection vulnerabilities.
+- [2025-11-26 16:05] All Deals listing — fix SQL parameter mismatch causing internal error
+  - API: Corrected the GET /api/deals listing query in api/src/dealsRoutes.js so that LIMIT/OFFSET use their own bound placeholders instead of reusing the filter parameters array length directly. Previously, the prepared statement expected only the WHERE-clause parameters while the code supplied three parameters (filters + limit + offset), triggering “bind message supplies 3 parameters, but prepared statement \"\" requires 1” and showing “Internal error” on the consultant’s All Deals page. The listing now executes without parameter count errors across all filter combinations.
+- [2025-11-26 15:25] Inventory cards — visual BLOCKED watermark for blocked units
+  - Client: Inventory grid cards now show a large red “BLOCKED” watermark over any unit whose unit_status is BLOCKED, while keeping the details readable. The “Create Offer” button on blocked cards is visually dimmed and non-clickable, matching the existing behavior that prevents offer creation for blocked units. AVAILABLE units retain the normal white card with no watermark.
+- [2025-11-26 15:10] All Deals table — Unit Availability column and auto-approval wiring
+  - Client: Deals → All Deals table now has a separate “Deal Status” column (draft / pending_approval / approved / rejected) and a “Unit Availability” column that surfaces the live unit status from Inventory via current_unit_status/current_unit_available. This makes the list view match the hint text and clearly separates deal lifecycle from the underlying unit state (AVAILABLE, BLOCKED, etc.).
+  - API: Hardened the auto-approval lookup in PATCH /api/blocks/:id/approve so that when a Financial Manager approves a normal block (financial_decision='ACCEPT' and no override approval), the server reliably finds the most recent matching deal by unit_id (trimming string unit_id values) and sets its status to approved, logging an auto_approved_on_block entry in deal_history. This fixes cases where blocked units did not automatically flip the related deal to approved despite meeting the criteria.
+- [2025-11-26 14:40] Deal Detail status banner for deal vs unit vs override
+  - Client: Deal Detail now shows a compact status banner directly under the title summarizing three things side by side: (1) Deal Status (draft / pending_approval / approved / rejected), (2) Override status (“Not requested”, “Pending (SM/FM/TM)”, or “Approved by Top Management”), and (3) Unit Availability (AVAILABLE / BLOCKED / other states). This makes it clear to consultants that the deal’s lifecycle is separate from the live unit status. When the new backend auto-approval rule kicks in (block approved on a normal ACCEPT plan with no override), Deal Detail also shows a small note “This deal was automatically marked as approved when the Financial Manager approved the unit block” based on the auto_approved_on_block audit entry, so consultants understand why a draft/pending deal flipped to approved after blocking.
+- [2025-11-26 14:30] Deal auto-approval on normal block approval (no override)
+  - API: When a Financial Manager approves a unit block (PATCH /api/blocks/:id/approve with action='approve') and the underlying financial_decision on the block is ACCEPT with no override approval present (override_status is not 'approved'), the system now automatically finds the most recent deal for that consultant and unit where the calculator evaluation decision is ACCEPT and the deal status is draft or pending_approval, and updates that deal’s status to approved. An audit entry 'auto_approved_on_block' is written into deal_history with structured JSON indicating who triggered the change and why. This ensures that in the normal path (criteria met, no override) the consultant sees their offer as approved as soon as the block is approved and the unit becomes BLOCKED, while override-based approvals keep their separate path and do not auto-change deal status.
+- [2025-11-26 14:00] Standard Mode evaluation schedule diagnosis (payments before month 39)
+  - Analysis: Identified that in Standard Mode the generated schedule used for Acceptance Evaluation was missing the three 15%-per-year payment blocks in Years 1–3. The backend engine (standardMode) was correctly enforcing the structure for PV, but /api/generate-plan was building the schedule only from effInputs.subsequentYears (which are empty in Standard Mode), plus the equal installments starting at month 39. As a result, “Payment by Handover” and “Cumulative by End of Year 1/2/3” only counted the 20% Down Payment, causing false FAIL decisions even when Standard Mode policy was conceptually satisfied.
+  - Plan: Update api/src/planningRoutes.js so that for mode='standardMode' the plan-generation layer enforces the canonical Standard Mode structure on effInputs (20% DP, 6 years, quarterly, handover at Year 3, three 15% yearly blocks in Years 1–3, remaining 35% as equal installments). This will align the generated schedule and Acceptance Evaluation with the engine’s Standard Mode logic and ensure cumulative thresholds are computed against the correct payment structure.
+- [2025-11-26 13:00] Standard Mode UI locking and payload enforcement
+  - Client: Fixed the calculator so that when “Standard Mode (Default Plan)” is selected, Installment Frequency is forced to quarterly and disabled, Plan Duration is forced to 6 years and disabled, Handover Year is fixed to 3 with no additional handover payment, and the “Split First Year Payments” / “Subsequent Custom Years” controls are disabled/hidden. The Maintenance Deposit amount field is now read-only in Standard Mode (amount comes from Standard Pricing), while the Maintenance Date remains editable.
+  - Client: Corrected the default mode to start in Standard Mode instead of the discounted standard mode. Down Payment in Standard Mode is now fully locked client-side at 20% percentage, preventing user edits that previously led to inconsistent “standard” structures.
+  - Client: Hardened the calculator payload builder so that when mode='standardMode' the request sent to /api/calculate and /api/generate-plan always uses dpType='percentage' with downPaymentValue=20, planDurationYears=6, installmentFrequency='quarterly', handoverYear=3, additionalHandoverPayment=0, splitFirstYearPayments=false, and no custom first-year or subsequent-year structures. This ensures the generated plan and server-side evaluation always follow the approved Standard Mode structure even if any UI state drifts.
+- [2025-11-26 12:00] Calculator Standard Mode + default DP/discount policy
+  - API: Added a new calculation mode standardMode in the central engine. Standard Mode enforces a fixed structure based on the approved standard price for the selected unit/model: 20% Down Payment, 6-year plan duration, quarterly installments, first 3 years at 15% of the (discounted) nominal price per year (3.75% per quarter), and the remaining 35% distributed as equal quarterly installments over the last 3 years. Handover year is forced to Year 3 with no additional handover lump sum; any maintenance amount is taken from standard pricing and scheduled via the plan generator (defaulting to month 36 if no explicit date is given).
+  - API: For Standard Mode, any plan with a non-zero sales discount is always evaluated as REJECT regardless of PV/thresholds, so discounted standard plans must flow through the override workflow. The existing 2% maximum consultant discount and 5% FM limit remain enforced by role.
+  - Client: Calculator now defaults to Standard Mode on load, with explanatory text in the Mode dropdown. In Standard Mode, consultants cannot change Down Payment type/value (fixed at 20% percentage), plan duration (6 years), installment frequency (quarterly), handover year (3), or the yearly structure; maintenance amount is locked to the unit’s standard pricing value, but the maintenance date remains editable and falls back to Year 3 (month 36) when left empty.
+  - Client: Across all modes, the default sales discount is now 0% instead of 1.5%, and the default Down Payment is expressed as 20% (dpType='percentage', downPaymentValue=20). In target-PV modes (calculateForTargetPV and customYearlyThenEqual_targetPV), the UI now enforces Down Payment as an absolute amount only: when switching into these modes, any percentage DP is converted once to an amount based on the current Standard Total Price and dpType is locked to 'amount'. In percentage modes, DP is constrained between 0% and 100%, and in amount mode the DP cannot exceed 100% of the Standard Total Price.
+- [2025-11-25 12:10] Top Management access to Block Requests page wired + documented
+  - Client: The “Unblock Requests” shortcut in the BrandHeader for Top Management roles (ceo, chairman, vice_chairman, top_management) now routes to /deals/block-requests and the route itself allows those roles. Previously, TM could see the header button but the RequireRole guard on /deals/block-requests only allowed sales_manager, property_consultant, and financial_manager, so TM landed on the generic Deals page instead of the Block Requests screen.
+  - Client: This keeps the existing behavior where Top Management lands on the “Pending Unit Unblock Requests” view by default while ensuring the shortcut actually opens the correct page for TM accounts.
+- [2025-11-25 12:00] Top Management unblock overrides visibility + shortcuts
+  - Client: BrandHeader now includes an “Unblock Requests” shortcut button in the header for Top Management roles (ceo, chairman, vice_chairman, top_management). This links directly to the Block Requests page so TM can review unblock requests without navigating through other menus.
+  - Client: On the Block Requests page, Top Management now lands on the “Pending Unit Unblock Requests” view by default (showUnblock=true for TM). FM still sees Pending Unit Block Requests first, ensuring the FM → TM chain remains intact while making TM’s unblock queue easier to reach.
+  - Client/API: When TM approves an unblock directly (from pending_fm), the UI toast now includes a clear remark “TM override: FM stage bypassed.” to make the override explicit in the unblock track. When TM or FM rejects an unblock, the notification message sent back to the requester now explicitly states whether it was rejected by FM, or by TM after FM approval, or by TM bypassing the FM stage (with the optional reason appended). The Unblock Requests table now includes a “Status” badge and an “Override Note” column: TM sees a red badge “TM override if approved (FM stage bypassed)” whenever a request is still pending_fm with no FM decision yet, and a blue note “FM approved – awaiting TM decision” when FM has already approved (pending_tm). This gives both approvers and consultants a visible audit hint whenever TM has the ability to override or act after FM on unblock requests.
+- [2025-11-24 11:10] Client Offer unit totals fallback for all-zero breakdowns + /payment-plans/my route fix
+  - API (Client Offer): In /api/documents/client-offer, unit_pricing_breakdown is now treated as “absent” when all components are zero (base, garden, roof, storage, garage, maintenance). In that case, the endpoint falls back to the latest approved unit_model_pricing for the selected unit_id, instead of rendering 0.00 in the unit totals box. This ensures existing deals like UTSUR — Standard Unit Right show the correct Base and Total (incl. maintenance) even if the saved snapshot stored an all-zero breakdown.
+  - API (Payment Plans “my” endpoint): Re-ordered payment plan routes in api/src/workflowRoutes.js so that GET /api/workflow/payment-plans/my and /team are defined before GET /api/workflow/payment-plans/:id. Previously, /my was captured by the :id route, which attempted to parse "my" as a numeric id and returned 400 \"Invalid id\", causing repeated errors in BrandHeader polling. The “My Payment Plans” endpoint now returns the consultant’s plans correctly and stops the noisy 400s.
+- [2025-11-24 10:40] Client Offer unit totals from Deal Detail and unblock-pending API wiring
+  - Client: Deal Detail only sends unit_pricing_breakdown to /api/documents/client-offer when a real unitPricingBreakdown exists on the saved calculator snapshot. Older deals without this field no longer send an all-zero breakdown, allowing the API’s fallback to unit_model_pricing to populate the unit totals box so Base and Total (incl. maintenance) show correct values instead of 0.00 in Client Offer PDFs.
+  - API: Added GET /api/blocks/unblock-pending plus PATCH /api/blocks/:id/unblock-fm-approve and PATCH /api/blocks/:id/unblock-reject in api/src/blockManagement.js. Financial Managers now see unblock requests in the “Pending Unit Unblock Requests” view and can approve (forward to TM) or reject them, and Top Management can still approve directly via /unblock-tm-approve. The endpoint now returns JSON instead of HTML 404, fixing the “Unexpected token '<', '<!DOCTYPE' is not valid JSON” error in the Financial Manager’s Unblock Requests tab.
+- [2025-11-23 00:15] Deal Detail offer export and unit block/unblock buttons
+  - Client: On Deal Detail for Property Consultants, the “Print Offer (Pricing Form PDF)” button now exports the same Client Offer PDF used on the main Calculator page (server-rendered /api/documents/client-offer), ensuring consistent output and avoiding confusion with internal Pricing Form templates.
+  - Client: The Deal Detail unit action button correctly toggles between “Request Unit Block” and “Request Unit Unblock” based on the saved unit_status/availability from the deal’s calculator snapshot, and sends unblock requests via POST /api/blocks/request-unblock without asking for a block duration.
+- [2025-11-24 01:15] Deal Detail unit block/unblock behavior and Client Offer unit totals
+  - Client: Deal Detail now derives the unit’s blocked state primarily from the live units table (current_unit_status/current_unit_available returned by GET /api/deals/:id) and only falls back to the calculator snapshot. This ensures the “Request Unit Block / Request Unit Unblock” button reflects the actual state even when the snapshot still shows AVAILABLE, and unblock requests are sent correctly for currently BLOCKED units.
+  - Client: Calculator snapshots saved into deals now include unitPricingBreakdown, so Deal Detail’s “Print Offer (Client Offer PDF)” button can send unit_pricing_breakdown to the server. New Client Offer PDFs generated from Deals show the correct unit totals (Base / Garden / Roof / Storage / Garage / Maintenance / totals) in the upper-right box instead of zeros.
+  - API: The server-side Client Offer generator (/api/documents/client-offer) now falls back to the latest approved unit_model_pricing for the selected unit when unit_pricing_breakdown is not present in the request, so older deals still render a populated unit totals box.
+- [2025-11-24 00:00] Deal Detail unit block/unblock button ReferenceError fix
+  - Client: Fixed a runtime ReferenceError in Deal Detail caused by an undefined canBlockOrUnblock variable and a partially merged JSX fragment after the “Print Offer (Client Offer PDF)” button. The unit action now derives canBlockOrUnblock from the saved evaluation decision (ACCEPT) or an approved override plus the presence of unit_id, toggles label and title based on BLOCKED vs AVAILABLE, and calls POST /api/blocks/request or POST /api/blocks/request-unblock accordingly.
+- [2025-11-22 20:10] Consultant unblock prompt and Pricing Form permissions
+  - Client: When a Property Consultant requests “Request Unit Unblock” from Deal Detail, the UI no longer asks for a block duration. Only an optional reason is collected and sent to POST /api/blocks/request-unblock, matching the backend unblock workflow.
+  - API: Secured POST /api/generate-document with authMiddleware so req.user.role is always populated, preventing “Forbidden: role undefined cannot generate pricing_form” errors for authenticated users.
+  - API: Relaxed deal status enforcement for Pricing Form generation — documentType='pricing_form' can now be generated for draft deals (deal_id is allowed without requiring status='approved'), while Reservation Form and Contract still require approved deals and any needed override.
+  - Files: client/src/deals/DealDetail.jsx, api/src/app.js.
+- [2025-11-22 19:30] Unit Unblock workflow via FM → TM and Deal Detail button wiring
+  - API: Refactored api/src/blockManagement.js into a single, clean module and added an explicit unblock workflow:
+    - POST /api/blocks/request-unblock records an unblock request for an active approved block (no direct unit change).
+    - PATCH /api/blocks/:id/unblock-fm-approve lets Financial Manager approve the unblock and forward it to Top Management (unblock_status='pending_tm').
+    - PATCH /api/blocks/:id/unblock-tm-approve lets Top Management approve the unblock; the block is marked expired and the unit becomes AVAILABLE again.
+    - PATCH /api/blocks/:id/unblock-reject lets FM or TM reject the unblock request with an optional reason.
+    - GET /api/blocks/unblock-pending lists pending unblock requests; Financial Manager sees unblock_status='pending_fm', Top Management sees 'pending_tm'.
+  - Client: Deal Detail unit action now calls:
+    - POST /api/blocks/request when the unit is AVAILABLE (“Request Unit Block”).
+    - POST /api/blocks/request-unblock when the unit is BLOCKED (“Request Unit Unblock”), sending only unitId and reason; the request then flows FM → TM as defined above.
+  - Client: Block Requests page now has a toggle for Financial Manager to switch between:
+    - Pending Unit Block Requests (existing /api/blocks/pending queue).
+    - Pending Unit Unblock Requests (new /api/blocks/unblock-pending view), with:
+      - FM actions: Approve Unblock (→ pending_tm) and Reject Unblock.
+      - TM actions: Approve Unblock (actually unblocks the unit) and Reject Unblock.
+  - Files: api/src/blockManagement.js, client/src/deals/DealDetail.jsx, client/src/deals/BlockRequests.jsx.
+- [2025-11-22 18:45] Sales Consultant Deal Detail buttons streamlined
+  - Client: On Deals → Deal Detail, renamed the “Edit in Calculator” action to “Edit Offer” to better match sales language.
+  - Client: On the Sales Consultant view, hid the “Submit for Approval” button (submission is handled elsewhere once offers meet standard criteria).
+  - Client: Removed the “Print Schedule” button from Deal Detail to avoid redundant or confusing exports.
+  - Client: When a unit is already BLOCKED, the consultant’s unit action now shows “Request Unit Unblock” instead of “Request Unit Block” while keeping the same backend request endpoint.
+  - Client: Restricted the “Generate Checks Sheet (.xlsx)” action on Deal Detail to Financial Admin only; consultants no longer see this button (checks-sheet generation remains available for FA via Deal Detail and the calculator exports).
+  - Files: client/src/deals/DealDetail.jsx.
+- [2025-11-22 12:20] CRM Admin Role & Inventory Workflow Refactor
+  - Role: Introduced `crm_admin` role for managing unit inventory (creating drafts, requesting changes).
+  - Workflow: Inventory drafts are now created by `crm_admin` and must be approved by `Top Management` (CEO, Chairman, Vice Chairman) to become AVAILABLE.
+  - Workflow: Inventory change requests (edit/delete approved units) are submitted by `crm_admin` and approved by `Financial Manager`.
+  - Access: `Financial Admin` no longer manages inventory drafts; focus is restricted to financial workflows (Standard Pricing, Current Blocks, Reservations).
+  - UI/API: Updated routes, navigation, and dashboards to enforce these new role boundaries.
+- [2025-11-22 12:00] CRM Admin vs Financial Admin responsibilities – future adjustments
+  - README: Documented two follow-up actions for the already-implemented CRM Admin inventory role:
+    - Adjust exactly which pages Financial Admin should still see (for example, whether they keep or lose specific admin pages).
+    - Add a small visual tag in the UI clearly separating “CRM Admin” vs “Financial Admin” responsibilities for training and onboarding.
+- [2025-11-22 11:30] Restore FM Header & Blocked Units Visibility
+  - Client: Inventory list now includes BLOCKED units for Sales Managers and Consultants, displayed with a 'BLOCKED' badge and disabled 'Create Offer' button. This ensures visibility of unavailable inventory.
+  - Client: Restored the "Block Requests" navigation link in the global header for Financial Managers.
+  - Client: Added a "Block Requests" shortcut button on the Deals Dashboard for Sales Managers, Property Consultants, and Financial Managers for quick access.
+  - Files: client/src/deals/InventoryList.jsx, client/src/lib/BrandHeader.jsx, client/src/deals/Dashboard.jsx.
+- [2025-11-22 09:00] Blocking flow: allow blocks based on valid Deals (Draft/Pending)
+  - API: Updated POST /api/blocks/request to fallback to checking for a valid Deal if no approved payment plan is found. This allows Consultants to block units immediately after creating a Deal (even if Draft), provided the plan evaluation decision is 'ACCEPT'.
+  - Fix: Resolved an issue where `app.js` was importing an outdated backup file (`blockManagement.fixed.js`), preventing fixes from taking effect. Corrected import to `blockManagement.js`.
+  - Files: api/src/blockManagement.js, api/src/app.js.
+- [2025-11-08 12:00] Block request approval-plan lookup hardened; approved-for-unit endpoint SQL repaired
+  - API: In POST /api/blocks/request, the approved plan lookup now trims unit_id and unit_code from the plan snapshot before matching, accepting numeric strings with whitespace and codes with incidental spaces. This resolves false “An approved payment plan is required…” when snapshots stored unit_id like "1 " or unit_code with trailing spaces.
+  - API: Repaired GET /api/workflow/payment-plans/approved-for-unit SQL (removed accidental inserted text and added TRIM on snapshot fields and target unit code). The endpoint again lists approved consultant-created plans for the unit reliably.
+  - Files: api/src/blockManagement.js, api/src/workflowRoutes.js.
+- [2025-11-01 11:10] UI hints for Block Override Chain + TM direct notification on REJECT
+  - Client: Deals → Block Requests now shows override status badges (Financial: ACCEPT/REJECT/Unknown; Override: Pending SM/FM/TM/Approved/Rejected) and role-based override actions:
+    - SM Approve Override (pending_sm → pending_fm), FM Approve Override (pending_fm → pending_tm), TM Approve Override (works even if SM/FM not approved; bypass recorded), Reject Override (SM/FM/TM).
+    - FM Approve now shows a tooltip indicating it requires Financial ACCEPT or TM override approved.
+  - Client: Deals → Offer Progress adds an “Override” column with compact badges (Financial + Override status) when available in API payload.
+  - Client: Deals → Deal Detail shows compact badges under Acceptance Evaluation (Financial decision + deal-level override status) alongside the existing timeline.
+  - API: On REJECT-plan block requests, Top Management is notified directly (bypass) in addition to starting the normal override sequence at pending_sm.
+  - Files: client/src/deals/BlockRequests.jsx, client/src/deals/OfferProgress.jsx, client/src/deals/DealDetail.jsx, api/src/blockManagement.js, api/src/blockOverrides.js.
+- [2025-11-01 10:50] Documentation: add Operational Workflow (Draft for Review)
+  - README: Added a comprehensive end-to-end workflow section covering Models → Standard Plan/Pricing → Inventory → Offers/Plans → Blocks → Reservations → Contracts, with Current vs Planned enforcement clearly labeled. This is a draft pending stakeholder approval and will be finalized after implementation of planned items.
+  - Files: README.md.
+- [2025-11-01 10:05] Block request approval-check aligned with approved plan lookup (unit_id or unit_code)
+  - API: Updated POST /api/blocks/request to recognize approved plans linked by either details.calculator.unitInfo.unit_id (numeric string) or unit_code fallback. Uses a safe numeric-regex check before casting. This fixes false “An approved payment plan is required…” when the plan snapshot stored unit_code only or unit_id as a string.
+  - Impact: Consultants/Sales Managers can request a block for units that already have an approved plan, regardless of snapshot representation.
+  - Files: api/src/blockManagement.js.
+- [2025-11-01 10:20] Enforce payment plan presence when creating or submitting offers (deals)
+  - API: POST /api/deals now requires details.calculator.generatedPlan with a non-empty schedule; otherwise returns 400 “A generated payment plan is required to create an offer.”
+  - API: POST /api/deals/:id/submit also enforces the same rule and returns 400 if the plan is missing.
+  - Impact: It is no longer possible to create or submit an offer for a unit without a generated payment plan snapshot attached to the deal.
+  - Files: api/src/dealsRoutes.js.
+- [2025-11-01 10:35] Offer eligibility and Reservation prerequisites hardened
+  - API: Offers only for AVAILABLE units: POST /api/deals and POST /api/deals/:id/submit now validate the selected unit (details.calculator.unitInfo.unit_id) is available=TRUE and unit_status='AVAILABLE'. Otherwise 400.
+  - API: Reservation forms require an active approved block: POST /api/workflow/reservation-forms resolves the unit from RF details or the plan snapshot, and requires an approved block (blocked_until > now()) for that unit. Otherwise 400.
+  - Impact: Enforces the workflow: create offer on AVAILABLE unit → request block → create reservation form on BLOCKED unit.
+  - Files: api/src/dealsRoutes.js, api/src/workflowRoutes.js.
+- [2025-11-01 00:15] Blocking flow: fix approved-plans lookup SQL and restore dropdown on Current Blocks
+  - API: Repaired corruption in GET /api/workflow/payment-plans/approved-for-unit SQL where a stray newline broke the numeric-regex check and truncated the query. Properly matches by unit_id (numeric JSON field) or by unit_code fallback.
+  - Impact: The “Approved Plan” selector on Current Blocks now populates when a unit has an approved plan, unblocking the Reservation Form flow. This also supports older snapshots with only unit_code.
+  - Files: api/src/workflowRoutes.js.
+- [2025-11-01 00:25] Approved plans scope: only consultant-created plans appear in FA Current Blocks
+  - API: GET /api/workflow/payment-plans/approved-for-unit now filters to plans created by users with role='property_consultant' and includes consultant_email in the payload.
+  - Impact: The Approved Plan dropdown will no longer show standard pricing or finance-created plans; it lists only consultant-created approved plans for the selected unit, aligning with the intended workflow.
+  - Files: api/src/workflowRoutes.js.
+- [2025-11-01 00:40] FA Current Blocks UX: plan auto-selected and locked; date, preliminary payment, and language editable
+  - Client: On Deals → Current Blocks, the “Approved Plan” is auto-fetched for each blocked unit and displayed read-only. Financial Admin can set Reservation Date, Preliminary Payment, and Language. Currency is removed and cannot be changed. The create payload includes preliminary_payment and omits currency_override.
+  - Impact: Keeps FA from changing the plan or currency while allowing Preliminary Payment entry, which will count toward the Down Payment in downstream processing.
+  - Files: client/src/deals/CurrentBlocks.jsx.
+- [2025-10-26 12:00] Notifications: fix unread state mismatch in header bell
+  - Client: NotificationBell.jsx now uses the API’s is_read property consistently (was using a local read flag). Marking single notifications or “Mark all read” correctly updates is_read and the unread counter.
+  - Impact: Notifications no longer reappear as unread after clicking “read” or after logging in again. Styling and badge counts reflect server state.
+  - Files: client/src/components/notifications/NotificationBell.jsx.
+- [2025-10-26 12:05] Notifications: disable auto pop-up toasts and reduce poll frequency
+  - Client: Removed the auto “You have X new notifications” toast on every count increase to avoid repeated pop-ups when navigating or remounting. Increased poll interval from 30s to 60s to reduce noise.
+  - Impact: The header bell still shows accurate unread counts and list updates, but no periodic pop-ups will interrupt the user. Counts refresh once per minute.
+  - Files: client/src/components/notifications/NotificationBell.jsx.
+- [2025-10-26 12:20] Blocks: server enforces approved payment plan before blocking a unit
+  - API: POST /api/blocks/request now checks for at least one approved payment plan tied to the unit via details.calculator.unitInfo.unit_id. If none exists, returns 400 with a clear message.
+  - Impact: Prevents blocked units without an approved plan appearing on “Current Blocks.” Existing blocks created previously without plans will still display; future requests must have an approved plan.
+  - Files: api/src/blockManagement.js.
+- [2025-10-26 12:30] Approved plans lookup: match by unit_id or unit_code
+  - API: GET /api/workflow/payment-plans/approved-for-unit now returns approved plans when either unit_id matches or unit_code in the plan snapshot matches the unit’s current code. This covers cases where older plan snapshots stored unit_code but not unit_id, or unit_id was a string.
+  - Impact: Current Blocks page will now list approved plans for blocked units that already have plans, even if the snapshot used unit_code rather than unit_id.
+  - Files: api/src/workflowRoutes.js.
+  - Note: Fixed a formatting glitch in the README entry and implemented the corresponding code fix above.
+- [2025-10-24 10:50] Create Deal prefill from plan_id + Notification Center (bell)
+  - API: Added GET /api/workflow/payment-plans/:id to fetch a plan by id (roles: consultant/FM/FA/SM/admin).
+  - Client: Create Deal now accepts plan_id in URL. If present, it hydrates the embedded calculator from that plan’s snapshot after loading the unit.
+  - Client: Added a Notification Bell in the header (right side). Polls unread count and shows a dropdown with notifications:
+    - Endpoints used: GET /api/notifications, GET /api/notifications/unread-count, PATCH /api/notifications/:id/read, PATCH /api/notifications/mark-all-read.
+    - “Mark all read” and per-item “Mark read” implemented.
+- [2025-10-24 10:35] FA: Select approved plans instead of typing ID; Sales: Offer Progress timeline; FM/FA edit-requests on payment plans; Consultant edits dashboard
+  - API: Added GET /api/workflow/payment-plans/approved-for-unit?unit_id=… to list approved plans where details.calculator.unitInfo.unit_id matches the unit.
+  - Client: On Deals → Current Blocks, FA now selects an Approved Payment Plan from a dropdown per blocked unit. The selector auto-loads plans; manual ID entry removed. We also include unit_id in reservation form details.
+  - API: Added GET /api/inventory/progress for sales roles to aggregate status across Block (blocks), Reservation (reservation_forms), and Contract (contracts) for relevant units:
+    - Consultants: their own block requests
+    - Sales Managers: consultants in their team
+  - Client: New Deals → Offer Progress page for property_consultant and sales_manager shows a training-like timeline (Blocked → Reserved → Contracted) in corporate colors for each unit. Route: /deals/offer-progress.
+  - Nav: Header shortcuts updated:
+    - Financial Admin: Current Blocks
+    - Financial Manager: Current Blocks, Reservations
+    - Sales Manager/Consultant: Offer Progress
+  - Policy: Only consultants can edit payment plans. FM/FA can request edits but cannot directly edit.
+    - API: Restricted POST /api/workflow/payment-plans/:id/new-version to property_consultant, and only by the plan creator.
+    - API: Added POST /api/workflow/payment-plans/:id/request-edits (roles: financial_manager, financial_admin) — stores request in payment_plans.details.meta and notifies the consultant.
+    - API: Added POST /api/workflow/payment-plans/:id/edits-addressed (role: property_consultant) — clears pending flag and logs response in details.meta.
+    - Client: On FM Reservations Queue, added “Request Edits” button next to Payment Plan ID to send an edit request to the consultant.
+  - Consultant dashboard for requested edits:
+    - Client: Added Deals → Plan Edits (/deals/plan-edits) for property_consultant. Lists only the consultant’s plans with pending_edit_request.
+    - Actions per plan: “New Version” (creates a consultant-only new version) and “Mark Edits Addressed” (POST /edits-addressed).
+- [2025-10-24 10:10] Unit Block approval updates inventory status and FA can find blocked units:
+  - API: When Financial Manager approves a block request (PATCH /api/blocks/:id/approve), the unit now sets available=FALSE and unit_status='BLOCKED'. Previously we flipped available only, leaving unit_status as 'AVAILABLE', so lists showed AVAILABLE despite a block.
+  - API: Block expiry job now restores units to available=TRUE and unit_status='AVAILABLE' (removed reference to a non-existent units.blocked_until field).
+  - API: GET /api/blocks/current now returns unit_id and unit_status along with unit_code to power deep-links.
+  - Client: Added Deals → Current Blocks page for Financial Manager and Financial Admin to see currently blocked units. For FA, the page now includes a minimal “Create Reservation Form” panel per blocked unit (inputs: Approved Payment Plan ID, Reservation Date, Preliminary Payment, Currency, Language). This creates a reservation form and sends it for FM approval. Route: /deals/current-blocks.
+  - API: Added Reservation Forms workflow endpoints:
+    - POST /api/workflow/reservation-forms (FA) — create pending_approval reservation form for an approved payment plan.
+    - GET /api/workflow/reservation-forms?status=... (FA/FM) — list forms.
+    - PATCH /api/workflow/reservation-forms/:id/approve (FM) — approve.
+    - PATCH /api/workflow/reservation-forms/:id/reject (FM) — reject.
+  - Client: Added Deals → Reservations Queue (FM) to approve/reject pending reservation forms. Route: /deals/reservations-queue.
+  - Impact: FM adds inventory as draft, approves to AVAILABLE, consultants request blocks, FA initiates reservation for already blocked units without creating deals, and FM approves reservations which become available for Contracts to draft.
+- [2025-10-24 09:50] Client Offer/Reservation Form PDFs — repeated headers, Cairo time, no overlap:
+  - Header content unified and repeated on every page:
+    - EN: “Uptown 6 October Financial System” (left), “Generated: DD-MM-YYYY HH:mm:ss” (right), big centered title, then a brief summary line (Offer Date, First Payment, Unit, Consultant for Client Offer; Reservation Date and Unit for Reservation Form).
+    - AR: “نظام شركة أبتاون 6 أكتوبر المالي” with proper RTL shaping and bidi overrides; equivalent summary lines localized.
+  - Timestamp now uses Cairo time explicitly via Intl.DateTimeFormat with timeZone 'Africa/Cairo' (overridable by TIMEZONE/TZ env).
+  - Removed conflicting @page margin from inline CSS to let Puppeteer’s page.pdf() margins take full effect and avoid header/content overlap on later pages.
+  - Increased top margins and added first-section spacing to guarantee content always starts below the repeated header on all pages (EN and AR).
+  - Restored disclaimer at the end of Client Offer: “This document is not a contract and is generated for client viewing only...” (localized).
+  - Files: api/src/documentsRoutes.js.
+- [2025-10-24 09:30] Unit Block flow — schema guard and SQL typing fix:
+  - API: POST /api/blocks/request now defensively ensures blocks table/indexes exist (for envs where migrations were skipped).
+  - Fixed interval expression for blocked_until to keep $3 as integer only: NOW() + ($3::int) * INTERVAL '1 day' (resolves Postgres 42P08 “text vs integer”).
+  - Files: api/src/blockManagement.js, api/src/migrations/041_blocks_table.sql.
+- [2025-10-24 09:15] Unit Block button modularized and gated by client info:
+  - UI: Added components/calculator/BlockUnitButton.jsx; App.jsx now renders it under Client Info, keeping modularity.
+  - Enablement rules: role = property_consultant|sales_manager, unit selected, plan decision = ACCEPT, and all client info fields present except Secondary Phone.
+  - On click: prompts for duration (days, default 7) and optional reason; posts to /api/blocks/request.
+  - Files: client/src/components/calculator/BlockUnitButton.jsx, client/src/App.jsx.
+- [2025-10-24 09:05] Inline “Request Override” on Calculator when REJECT:
+  - UI: “Request Override” button added under the PV Comparison card when decision = REJECT and no dealId (calculator-only context).
+  - Flow: validates unit and required client info → creates draft deal via POST /api/deals → immediately POST /api/deals/:id/request-override with optional reason → alerts success.
+  - Files: client/src/components/calculator/EvaluationPanel.jsx, client/src/App.jsx.
+- [2025-10-24 08:45] Client Offer brand strings corrected:
+  - EN: “Uptown 6 October Financial System”
+  - AR: “نظام شركة أبتاون 6 أكتوبر المالي”
+  - Reservation Form header updated to show the same brand line above title; no consultant info in RF header per policy.
+  - Files: api/src/documentsRoutes.js.
+- [2025-10-24 08:20] Arabic layout alignment in Client Offer:
+  - Summary box and buyers info swap sides in Arabic (summary left, buyers right) to mirror LTR layout.
+  - Applied consistent corporate table styling (gold/dark) across sections; widened date column and standardized DD-MM-YYYY format.
+  - Files: api/src/documentsRoutes.js.
+
+- [2025-10-23 14:30] API route mounts and health endpoints restored:
+  - API: Reintroduced core middleware (helmet, cors, express.json/urlencoded) and mounted primary routers in api/src/app.js:
+    - /api/auth, /api/deals, /api/units, /api/inventory, /api/standard-plan, /api (planningRoutes), /api/notifications, and /api/blocks.
+  - API: Added GET /api/health → { status: "ok" } and GET /api/message → { message: "Hello from API" } for Codespaces reachability checks.
+  - Impact: Client calls like POST /api/blocks/request now resolve to the correct Express router instead of returning 404/500 due to missing mounts. Body parsing is enabled so validation works as expected.
+- [2025-10-23 15:32] Client Offer PDF — Amount in Words and Unit Totals restored (modular):
+  - API: In api/src/documentsRoutes.js (server-rendered PDFs), restored the “Amount in Words” column using convertToWords for both English and Arabic.
+  - API: Added a “Unit Totals” section that shows Base, Garden, Roof, Storage, Garage, Maintenance Deposit, and dual totals (incl./excl. maintenance). It reads unit_pricing_breakdown sent by the client for consistency with the calculator.
+  - Modularity: No changes to app.js or App.jsx. All logic remains in the modular documents route.
+- [2025-10-23 15:28] Acceptance Evaluation — thresholds now read from DB:
+  - API: api/src/planningRoutes.js now reads payment_thresholds (latest row) for pv_tolerance_percent and min% for Year1/Year2/Year3/Handover.
+  - Removed duplicate “Payment After 1 Year” condition; Year 1 is enforced via the cumulative percent rule only.
+- [2025-10-23 15:18] Standard PV source — prefer FM-stored PV for consistency:
+  - API: In /api/calculate and /api/generate-plan (api/src/planningRoutes.js), when a unit/model or standardPricingId is provided, we now prefer the Financial Manager’s stored calculated_pv from unit_model_pricing/standard_pricing if present. We only compute PV if stored value is missing.
+  - Queries updated to select calculated_pv from both unit_model_pricing and standard_pricing.
+  - Result: The “Standard PV” used by the calculator and evaluation matches the approved value set by the Financial Manager.
+- [2025-10-23 15:05] NPV tolerance tightened to 2%:
+  - API: Updated evaluation tolerance in api/src/planningRoutes.js from 70% to 98% baseline, i.e., Proposed PV must be ≥ 98% of Standard PV to PASS (epsilon applied).
+  - Note: The evaluation PV shown in “Acceptance Evaluation” is authoritative; smaller “Std Calculated PV” boxes are client estimates and may differ if inputs don’t match.
+- [2025-10-23 14:40] Maintenance Deposit month default — treat empty string or 0 as “not provided”:
+  - API: In plan generation (api/src/planningRoutes.js), if maintenancePaymentDate is not given and maintenancePaymentMonth is '' or 0, we now fallback to HandoverYear × 12; if handoverYear is not set, fallback to 12 months. Previously, an empty string coerced to 0 so Maintenance showed at month 0 (same date as Down Payment).
+  - Tests: Added unit tests for the helper in api/src/tests/paymentPlanHelpers.test.js. Run with: cd api && npm run test:helpers
+  - Result: Maintenance Deposit date defaults to Handover (or 12 months) unless an explicit month (> 0) or a calendar date is provided.
+- [2025-10-23 09:10] Maintenance Deposit default date — honor Handover year when date is empty:
+  - Client: Fixed payload construction so an empty Maintenance Deposit Month is not treated as 0. When the Maintenance Deposit Date is empty, we now default the due month to handoverYear × 12; if handoverYear is not set, we fall back to 12 months. Previously, an empty string coerced to 0 and the schedule placed Maintenance at month 0 (same as First Payment Date).
+  - API: No change required. The server already defaults to Handover when month is invalid; the client now sends the correct month when the date is omitted.
+- [2025-10-23 09:15] Unit Block internal error (500) — ensure blocks table exists:
+  - DB: Added migration 041_blocks_table.sql to create the blocks table with required columns and indexes. Some environments relied on initDb but had migrations drift; this guarantees the table and trigger exist so /api/blocks/request no longer returns 500 due to missing relation.
+- [2025-10-23 09:35] Blocked-unit edit rules and Reservation Form flow:
+  - Client: When a unit is blocked (approved), property_consultant cannot edit client identity fields (name, email, phone) and cannot edit Unit & Project Information. Consultants can still adjust the payment plan and other client fields (e.g., address).
+  - Client: Financial Admin sees blocked units and can generate the Reservation Form using the data previously entered by the consultant (buyers, unit, and payment plan). FA cannot edit these fields directly; they should request edits from the consultant via workflow (future enhancement to add explicit “Request Edits” action).
+  - Client: App now passes blocked_until/available through unitInfo and computes unitBlocked to drive field-level locks.
+- [2025-10-23 10:25] Full Override Workflow (Consultant → SM → FM → TM) with notifications and audit:
+  - Client: Consultant can request override when Evaluation is REJECT on Deal Detail; the panel shows the workflow stages and provides role-based actions for SM, FM, and TM (Approve/Reject) with optional notes.
+  - Client: Added a visual timeline (sample circles) with dimmed pending stages and orange line/circle for approved stages. Stages show timestamps when completed.
+  - API: Notifications added for each decision stage:
+    - SM Approve → notify consultant “override_sm_approved”; SM Reject → “override_sm_rejected”.
+    - FM Approve → “override_fm_approved”; FM Reject → “override_fm_rejected”.
+    - TM Approve → “override_approved”; TM Reject → “override_rejected” (includes role in message).
+  - API: All actions write structured entries to deal_history with timestamps and user roles. Rejections clear needs_override and return the decision to consultant with audit trail.
+  - Client: Approvals page remains focused on deal approvals; override is handled in Deal Detail with role-specific buttons.
+- [2025-10-23 10:35] Unit Block button activation policy:
+  - Client: Consultant can request a unit block only when the plan is accepted by the automated system (NPV evaluation PASS) or when an override is approved (Top Management approval present). The button is disabled otherwise with a tooltip explaining the condition.
+  - Client: Create Deal page also disables the “Request Unit Block” button until the plan evaluation is ACCEPT.
+- [2025-10-23 11:22] Reservation Form — Arabic/RTL support and in-app modal UX:
+  - API: /api/documents/reservation-form now supports 'language' ('en'|'ar'), RTL rendering, localized labels and day-of-week, plus 'currency_override'.
+  - Client: Deal Detail shows a modal for Financial Admin to choose:
+    - Reservation Date (date picker)
+    - Preliminary Payment (validated numeric)
+    - Currency override (optional)
+    - Language (English/Arabic with RTL)
+    Then calls the API to generate and download the PDF. Button remains disabled until Financial Manager approval (fm_review_at).
+
+- [2025-10-23 11:40] Backend refactor — modular documents and planning endpoints, plus jobs and schema checks:
+  - Created api/src/documentsRoutes.js and mounted at /api/documents:
+    - POST /api/documents/client-offer
+    - POST /api/documents/reservation-form
+  - Created api/src/planningRoutes.js and mounted at /api:
+    - POST /api/calculate
+    - POST /api/generate-plan
+  - Moved background schedulers to api/src/jobs/scheduler.js and started from app.js via startSchedulers().
+  - Moved schema check utilities to api/src/utils/schemaCheck.js; app.js imports runSchemaCheck and retains /api/schema-check and startup check.
+  - Carefully removed legacy inline route blocks from app.js:
+    - Removed the old Client Offer and Reservation Form endpoints now served by documentsRoutes.
+    - Removed the old /api/calculate and /api/generate-plan endpoints now served by planningRoutes.
+  - If rollback is needed:
+    - Reintroduce the removed blocks from git history, or temporarily comment out the new mounts and re-enable the inline routes in app.js.
+    - Alternatively, disable the scheduler import in app.js and re-enable the in-file setInterval blocks.
+
+- [2025-10-23 11:41] Frontend refactor — modal component extraction:
+  - Added client/src/components/ReservationFormModal.jsx and wired it in DealDetail.jsx.
+  - The modal handles: date picker, preliminary payment validation, currency override, language toggle (English/Arabic).
+  - DealDetail now uses the component and calls the server endpoint to generate the PDF.
+
+- [2025-10-23 11:55] Backend refactor — notifications endpoints modularized:
+  - Created api/src/notificationsRoutes.js and mounted at /api/notifications:
+    - GET /api/notifications
+    - GET /api/notifications/unread-count
+    - PATCH /api/notifications/:id/read
+    - PATCH /api/notifications/mark-all-read
+  - Removed the old inline notifications endpoints from app.js and replaced with the module mount.
+  - Rollback guidance:
+    - If needed, re-enable the inline endpoints from git history and comment out app.use('/api/notifications', notificationsRoutes).
+    - Alternatively, keep the mount and copy routes back into app.js temporarily to test; then remove duplicates once stable.
+
+- [2025-10-23 12:05] Frontend refactor — App.jsx modularization (step 1):
+  - Extracted DiscountHint into client/src/components/DiscountHint.jsx and imported in App.jsx.
+  - Extracted TypeAndUnitPicker into client/src/components/TypeAndUnitPicker.jsx for cleaner unit/type selection logic (currently not directly used if UnitInfoSection encapsulates selection).
+  - App.jsx imports the new components to reduce inline function size and improve readability.
+  - Rollback guidance:
+    - If any UI breaks, revert imports in App.jsx and restore the inline DiscountHint/TypeAndUnitPicker implementations from git history.
+    - Components are self-contained; you can delete the new files and the app will work once inline code is restored.
+
+- [2025-10-23 12:20] Frontend refactor — App.jsx modularization (step 2: exports utils):
+  - Created client/src/lib/docExports.js and moved:
+    - exportScheduleCSV(genResult, language)
+    - exportScheduleXLSX(genResult, language)
+    - generateChecksSheetXLSX(genResult, clientInfo, unitInfo, currency, language)
+  - App.jsx now imports these helpers and calls them from the buttons.
+  - Benefits: reduces App.jsx size and isolates export logic for reuse.
+  - Rollback guidance:
+    - If needed, delete client/src/lib/docExports.js and restore the original inline functions in App.jsx from git history.
+    - Temporarily you can copy the functions back into App.jsx while keeping imports commented to test UI, then remove duplicates once stable.
+
+- [2025-10-23 12:32] Frontend refactor — App.jsx modularization (step 3: Client Offer generation helper):
+  - Extended client/src/lib/docExports.js with generateClientOfferPdf(body, API_URL, onProgress?).
+  - App.jsx now calls generateClientOfferPdf and handles the returned blob+filename to download the PDF.
+  - Benefits: progress/notification logic centralized; App.jsx smaller and easier to read.
+  - Rollback guidance:
+    - If needed, remove generateClientOfferPdf from docExports.js and reinsert the original exportClientOfferPdf function into App.jsx from git history.
+    - Comment out the import in App.jsx and call the inline function; once stable, remove duplicates.
+
+- [2025-10-23 12:45] Frontend refactor — App.jsx modularization (step 4: hooks + persistence):
+  - Added client/src/hooks/useCalculatorSummaries.js and replaced the in-file useMemo with useCalculatorSummaries(preview).
+  - Added client/src/hooks/useComparison.js and replaced the in-file useMemo with useComparison({ stdPlan, preview, inputs, firstYearPayments, subsequentYears, genResult, thresholdsCfg }).
+  - Added client/src/hooks/useCalculatorPersistence.js:
+    - loadSavedCalculatorState(LS_KEY) used to hydrate the calculator state on mount.
+    - usePersistCalculatorState(LS_KEY, snapshot) used to persist state changes (snapshot built via useMemo).
+  - App.jsx now imports and uses these hooks, reducing in-file logic and improving readability.
+  - Rollback guidance:
+    - If needed, delete the new hooks and restore the original useMemo blocks and localStorage effects from git history.
+    - Temporarily reintroduce the inline logic while keeping imports commented out to test, then remove duplicates when stable.
+
+- [2025-10-23 12:46] Frontend refactor — services layer (calculator API):
+  - Added client/src/services/calculatorApi.js with:
+    - fetchLatestStandardPlan(API_URL)
+    - calculateForUnit({ mode, unitId, inputs }, API_URL)
+    - generatePlan(payload, API_URL)
+  - Wired TypeAndUnitPicker to use calculateForUnit service instead of direct fetchWithAuth for unit-based calculations.
+  - Rollback guidance:
+    - If any API code breaks, call fetchWithAuth directly as before, and remove the service import.
+
+- [2025-10-23 12:58] Frontend refactor — App.jsx document generation via helper:
+  - Extended client/src/lib/docExports.js with generateDocumentFile(documentType, body, API_URL) which wraps /api/generate-document and returns { blob, filename }.
+  - App.jsx now uses generateDocumentFile in the Reservation Form and Contract buttons:
+    - Builds document body with existing buildDocumentBody(documentType).
+    - Calls generateDocumentFile and triggers the download.
+  - Rollback guidance:
+    - If needed, remove the import and restore the original generateDocument(documentType) function from git history.
+    - Alternatively, call fetchWithAuth inline and parse Content-Disposition as previously done.
+
+- [2025-10-23 13:08] Frontend refactor — App.jsx modularization (step 5: buildDocumentBody util + service wiring):
+  - Added client/src/lib/buildDocumentBody.js and replaced inline builder in App.jsx:
+    - buildDocumentBody(documentType, { language, currency, clientInfo, unitInfo, stdPlan, genResult, inputs }) returns { buyers, data } for the document.
+    - App.jsx now validates via validateForm(), builds payload, and merges docPart into the request body before calling generateDocumentFile.
+  - Wired App.jsx to services:
+    - Standard Plan fetch now uses fetchLatestStandardPlan(API_URL) from client/src/services/calculatorApi.js.
+    - Plan generation now uses generatePlan(payload, API_URL) instead of direct fetchWithAuth.
+  - Rollback guidance:
+    - If needed, delete client/src/lib/buildDocumentBody.js and restore the original buildDocumentBody function in App.jsx from git history.
+    - Revert service imports and switch back to fetchWithAuth calls for /api/standard-plan/latest and /api/generate-plan.
+
+- [2025-10-23 13:20] Frontend refactor — App.jsx modularization (step 6: payload + validation + system services):
+  - Added client/src/lib/payloadBuilders.js:
+    - buildCalculationPayload({ mode, stdPlan, unitInfo, inputs, firstYearPayments, subsequentYears }) centralized payload assembly.
+  - Added client/src/lib/validateCalculatorInputs.js:
+    - validateCalculatorInputs(payload, inputs, firstYearPayments, subsequentYears) returns an errors object, replacing inline validation checks.
+  - App.jsx updates:
+    - Replaced inline buildPayload with buildCalculationPayload import.
+    - Replaced validation logic with validateCalculatorInputs while keeping date defaulting locally (offerDate/firstPaymentDate).
+    - Fixed import for buildDocumentBody (typo corrected).
+    - Snapshot exposure now uses buildCalculationPayload for consistency.
+  - Added client/src/services/systemApi.js and wired App.jsx:
+    - fetchHealth(API_URL), fetchMessage(API_URL) used for initial health/message loading.
+  - Rollback guidance:
+    - If needed, delete payloadBuilders.js and validateCalculatorInputs.js and reinsert the original buildPayload and validateForm from git history.
+    - Revert systemApi imports and switch back to fetchWithAuth directly for /api/health and /api/message.
+
+- [2025-10-23 13:30] Frontend refactor — App.jsx modularization (step 7: styles + dynamic payments handlers):
+  - Added client/src/styles/calculatorStyles.js and moved the big styles object out of App.jsx. App.jsx now imports styles from this file.
+  - Added client/src/hooks/useDynamicPayments.js encapsulating:
+    - addFirstYearPayment, updateFirstYearPayment, removeFirstYearPayment
+    - addSubsequentYear, updateSubsequentYear, removeSubsequentYear
+    App.jsx imports and uses the hook to reduce inline handler boilerplate.
+  - Result: App.jsx line count reduced further without changing behavior.
+  - Rollback guidance:
+    - If needed, remove the styles import and paste the original styles object back into App.jsx from git history.
+    - Delete useDynamicPayments.js and restore the handler functions inline in App.jsx.
+
+- [2025-10-23 13:42] Frontend refactor — App.jsx modularization (step 8: unit search + embedding APIs):
+  - Added client/src/hooks/useUnitSearch.js and replaced the inline debounced typeahead effect with this hook.
+    - Provides: unitsCatalog, unitQuery, unitSearchLoading, unitDropdownOpen, setUnitQuery, setUnitDropdownOpen.
+  - Added client/src/hooks/useCalculatorEmbedding.js and replaced the long window.__uptown_calc_* useEffect with this hook.
+    - Exposes getSnapshot, applyClientInfo, applyUnitInfo, applyUnitPrefill for embedding contexts.
+  - Fixed minor import typos and cleaned duplicated snapshot lines.
+  - Result: App.jsx line count reduced to approximately ~1260 lines.
+  - Rollback guidance:
+    - If needed, remove the hook imports and reinsert the original unit search effect and embedding useEffect from git history.
+    - Ensure any removed state variables are re-added if rolling back (unitsCatalog/unitQuery/etc.).
+
+- [2025-10-23 13:52] Frontend refactor — App.jsx modularization (step 9: acceptance thresholds hook + Custom Notes component):
+  - Added client/src/hooks/useAcceptanceThresholds.js and replaced the inline acceptance thresholds fetch/useEffect.
+    - App.jsx now calls const thresholdsCfg = useAcceptanceThresholds() and uses it in comparison/evaluation.
+  - Added client/src/components/calculator/CustomNotesSection.jsx and replaced the inline custom notes section.
+    - Props: styles, language, role, customNotes, setCustomNotes.
+    - Behavior identical; just modularized.
+  - App.jsx imports these for cleaner structure. Line count reduced further (~1170 lines).
+  - Rollback guidance:
+    - If needed, remove the hook/component imports and paste back the original inline useEffect and custom notes JSX from git history.
+    - Ensure state bindings (customNotes/setCustomNotes and thresholdsCfg) are restored when rolling back.
+
+- [2025-10-23 14:05] Frontend cleanup — App.jsx fixes and styles polish:
+  - Removed inline duplicate TypeAndUnitPicker definition from App.jsx (the component already exists in client/src/components/TypeAndUnitPicker.jsx).
+  - Restored a small buildPayload() wrapper in App.jsx that delegates to buildCalculationPayload(...) to maintain compatibility with InputsForm prop usage.
+  - Fixed acceptance thresholds hook usage after refactor (useAcceptanceThresholds now correctly assigned to thresholdsCfg).
+  - Styles: corrected a syntax error in client/src/styles/calculatorStyles.js (td.borderBottom had mismatched quotes) and added styles.arInline used by CustomNotesSection.
+  - Rollback guidance:
+    - If needed, reinsert the inline TypeAndUnitPicker block from git history and remove the component import.
+    - If InputsForm requires a different payload shape, adjust buildPayload() accordingly or revert to the original inline builder.
+    - If styling regressions occur, revert calculatorStyles.js to its prior version from git history.
+- [2025-10-21 07:20] Standard Pricing approval — propagate to unit:
+  - API: On approving a Standard Pricing record, the server now propagates the approved price (and area when valid) to the related unit (units.base_price and optionally units.area), and logs a 'propagate' entry in standard_pricing_history. This mirrors the unit-model pricing propagation pattern and ensures approved standards immediately reflect on the unit.
+- [2025-10-21 07:05] Top-Management approvals for Standard Pricing:
+  - API: Updated /api/workflow/standard-pricing/:id/approve and /reject to allow Chairman and Vice Chairman in addition to CEO. Previously, only CEO could approve/reject, which blocked Top Management when other roles attempted to act. This change makes approvals applicable regardless of the unit’s linkage to a Standard Price record.
+- [2025-10-21 06:35] Client Offer PDF — consultant name reliability:
+  - API: Simplified consultant identity resolution to rely strictly on users.name and users.email. We initialize from the authenticated user context and, if a deal_id is provided, prefer the deal creator from DB. Fallback reads the current user from DB using name/email columns only. This ensures the consultant’s name appears in the PDF whenever it’s present in the users table.
+- [2025-10-21 06:25] Consultant UX — export buttons visibility and Unit Block section placement:
+  - Client: PaymentSchedule export buttons (XLSX/CSV/Checks) are now visible only to financial_admin; they are hidden for property_consultant and sales_manager while keeping the functionality available under the admin role.
+  - Client: Moved the Unit Block/Unit Info section to the end of the page (below the schedule) to improve perceived streaming and page flow.
+- [2025-10-21 06:10] Client Offer PDF — performance, Arabic reliability, and UI improvements:
+  - API: Reuse a singleton Puppeteer browser instance and switch setContent waitUntil to 'load' to reduce export latency and avoid intermittent stalls on Arabic PDFs behind sandboxed environments.
+  - API: Unit totals box now shows dual totals — excluding Maintenance Deposit and including Maintenance Deposit — to align with the payment plan totals presentation.
+  - Client: Export button for Property Consultant now shows a progress indicator (%) while the PDF is generated. Progress ramps to completion when the file is ready and the button is disabled during processing.
+  - Client: Added Maintenance Deposit inputs (Amount and optional Date) in the consultant Inputs panel. If date is omitted, the API defaults the maintenance due to the Handover date. The generated plan now consistently includes the Maintenance Deposit row when an amount is present.
+- [2025-10-21 05:10] Backend stability and schema alignment:
+  - Fixed a server crash in Client Offer PDF totals block by adding explicit parentheses around mixed ?? and || expressions in template strings.
+  - Adjusted consultant name lookup to rely on users.name and users.email only (no first_name/last_name columns required). If users.name is empty, the PDF falls back to the authenticated user's name or finally to email.
+- [2025-10-21 05:05] Codespaces/CORS/Ports guide (Docker):
+  - Added a Troubleshooting section with exact commands for Docker Compose, Codespaces port visibility, curl preflight (OPTIONS) checks, and how to set CORS_ORIGINS correctly when needed.
+  - Clarified that our API CORS layer already allows *.app.github.dev unless CORS_ORIGINS is explicitly set (then it becomes a strict allow-list).
+- [2025-10-21 05:00] CSV/XLSX/PDF nullish coalescing fixes:
+  - Updated client (App.jsx) and server (app.js) to wrap nullish coalescing expressions mixed with logical OR to keep Babel/Node parsers happy.
+
+- [2025-10-20 23:55] Client Offer PDF — Unit totals box:
+  - API: /api/documents/client-offer now renders a unit totals table (Unit Type, Price, Garden, Roof, Storage, Garage, Maintenance Deposit, Total). Optional rows are shown only when > 0; labels localized EN/AR.
+  - Client: exportClientOfferPdf sends unit_pricing_breakdown derived from the selected unit.
+- [2025-10-20 23:45] Dual totals everywhere (incl./excl. Maintenance Deposit):
+  - API: /api/generate-plan totals now include totalNominalIncludingMaintenance and totalNominalExcludingMaintenance (totalNominal preserved for compatibility).
+  - Client: PaymentSchedule footer shows both totals; CSV/XLSX exports append both; Client Offer PDF totals block shows both (localized).
+- [2025-10-20 23:35] Client Offer PDF — Consultant identity and footer:
+  - Consultant label localized to “Property Consultant” / “المستشار العقاري”.
+  - Name resolution improved: falls back to req.user first_name/last_name or name when DB lacks names; email still shown.
+  - Footer shows page numbering: “Page X of Y” / “صفحة س من ص”.
+- [2025-10-20 23:20] Maintenance Deposit terminology and scheduling:
+  - Renamed “Maintenance Fee” to “Maintenance Deposit” throughout schedule/UI (Arabic: وديعة الصيانة).
+  - Default due date equals Handover date when month is not provided.
+  - New optional maintenancePaymentDate supported (calendar date overrides month offset).
+  - Acceptance calculations exclude Maintenance Deposit from cumulative totals.
+- [2025-10-20 23:00] Acceptance Evaluation and Standard PV baseline:
+  - Standard PV in /api/generate-plan is now computed via the central engine including the current request’s Down Payment definition to match Proposed PV when using the same plan.
+  - PV rule fixed: Proposed PV passes when ≥ Standard PV (within tolerance/epsilon).
+- [2025-10-20 22:45] Arabic words everywhere:
+  - PaymentSchedule already showed Arabic words when language='ar'.
+  - CSV/XLSX exports now write Arabic words when exporting in Arabic.
+  - Client Offer PDF always renders amount-in-words in the requested language (ignores client-provided wording to avoid mismatches).
+- [2025-10-20 22:30] DP handling and mode defaults:
+  - Target-PV modes now convert DP% to a fixed amount on mode switch (computed from the current Standard Total Price) to avoid “20% → 20 EGP” errors.
+  - Consultant default mode changed to “Discounted Standard Price (Compare to Standard)”.
+- [2025-10-20 22:10] Standard Pricing — PV alignment:
+  - Table rows now request PV from the central calculator with the user’s current DP% included (previously sent 0%).
+  - The table recomputes PV when DP% changes so PV in the form and list match.
+- [2025-10-19 05:30] GitHub Actions: On-demand database backups:
+  - Added .github/workflows/db-backup.yml with workflow_dispatch inputs: mode {logical|bundle}, release {true|false}.
+  - logical: Runs pg_dump using secrets.DATABASE_URL and uploads a gzipped SQL artifact; optional GitHub Release created.
+  - bundle: Archives the repo’s backups/ directory and uploads as artifact; optional GitHub Release created.
+  - README: Documented usage and required secret (DATABASE_URL) format.
+- [2025-10-19 05:15] DB backup/restore convenience commands:
+  - package.json: Added npm scripts `db:backup` and `db:restore` to run the volume backup and restore scripts without typing full paths.
+  - scripts/db_volume_restore.sh: If filename arg is omitted or incorrect, the script now lists available backups from backups/*.tar.gz and shows usage examples.
+  - README: Updated “Database Backup and Restore” with npm convenience commands and note about auto-listing backups on restore.
+- [2025-10-19 05:00] DB volume backup/restore scripts:
+  - Added scripts/db_volume_backup.sh to archive the db_data Docker volume to backups/db_data-YYYYMMDD-HHMMSS.tar.gz (UTC timestamp).
+  - Added scripts/db_volume_restore.sh to restore the db_data volume from a tar.gz archive. Documented usage and cautions (stop db before, version compatibility).
+  - README: Added “Database Backup and Restore (db_data volume)” section with instructions for physical volume backup/restore and optional pg_dump/psql commands for logical backups.
+- [2025-10-19 04:40] Server-rendered Client Offer PDF (Puppeteer):
+  - API: Added POST /api/documents/client-offer (role: property_consultant). Generates a PDF from server-rendered HTML with buyers[] (phones/emails), payment schedule, totals, dates, and optional unit info. Supports Arabic/English.
+  - Infra: Added puppeteer dependency and installed Chromium in API Dockerfile (development and production). Set PUPPETEER_EXECUTABLE_PATH; added fonts for Arabic rendering.
+  - Client: Added “Export Client Offer (PDF)” button in Calculator Payment Schedule panel for property_consultant only. It posts current buyers, schedule, totals, dates, and unit summary to the new endpoint and downloads the PDF.
+  - Note: Reservation Form remains mapped to Pricing Form G.docx (financial_admin); Contract uses Uptown Residence Contract.docx (contract_person). Exports (CSV/XLSX/Checks) remain visible only to financial_admin.
+- [2025-10-19 04:05] Client-side route guard added:
+  - New component client/src/components/RequireRole.jsx to enforce per-route role access. Unauthorized users are redirected to /deals (fallback configurable).
+  - Applied to /deals/block-requests allowing roles: sales_manager, property_consultant, financial_manager.
+  - Purpose: Begin enforcing UI-level access control consistently; server-side auth remains authoritative.
+- [2025-10-19 03:55] Sales Manager team scoping for pending Block Requests:
+  - API: GET /api/blocks/pending now restricts Sales Manager view to requests initiated by consultants in their team, using sales_team_members (manager_user_id → consultant_user_id). Consultants see only their own; Financial Managers see all.
+  - Purpose: Ensure SMs only manage requests from their direct team.
+- [2025-10-19 03:45] FM approval actions in Block Requests queue:
+  - UI: For Financial Managers, /deals/block-requests now shows Approve/Reject buttons per request (inline). It uses PATCH /api/blocks/:id/approve with action approve|reject and optional reason prompt. Requests are removed from the list after decision.
+  - Purpose: Allow FM to process unit block approvals directly from the queue.
+- [2025-10-19 03:35] Block Requests queue (Sales Manager/Consultant): 
+  - API: Added GET /api/blocks/pending (role-aware) and PATCH /api/blocks/:id/cancel (Consultant can cancel own; Sales Manager can cancel any pending). 
+  - UI: Added /deals/block-requests page listing pending block requests with Cancel action where allowed, and a “Block Requests” link in Deals Dashboard for Sales Manager/Consultant/FM.
+  - Purpose: Let Sales Managers monitor and manage pending unit block requests before FM approval.
+- [2025-10-19 03:10] Unit Block request endpoint fixed: Corrected API route prefix so client POST /api/blocks/request matches Express router. Previously, routes were registered under /api/blocks/blocks/* causing HTML/DOCTYPE errors when the client tried to parse JSON. Updated paths in api/src/blockManagement.js to remove the extra '/blocks' prefix (request, approve, current, extend). Also expanded requester roles to include Sales Manager so both Property Consultant and Sales Manager can initiate block requests; approvals remain by Financial Manager.
+- [2025-10-19 02:35] Buyers[] propagated to generate-plan: The /api/generate-plan request now includes a buyers array (1–4) built from ClientInfo, alongside existing payload fields. This enables the API (or downstream consumers) to consider multiple buyers if needed without breaking existing single-buyer logic. File: client/src/App.jsx.
+- [2025-10-19 02:20] Document generation buyers[] mapping: buildDocumentBody now includes a structured buyers array (1–4) built from ClientInfo fields, enabling templates to iterate over all buyers. The existing single-buyer placeholders remain unchanged for Buyer 1. File: client/src/App.jsx.
+- [2025-10-19 02:00] Client Info — multi-buyer support added: The minimal Client Info form now lets you select 1–4 buyers (clientInfo.number_of_buyers). For Buyers 2–4, identical fields open using suffixed keys (buyer_name_2, nationality_2, id_or_passport_2, id_issue_date_2, birth_date_2, address_2, phone_primary_2, phone_secondary_2, email_2). No OCR and no buffering; pure controlled inputs to keep typing stable. File: client/src/components/calculator/ClientInfoFormMin.jsx.
+- [2025-10-19 01:40] Multi-buyer support (UI only): ClientInfoFormMin.jsx now includes a "Number of Buyers" selector (1–4). For buyers 2–4, the form opens additional sections with suffixed field keys (e.g., buyer_name_2, nationality_2, …). This keeps existing single-buyer keys intact while allowing up to four buyers without OCR or buffering.
+- [2025-10-19 01:25] Path alignment fix: App.jsx now imports client/src/components/calculator/ClientInfoFormMin.jsx (matching existing filesystem naming). Added ClientInfoFormMin.jsx as the minimal no-OCR template. This resolves Vite import-analysis failure due to filename mismatch.
+- [2025-10-19 01:10] Added a Minimal Client Information form (client/src/components/calculator/ClientInfoFormMinimal.jsx) patterned after InputsForm’s simple controlled inputs. App.jsx now imports the Minimal form to isolate typing/focus issues with the least complexity. The Basic form remains for reference; the OCR-enabled form persists under archive/ for future steps.
+- [2025-10-19 00:45] Removed legacy client/src/components/calculator/ClientInfoForm.jsx to avoid confusion. App.jsx now imports ClientInfoFormBasic.jsx. The OCR-enabled version is preserved at client/src/components/calculator/archive/ClientInfoForm_OCR.jsx for future reintroduction.
+- [2025-10-19 00:30] Introduced a basic Client Information form without OCR to isolate input focus/typing issues. The calculator now uses client/src/components/calculator/ClientInfoFormBasic.jsx, which retains buffered inputs and focus-aware sync but removes OCR mode and scanner entirely. The previous OCR-enabled form was archived at client/src/components/calculator/archive/ClientInfoForm_OCR.jsx for future reintroduction once stability is confirmed. App.jsx import updated to point to the Basic form.
+- [2025-10-18 03:35] Client Information input stability — guarded parent sync: Added lastSyncedRef and a shallow equality check to skip parent→local syncing when values haven’t changed, and adjusted the selective merge to return the previous state when no changes are applied. This prevents unnecessary re-renders during typing that could reset the cursor or appear to “lose” focus. OCR apply also updates lastSyncedRef. File: client/src/components/calculator/ClientInfoForm.jsx.
+- [2025-10-18 03:14] Lazy-loaded OCR module: ClientInfoForm now dynamically imports the OCR scanner with React.lazy + Suspense, reducing initial bundle size. File: client/src/components/calculator/ClientInfoForm.jsx.
+- [2025-10-18 03:12] Modular OCR: Moved ClientIdScanner to client/src/components/ocr/ClientIdScanner.jsx and refactored to use local callbacks (onStart/onApply/onError) instead of global window hooks. This improves modularity and avoids side-effects.
+- [2025-10-18 03:10] Client Info entry modes (Manual vs OCR-assisted): Added a user toggle to select Manual entry or OCR-assisted. In OCR-assisted mode, only ID‑derived fields (buyer_name, nationality, id_or_passport, id_issue_date, birth_date, address) are populated; phones (phone_primary, phone_secondary) and email remain strictly manual. During OCR processing, auto‑filled fields are temporarily disabled to prevent focus/typing races; upon completion, a selective merge applies updates without touching manual‑only fields. Files: client/src/components/calculator/ClientInfoForm.jsx, client/src/components/ocr/ClientIdScanner.jsx.
+- [2025-10-18 02:55] Client Information — stronger typing protection: Iteratively improved guards (typing flag, :focus-within detection, short focus transition window) and added selective parent→local merge to avoid overwriting the currently active field. File: client/src/components/calculator/ClientInfoForm.jsx.
+- [2025-10-18 02:45] Client Information typing stability — enhanced guard + logging: Added a debounce-based guard in ClientInfoForm.jsx to suppress parent→local sync for 500ms after the last keystroke or while a field is focused. Also instrumented temporary console logging inside the sync useEffect to confirm when syncs are skipped vs applied, aiding field testing. This aims to prevent the “one-character-only” typing interruption caused by external state updates or rapid re-renders. File: client/src/components/calculator/ClientInfoForm.jsx.
+- [2025-10-18 02:30] Target PV correction (Modes 2/4): The API now computes the Standard PV target as the true Present Value of the standard plan structure including its Down Payment, not the equal-installments-only baseline. In /api/calculate and /api/generate-plan, when resolving effectiveStdPlan for unit/model flows, we run the standard plan parameters through the engine (EvaluateCustomPrice) using the request’s Down Payment definition to derive calculatedPV. This fixes the issue where entering the standard Down Payment amount in Target-PV modes solved to a lower total price. With this change, using the standard plan’s DP, duration, and frequency in Mode 2 yields a solved New Price equal to the Standard Total Price. Files: api/src/app.js.
+- [2025-10-18 00:00] Standard Pricing PV source fixed: Removed client-side duplicate PV formula in StandardPricing.jsx and now fetch the authoritative PV from the backend (/api/calculate) whenever form inputs change (price components, DP%, years, frequency, rate). Previously, the form used a local calculatePV that only considered Base Unit Price, causing mismatches (e.g., 4.3M total, 20% rate, 20% DP, 6y monthly showed ~2,730,836.86 instead of the backend’s ~2,937,031.55). Updated table rows as well to fetch and display authoritative PV per row using the same backend endpoint for consistency across the page.
+- [2025-10-18 00:20] Client Information form stability and accessibility: Added id/name to all fields and associated labels with htmlFor; provided autocomplete hints (name, country-name, street-address, tel, email, bday). Implemented local buffered inputs that commit onBlur to parent state to prevent “one-character-only” typing interruptions caused by external re-renders. File: client/src/components/calculator/ClientInfoForm.jsx.
+- [2025-10-18 01:10] Revert: In Target-PV modes (2 and 4), DP Type is enforced as amount (fixed) to avoid circular dependencies. UI disables percentage in these modes and backend treats any percentage input as an amount. This aligns with the established policy to prevent loops when solving for price from PV. Files: client/src/components/calculator/InputsForm.jsx (disable DP% in target-PV modes), api/services/calculationService.js (amount-only DP in target-PV solver).
+- [2025-10-18 01:25] UX hint for Target-PV modes: Added an explanatory note next to Down Payment Type in Modes 2/4 clarifying why percentage is disabled and instructing users to enter a fixed amount. File: client/src/components/calculator/InputsForm.jsx.
+- [2025-10-18 01:40] Client Information typing stability: Prevent parent state sync from clobbering in-progress typing by tracking the focused field and deferring external updates until blur. Added onFocus/onBlur per field and guarded the local buffer sync with focusedKey. File: client/src/components/calculator/ClientInfoForm.jsx.
+- [2025-10-18 01:55] Client Information — address field fix: Corrected the textarea handlers to use onFocus={() => setFocusedKey('address')} and onBlur={() => { commit('address'); setFocusedKey(null) }} so the focus lock applies to the address field as well. File: client/src/components/calculator/ClientInfoForm.jsx.
+- Resolved App.jsx merge conflicts; rateLocked computed once from unitInfo.
+- Switched host API port to 3001 and updated client to talk to 3001.
+- Added .devcontainer/devcontainer.json with forwardPorts and postStartCommand.
+- Vite HMR configured for Codespaces (wss + origin).
+- Docker Compose passes Codespaces env vars into client service.
+- Inventory deals page now shows a clear empty-state message for sales roles. It explains that units only appear after: (1) CRM Admin creates drafts linked to a Unit Model with approved standard pricing, and (2) Top Management approves the drafts to mark them AVAILABLE. This helps when inventory appears in Admin pages but not under Deals → Inventory.
+- Client Information enhanced: added Birth Date and moved the Egyptian ID scanner into the Client Information section (ClientIdScanner) so consultants can scan and auto-fill name, ID, address directly.
+- Create Deal page: “Unit Type” relabeled to “Unit Model” and now displays model_code — model_name when available.
+- Acceptance evaluation fix: PV rule now passes when Proposed PV ≤ Standard PV × tolerance (equality allowed). Previously it required ≥, which caused a false FAIL at 0 difference. Also added small epsilon to avoid float rounding issues.
+- Third-year condition is already dynamic; it now reads min/max from payment_thresholds (with sensible fallbacks if not configured).
+- UI cleanup: Removed duplicated “Unit & Project Information” section from Deals → Create Deal in favor of the upper “Selected Unit” summary, and added “Block / Sector” to that summary. Removed unused local state and draft autosave tied to the deleted section to prevent stale localStorage keys and simplify the component.
+- Sales Consultant calculator UX: Hid “Std Financial Rate (%)” input for property consultants (it is pulled from approved standard and should not be editable). Also improved Down Payment UX—when DP Type = percentage, the input now shows a “%” suffix and enforces 0–100, reducing confusion about entering values.
+- Removed obsolete “Standard PV vs Offer PV” comparison section from the calculator page; kept the server-side “Acceptance Evaluation” section only (as this is authoritative and up-to-date).
+- Removed the “Payment Structure Metrics” section below Acceptance Evaluation to avoid duplicated/legacy presentation. The page now relies solely on the server-side Acceptance Evaluation.
+- Acceptance Evaluation fix: PV rule now passes when Proposed PV ≤ Standard PV × tolerance (equality allowed). Previously it required ≥, which caused a false FAIL at 0 difference. Also added small epsilon to avoid float rounding issues.
+- Mode explanations: The calculator now shows clear names and explanations for all four modes in the UI (English/Arabic). File: client/src/components/calculator/InputsForm.jsx.
+- Down Payment control restored: Consultants can set the DP in all modes. Previous temporary behavior that ignored DP in PV-target modes has been removed. File: api/src/app.js.valuation banner: Compact banner now displays NPV-based decision with distinct colors (green for ACCEPT, stronger red for REJECT). When REJECT, it also lists unmet criteria (e.g., PV below standard, specific failed conditions) and shows a “Request Override” action that posts to /api/deals/:id/request-override.
+- Offer/First Payment Dates: Added two required date pickers in Inputs — Offer Date and First Payment Date. Offer Date defaults to today; First Payment Date defaults to Offer Date. Plan generation uses First Payment Date as baseDate (fallback to Offer Date or today). Both dates are included in document generation (offer_date, first_payment_date) from Calculator and Deal Detail flows, and are now displayed above the Payment Schedule for clear visibility (also shown on Deal Detail and in the Dashboard list and exports).
+- Create Deal UI: Removed the separate “Server Calculation” panel and its button; consultants generate the plan using the main “Calculate (Generate Plan)” action only.
+- Dashboard: Added Offer Date and First Payment Date columns; included both in CSV/XLSX exports.
+- Arabic/RTL support: Introduced a lightweight i18n system (client/src/lib/i18n.js) with t(), isRTL(), and applyDocumentDirection(). Updated calculator sections (InputsForm, ClientInfoForm, PaymentSchedule, and App.jsx headings/buttons) to render full Arabic labels and right-to-left layout when language = 'ar'. Also switched document <html dir> dynamically so the whole page reads RTL in Arabic.
+- Payment Schedule Arabic improvements: The “الوصف” column now shows Arabic translations for schedule items like Down Payment, Equal Installment (قسط متساوي), Handover, Maintenance Fee, Garage Fee, and Year N (frequency). The description column is center-aligned for better readability in Arabic. File: client/src/components/calculator/PaymentSchedule.jsx.
+- Header direction: The top navigation/header now forces LTR layout even when the page runs in Arabic (RTL) so consultant pages keep the header alignment unchanged. File: client/src/lib/BrandHeader.jsx.
+- Client Information UX: Always show full client fields (name, nationality, ID/passport, issue date, birth date, address, primary phone, secondary phone, email). Stabilized input focus while typing by memoizing the form and removing role-based field switching that caused unmount/remount. OCR scanner remains available in the same section.
+- Codespaces ports: Forwarded ports 3001 (API) and 5173 (client) now default to visibility: public and open in the browser automatically on forward. To apply, rebuild the container (F1 → “Codespaces: Rebuild Container”). File: .devcontainer/devcontainer.json.abic/RTL support: Introduced a lightweight i18n system (client/src/lib/i18n.js) with t(), isRTL(), and applyDocumentDirection(). Updated calculator sections (InputsForm, ClientInfoForm, PaymentSchedule, and App.jsx headings/buttons) to render full Arabic labels and right-to-left layout when language = 'ar'. Also switched document <html dir> dynamically so the whole page reads RTL in Arabic.
+
+- Mode explanations panel: Added clear names and short descriptions for all four calculator modes in the UI (English/Arabic) to guide consultants when choosing a mode.
+- Mode 4 clarified: “Custom Structure targeting Standard PV” now clearly states it lets you define split First Year and subsequent years, puts the remainder as equal installments (like Mode 3), but solves to match the Standard PV (like Mode 2). UI text only; engine was already correct.
+- Down Payment rule for target-PV modes: In Modes 2 and 4 (Target PV), DP is treated as a fixed amount (not percentage) to avoid circular dependency as the final nominal price is solved from PV. UI enforces amount-only and backend coerces percentage to amount. Files: api/services/calculationService.js, client/src/components/calculator/InputsForm.jsx, client/src/App.jsx.
+- Standard PV baseline fix: When resolving Standard Plan via unitId/standardPricingId, the API now computes Standard Calculated PV from the equal-installments baseline using the authoritative rate/duration/frequency instead of defaulting to the nominal total price. This ensures PV ≠ Standard Total Price and modes 2/4 target the correct PV. File: api/src/app.js.
+- Consultant UI — New Price visibility: For target-PV modes (2 and 4), the calculator now displays the solved New Price (offer total) in the Inputs panel Live Preview area, so consultants can immediately see the price that matches Standard PV. File: client/src/components/calculator/InputsForm.jsx.
+- Thresholds based on offer, not standard: Client-side preview percentages (for quick inline comparison before generating) now compute the Down Payment amount correctly when DP Type = percentage by basing it on the current offer total (preview/gen) instead of the Standard Total Price. File: client/src/App.jsx.
+- [2025-10-16 00:00] Standard PV locking (Modes 2/4): When a unit is selected, the client now fetches the authoritative Standard PV from the server (/api/generate-plan evaluation.pv.standardPV) and locks it, preventing the UI from recomputing PV client-side. This fixes cases where Standard Price incorrectly equaled PV over multi‑year plans due to missing/zero rate context. Files: client/src/App.jsx.
+- Standard Plan defaults hydration: On load, the client fetches the latest active Standard Plan and pre-fills financial rate, plan duration, and installment frequency for consultants, ensuring Std Calculated PV is derived consistently. File: client/src/App.jsx.
+- Std Calculated PV read-only: The “Std Calculated PV” field in the calculator is now read-only and auto-derived from Standard Total Price, rate, duration and frequency. File: client/src/components/calculator/InputsForm.jsx.
+- [2025-10-17 16:25] Client banner for missing per-pricing terms:
+  - Calculator page shows a red policy banner when a unit/model is selected and the API returns 422 requiring per-pricing terms.
+  - Message instructs to configure Annual Financial Rate, Duration, and Frequency on the Standard Pricing page for that unit model.
+  File: client/src/App.jsx.
+- Header stays LTR: Top navigation/header is always LTR even when Arabic is selected, keeping consultant layout stable.
+- Payment Schedule Arabic polish: “الوصف” column shows Arabic labels for schedule rows and is center‑aligned in Arabic.
+- Calculator PV baseline: Standard Calculated PV is now auto-computed on the client from Standard Total Price, financial rate, duration and frequency. This prevents it from mistakenly matching the nominal price and ensures Modes 2 and 4 solve a new final price against the correct Standard PV baseline. File: client/src/App.jsx.
+- [2025-10-17 12:00] Frequency normalization and robust Standard PV resolution:
+  - Added API-side frequency normalization (maps 'biannually' → 'bi-annually', case-insensitive, trims) and validated against engine enum.
+  - Enforced authoritative baseline from active Standard Plan: std_financial_rate_percent, plan_duration_years, installment_frequency.
+  - Removed silent fallback to 0% when Standard Plan is missing/invalid; server now either uses FM stored Calculated PV or returns 422 with a clear message.
+  - Added diagnostics meta in responses: rateUsedPercent, durationYearsUsed, frequencyUsed, computedPVEqualsTotalNominal, usedStoredFMpv.
+  - Fixed frequency mismatches by normalizing before switch statements and calculations. Files: api/src/app.js.
+
+- [2025-10-17 15:10] Terminology correction: Standard Plan is configured by the Financial Manager and approved by Top Management. Updated README “Configuration Requirements” to reflect ownership and removed “global” wording.
+
+Future tasks:
+- PDF templates: map offer_date and first_payment_date placeholders in server-side document templates for Pricing Form, Reservation Form, and Contract.
+
+Future Enhancements (proposed):
+- Optional pending external update banner in ClientInfoForm: “New client data available — Apply now or after editing” with an explicit apply action.
+- Versioned, deferred-apply strategy for external updates (e.g., OCR) across the app to avoid focus/typing races without timing heuristics.
+- Further code-splitting: lazy-load larger calculator modules (UnitInfoSection, ContractDetailsForm) conditioned on role/mode to reduce initial bundle size.
+- Tests: add React Testing Library unit/integration tests for form sync behavior (typing uninterrupted, OCR apply selective merge).
+- Incremental TypeScript adoption for calculator payloads and API responses to improve safety and DX.
+- Accessibility pass: ensure disabled states and status messages (OCR processing) are announced properly via ARIA.
+
+---
+
+## How to Work Day‑to‑Day
+
+- Pull latest code in Codespaces:
+  - Commit/stash your local changes
+  - git pull --rebase
+  - Rebuild container if devcontainer/ or Docker files changed:
+    - F1 → Rebuild Container
+  - Rebuild services if needed:
+    - docker compose build
+    - docker compose up -d
+- Stop Codespace to save hours:
+  - GitHub → Your profile → Codespaces → ••• → Stop
+  - Or F1 → Codespaces: Stop Current Codespace
+
+Persistence
+- Postgres data is stored in the named volume db_data and survives restarts.
+- Client form state persists in localStorage per Codespace URL.
+- Avoid docker compose down -v unless you want to reset the database.
+
+## Database Backup and Restore (db_data volume)
+
+Two scripts are provided to back up and restore the Postgres data volume (physical files). Physical volume backups are fast but are tied to the Postgres major version. For portability across versions, prefer logical dumps (pg_dump).
+
+Important
+- For maximum consistency, stop the db container before a volume backup or restore:
+  - docker compose stop db
+- After restore, start the db container:
+  - docker compose up -d db
+
+Convenience commands (npm)
+- Backup: npm run db:backup
+- Restore: npm run db:restore -- backups/db_data-YYYYMMDD-HHMMSS.tar.gz
+  - If you omit the filename, the restore script will list available backups from backups/*.tar.gz.
+
+Create a volume backup (tar.gz)
+- scripts/db_volume_backup.sh
+  - Creates backups/db_data-YYYYMMDD-HHMMSS.tar.gz in the repo
+  - Usage: scripts/db_volume_backup.sh [backup_dir]
+  - Example: scripts/db_volume_backup.sh
+  - Output file: backups/db_data-20251019-050000.tar.gz (UTC timestamp)
+
+Restore from a volume backup
+- scripts/db_volume_restore.sh <path/to/db_data-YYYYMMDD-HHMMSS.tar.gz>
+  - WARNING: Deletes current contents of db_data and replaces with archive
+  - Example: scripts/db_volume_restore.sh backups/db_data-20251019-050000.tar.gz
+
+Notes
+- Physical volume backups/restores assume the same Postgres major version (here: 16).
+- If you need cross-version migration or fine-grained selection, use pg_dump/psql:
+  - docker exec -t app_db pg_dump -U appuser -d appdb > backups/appdb-YYYYMMDD.sql
+  - cat backups/appdb-YYYYMMDD.sql | docker exec -i app_db psql -U appuser -d appdb
+
+---
+
+## Troubleshooting
+
+- Client connects to localhost:5173 in browser logs:
+  - Hard refresh the client page (Ctrl/Cmd+Shift+R)
+  - Ensure you opened via the Ports panel 5173 public URL
+  - Rebuild the client container: docker compose up -d --build client
+- No ports appear in Ports panel:
+  - Rebuild container; postStartCommand will run
+  - Check docker compose ps; then docker logs -f app_client / app_api
+- 500 on /src/*.jsx in dev overlay:
+  - Check app_client logs for syntax errors and fix the file
+- Merge conflicts:
+  - Use VS Code Merge Editor; prefer “Accept Current” when keeping local branch
+  - Remove all conflict markers <<<<<<<, =======, >>>>>>> before committing
+
+### Docker/Codespaces — Reachability & CORS checklist
+
+1) Verify containers and published ports
+- docker compose ps
+- docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+  - Expect API to publish 3001 on the host (e.g., 0.0.0.0:3001->3000/tcp).
+
+2) Ensure Codespaces ports are public
+- gp ports list
+- gp ports visibility 3001:public
+- gp ports visibility 5173:public
+
+3) Make sure client uses the correct API URL
+- In Codespaces, the API URL is:
+  - https://<your-codespace>-3001.app.github.dev
+- The client reads VITE_API_URL. Set it if needed:
+  - echo 'VITE_API_URL="https://<your-codespace>-3001.app.github.dev"' >> client/.env
+  - docker compose up -d --build client
+
+4) Test API from inside API container (confirms app is running)
+- docker compose exec app_api sh -lc 'apk add --no-cache curl 2>/dev/null || true; curl -i http://127.0.0.1:3000/api/health'
+  - Expect 200 OK
+
+5) Test API from Codespaces host (confirms port forwarding)
+- export API_HOST="<your-codespace>-3001.app.github.dev"
+- curl -i https://$API_HOST/api/health
+  - Expect 200 OK. If 502, check port mapping (compose) and that app listens on 0.0.0.0 in container.
+
+6) Validate CORS (only meaningful after 200 OK)
+- export FE_ORIGIN="https://<your-codespace>-5173.app.github.dev"
+- Preflight:
+  curl -i -X OPTIONS "https://$API_HOST/api/health" \
+    -H "Origin: $FE_ORIGIN" \
+    -H "Access-Control-Request-Method: GET"
+- Actual:
+  curl -i "https://$API_HOST/api/health" -H "Origin: $FE_ORIGIN"
+
+By default, our CORS layer allows *.app.github.dev. If you explicitly set CORS_ORIGINS, it becomes a strict allow-list. Include your FE origin when setting CORS_ORIGINS:
+- In docker-compose.yml (API service):
+  environment:
+    - CORS_ORIGINS=https://<your-codespace>-5173.app.github.dev,http://localhost:5173
+
+Then rebuild:
+- docker compose up -d --build
+
+---
+
+## API Reference (selected)
+
+POST /api/calculate
+- Body schema:
+  - mode: string (see modes)
+  - stdPlan: { totalPrice, financialDiscountRate, calculatedPV }
+  - inputs: {
+      salesDiscountPercent,
+      dpType, downPaymentValue,
+      planDurationYears, installmentFrequency,
+      additionalHandoverPayment, handoverYear,
+      splitFirstYearPayments, firstYearPayments[], subsequentYears[]
+    }
+
+Health endpoints
+- GET /api/health → { status: "OK" }
+- GET /api/message → { message: "Hello..." }
+
+---
+
+## Branding and App Title
+
+- Place a logo under client/public/logo/ (logo.svg/png/jpg). First found will be used.
+- Legacy path supported: client/public/branding/
+- Override via VITE_COMPANY_LOGO_URL
+- Override app title via VITE_APP_TITLE
+
+---
+
+## Testing
+
+API unit tests:
+- cd api && npm run test
+
+API integration tests:
+- cd api && npm run test:integration
+
+---
+
+## User Guide — Pages, Flows, and Actions
+
+This section describes how each primary page works, who can use it, and the key buttons and actions available. Use this as a quick help reference per role. Links and labels are given as they appear in the app.
+
+General notes
+- Roles: property_consultant, sales_manager, financial_admin, crm_admin, financial_manager, contract_person, admin/superadmin (admin pages).
+- Date pickers accept calendar dates; if a date is optional and left empty, defaults are applied as documented (e.g., Maintenance Deposit defaults to the Handover date).
+- The app supports English and Arabic. Toggle “Language for Written Amounts” in Calculator to affect number-to-words output.
+
+1) Calculator Page
+- Purpose: Build payment plans, evaluate acceptance, prepare client offer exports.
+- Who: All roles can view; some inputs are locked based on role.
+- Key inputs
+  - Offer Date and First Payment Date: required; First Payment defaults to Offer Date.
+  - Mode: choose calculation mode (four options with inline explanations).
+  - Down Payment Type: “percentage” is disabled in PV-target modes to avoid circular dependency.
+  - Installment Frequency and Plan Duration (years): required.
+  - Handover Year and Additional Handover Payment: optional; if amount > 0 and year > 0, “Handover” appears in schedule.
+  - Maintenance Deposit (Amount + optional Date): not part of PV; if date is empty, it defaults to Handover.
+- Buttons
+  - Calculate (Generate Plan): builds the schedule and shows acceptance evaluation.
+  - Export Client Offer (PDF): Property Consultant only; shows a progress bar during generation.
+  - Export CSV / Export XLSX / Generate Checks Sheet: Financial Admin only; disabled for other roles.
+- Results
+  - Payment Schedule table with Month/Label/Amount/Date/Written Amount.
+  - Totals box shows both “Total (excluding Maintenance Deposit)” and “Total (including Maintenance Deposit)”.
+  - Acceptance Evaluation (server-side) shows PV comparison, conditions, and decision.
+
+2) Deals → Create Deal
+- Purpose: Prepare a full deal record using the embedded calculator and selected unit.
+- Who: Consultants/Sales Managers prepare; downstream actions by managers/admins.
+- Flow
+  - Select a unit from Inventory (or arrive with unit_id in URL). Unit summary shows model, code, prices, and totals.
+  - Use the embedded Calculator to generate a Payment Plan.
+  - Required minimal fields: Client Name, Client Primary Phone, Unit Model, Unit Code or Unit Number.
+- Buttons
+  - Change Unit: navigates back to Inventory.
+  - Request Unit Block: Consultants/Sales Managers can request a temporary hold (block) on the unit.
+  - Save as Draft: creates a draft deal.
+  - Save and Submit: creates and submits the deal; requires a generated plan.
+- Errors
+  - “Please generate a payment plan before submitting.” if plan missing.
+  - “Missing required fields: …” for minimal fields not supplied.
+
+3) Deals → Block Requests
+- Purpose: Manage pending unit block requests.
+- Who:
+  - Property Consultant: sees only their own pending requests; can cancel own.
+  - Sales Manager: sees requests from consultants in their team; can cancel any pending.
+  - Financial Manager: sees all pending requests; can approve or reject inline.
+- Buttons per request row
+  - Approve / Reject (FM only): PATCH /api/blocks/:id/approve with action approve|reject.
+  - Cancel: Consultant (own only) or Sales Manager (any pending).
+- Outcomes
+  - Approve: unit becomes unavailable; block listed under “Current Blocks”.
+  - Reject/cancel: request removed from pending list.
+
+4) Inventory (Deals → Inventory)
+- Purpose: Browse and select units for a deal.
+- Who: Consultants/Sales Managers/Financial Managers.
+- Actions
+  - Filter/search: type ahead to find units.
+  - Select unit: navigates to Create Deal with unit prefilled.
+- Notes
+  - If inventory appears in Admin pages but not under Deals → Inventory, ensure pricing drafts are linked to a Unit Model and approved, and units are AVAILABLE.
+
+5) Dashboard (Deals → Dashboard)
+- Purpose: Overview of deals and proposals with key dates.
+- Who: All roles; sections vary by role.
+- Columns
+  - Offer Date, First Payment Date, decision status, totals.
+- Exports
+  - CSV/XLSX exports include Offer Date and First Payment Date.
+
+6) Admin Pages (various)
+- Purpose: Configuration, pricing, approvals, thresholds.
+- Who: financial_admin, crm_admin, financial_manager, contract_person, admin/superadmin.
+- Examples
+  - Standard Pricing: configure per-model nominal components; approve to propagate to units (base price, area).
+  - Standard Plan: configure annual rate, duration, frequency; becomes authoritative baseline.
+  - Acceptance Thresholds: update min/max percentages; evaluated server-side in plans.
+
+7) Documents
+- Client Offer (PDF)
+  - Who: Property Consultant
+  - Button: Export Client Offer (PDF) from Calculator page.
+  - Content: buyers list, schedule table, totals, optional unit summary box with breakdown and dual totals. Arabic/RTL supported; page footers show Page X of Y.
+- Reservation Form
+  - Who: Financial Admin
+  - Button: Generate Reservation Form (from Calculator page when role permitted).
+- Contract
+  - Who: Contract Person
+  - Button: Generate Contract (from Calculator page when role permitted).
+- Notes: Supported templates live under api/templates; placeholders use <<name>>. Numeric fields gain “*_words” automatically.
+
+8) Notifications
+- Financial Managers receive notifications for block requests, hold reminders/expiry events.
+- Consultants receive notifications for decisions on their block requests.
+
+Troubleshooting quick tips
+- If a button is disabled, check role permissions.
+- For CORS/API reachability in Codespaces, see the Troubleshooting section below.
+- If a unit block request returns an error, ensure the unit is AVAILABLE and that the blocks table exists (migrations run automatically on startup).
+
+---
+
+## Key Terms and Definitions
+
+This section explains the main financial terms used throughout the system so that everyone uses the same language.
+
+- Default Financing Policy (Standard Plan)
+  - A global set of financial terms configured by the Financial Manager and approved by Top Management.
+  - Defines the “standard” financing policy:
+    - Annual financial discount rate (%)
+    - Plan duration in years
+    - Default installment frequency (monthly/quarterly/bi-annually/annually)
+  - Used by the calculation engine as a baseline for Present Value (PV) comparisons and for Standard Mode structures.
+  - Technical name in code and DB: standard_plan.
+
+- List Price Configuration (Standard Pricing / Unit Model Pricing)
+  - Per-model or per-unit nominal price configuration, used to derive the official List Price for a unit.
+  - Components:
+    - Base unit price
+    - Optional components: garden, roof, storage, garage, maintenance
+    - std_financial_rate_percent, plan_duration_years, installment_frequency (per-pricing overrides when present)
+    - calculated_pv (FM’s approved Standard PV)
+  - “List Price” refers to the total nominal price built from these components for a specific unit or model.
+  - Technical names in code and DB: standard_pricing and unit_model_pricing.
+
+- Standard Unit / Inventory Unit
+  - A unit record in the inventory linked to a unit model and Standard/Unit Model Pricing.
+  - Lifecycle:
+    - Draft (created by CRM Admin)
+    - AVAILABLE (approved by Top Management and ready to sell)
+    - BLOCKED (temporarily held during a block)
+    - RESERVED (after reservation approval)
+  - Only AVAILABLE units can be used to create or submit Deals (offers).
+
+- Calculator Modes
+  - Standard Mode:
+    - Uses Standard Price and enforces a fixed structure (20% Down Payment, 6 years, quarterly installments, three 15% yearly blocks, remaining 35% as equal installments).
+  - Discounted Standard Price (Compare to Standard):
+    - Applies a discount to Standard Price and allows flexible structure inputs, then compares PV to the Standard PV.
+  - Target Price: Match Standard PV:
+    - Solves for a new nominal price that makes the PV equal to the Standard PV, given a structure and down payment amount.
+  - Custom Structure using Standard Price:
+    - Uses Standard Price, but allows custom yearly blocks + equal installments; PV is calculated on the resulting structure.
+  - Custom Structure targeting Standard PV:
+    - Uses a custom structure but solves for a price that matches Standard PV.
+
+- Deal (Offer)
+  - A sales offer record created from the calculator snapshot for a specific unit and client.
+  - Contains:
+    - Title, amount (typically the total nominal from the generated plan)
+    - details.calculator snapshot:
+      - mode, stdPlan, inputs, unitInfo, clientInfo
+      - generatedPlan (schedule, totals, evaluation)
+  - Status:
+    - draft → pending_approval → approved or rejected
+  - Represents “this is the offer we are proposing to the client,” including the exact payment plan at the time it was created.
+
+- Payment Plan
+  - A workflow wrapper around a calculator snapshot tied to a Deal.
+  - Stored in payment_plans with:
+    - details.calculator (same shape as in deals)
+    - Approval status:
+      - pending_sm, pending_fm, pending_tm, approved, rejected
+    - Metadata for discounts and policy limits
+  - Only one plan per deal can be marked accepted (accepted=true), but multiple approved plans can exist per unit (e.g., alternative scenarios).
+
+- Approved Plan vs Accepted Plan
+  - Approved Plan:
+    - A payment_plan row with status='approved' (after SM/FM/TM as needed).
+  - Accepted Plan:
+    - The single “chosen” approved plan for a given deal, marked via mark-accepted.
+    - Used as the primary reference when moving toward reservation and contract.
+
+- Block (Unit Hold)
+  - A temporary hold on an AVAILABLE unit requested by a Property Consultant or Sales Manager.
+  - Represents “we are holding this unit for this client/offer while approvals/reservations are processed.”
+  - Data lives in the blocks table with:
+    - Requester, reason, duration
+    - financial_decision (FM decision), override status if applicable
+    - blocked_until timestamp
+  - Approval:
+    - Financial Manager approves/rejects.
+    - On approval: unit_status='BLOCKED', available=FALSE.
+
+- Reservation Form
+  - A record representing a client’s reservation for a BLOCKED unit with a specific approved payment plan.
+  - Created by Financial Admin:
+    - Ties together: blocked unit, approved payment_plan, reservation date, and preliminary payment.
+  - Approval:
+    - Financial Manager approves/rejects reservation forms.
+    - On approval: unit_status='RESERVED', available=FALSE.
+  - Reservation Form PDF:
+    - Generated from the deal and plan snapshot; legally formatted for client signature.
+
+- Contract
+  - The legal contract generated after a reservation is approved.
+  - Today:
+    - Mainly a server-rendered PDF document from the deal snapshot and templates.
+  - Planned:
+    - A full workflow in contracts table:
+      - draft → CM review → TM approval → executed
+    - With explicit audit trail and status transitions.
+
+- Standard PV (Standard Present Value)
+  - The “standard” Present Value of the Standard Plan structure for a given unit/model.
+  - Usually the FM-approved calculated_pv stored in Standard Pricing / Unit Model Pricing.
+  - Target-PV modes and Acceptance Evaluation compare Proposed PV against this Standard PV.
+
+- Proposed PV (Offer Present Value)
+  - The Present Value of the proposed payment schedule (including down payment, custom years, equal installments, handover).
+  - Used to determine whether a plan is ACCEPT or REJECT based on tolerance thresholds from payment_thresholds.
+
+- Discount Percent (salesDiscountPercent)
+  - The percentage discount applied to the Standard Price to arrive at the nominal offer price in discounting modes.
+  - Subject to:
+    - Role-based Authority Limits (per role)
+    - Policy Limits (global/ scoped policies from approval_policies) that control whether plans must go to TM.
+
+- Authority Limit (Role-based Discount Limit)
+  - The maximum discount a given role can apply directly when generating a plan.
+  - Implemented via getRoleDiscountLimit(role) in the API, with current defaults:
+    - property_consultant: 2%
+    - financial_manager: 5%
+  - Enforced primarily in:
+    - /api/calculate (returned as authorityLimit/overAuthority in meta)
+    - /api/generate-plan (requests above the role’s limit are rejected with 403)
+  - Business meaning:
+    - Within the Authority Limit, the role can propose and generate plans freely.
+    - Above this limit, the plan must go through the override/workflow path (SM/FM/TM) instead of being accepted as a normal scenario.
+
+- Policy Limit (Global/Scoped Approval Policy)
+  - A discount threshold stored in approval_policies (scope_type='global' or more specific scopes in the future).
+  - Used primarily by Financial Manager and Top Management to decide whether TM approval is required:
+    - disc ≤ policy_limit_percent → can be approved at FM level.
+    - disc > policy_limit_percent → escalates to TM (pending_tm).
+  - This is distinct from a role’s Authority Limit:
+    - Authority Limit = what you are allowed to propose at all.
+    - Policy Limit = how far FM can approve alone before TM must be involved.
+
+- Override (Top-Management Override of Financial Decision)
+  - A controlled exception process that allows a REJECT plan or an over-policy-limit plan to proceed.
+  - Triggered when:
+    - A plan’s Acceptance Evaluation is REJECT but the business wants to consider it anyway.
+    - A discount is above the normal policy limit, requiring TM review.
+  - Workflow stages:
+    - Request Override (Consultant or Manager)
+    - Sales Manager review (override_sm_approve / override_sm_reject)
+    - Financial Manager review (override_fm_approve / override_fm_reject)
+    - Top Management decision (override_approve / override_reject)
+  - Recorded in:
+    - deal fields (needs_override, override_* columns)
+    - deal_history with structured JSON notes
+  - Effect:
+    - Once an override is approved by TM, the system treats the plan as authorized despite PV or threshold failures and allows dependent actions (blocks, deals, documents) to proceed under that exception.
+
+With these definitions, the terms in the flow below (Standard Plan, Standard Pricing, Deal, Payment Plan, Block, Reservation, Contract, Standard PV, etc.) should be unambiguous.
+
+## Operational Workflow — End-to-End (Draft for Review)
+
+### Conceptual Flow (Mermaid Diagram)
+
+The diagram below shows the full flow from configuration, through offers and approvals, to blocks, reservations, and contracts using the updated terminology (Default Financing Policy, List Price Configuration, List Price, Authority Limit, Policy Limit).
+
+```mermaid
+flowchart TD
+    %% Configuration Phase
+    A[FM/TM Configures<br/>Default Financing Policy &<br/>List Price Configuration] --> B[Default Financing Policy<br/>standard_plan table &<br/>List Price Configuration<br/>standard_pricing, unit_model_pricing tables]
+    C[CRM Admin Creates<br/>Unit Drafts] --> D[TM Approves Units<br/>→ AVAILABLE Status]
+    
+    %% Calculator & Deal Flow
+    E[Consultant Selects<br/>AVAILABLE Unit] --> F{Choose Calculation Mode}
+    
+    F --> F1[Standard Mode<br/>Default Financing Policy]
+    F --> F2[Discounted List Price<br/>Compare to Standard]
+    F --> F3[Target Price: Match Standard PV<br/>calculateForTargetPV]
+    F --> F4[Custom Structure using List Price<br/>customYearlyThenEqual_useStdPrice]
+    F --> F5[Custom Structure targeting Standard PV<br/>customYearlyThenEqual_targetPV]
+    
+    F1 --> G[POST /api/generate-plan<br/>Schedule + Evaluation]
+    F2 --> G
+    F3 --> G
+    F4 --> G
+    F5 --> G
+    
+    G --> H{Acceptance Evaluation}
+    H -->|ACCEPT| I[Create Deal/Offer<br/>with Generated Plan]
+    H -->|REJECT| J[Flag for Override<br/>needs_override=true]
+    
+    J --> K[Override Workflow<br/>SM → FM → TM]
+    K --> L{Override Approved?}
+    L -->|Yes| I
+    L -->|No| M[Deal Rejected]
+    
+    %% Payment Plan Workflow
+    I --> N[Create Payment Plan<br/>POST /api/workflow/payment-plans]
+    
+    N --> O{Role & Discount Check}
+    O -->|Consultant<br/>Discount up to Authority Limit| P1[Pending SM<br/>Sales Manager Queue]
+    O -->|Sales Manager<br/>Discount ≤ Authority Limit| P2[Approved]
+    O -->|Sales Manager<br/>Discount > Authority Limit| P3[Pending FM<br/>Financial Manager Queue]
+    O -->|Financial Manager<br/>Discount ≤ Policy Limit| P2
+    O -->|Financial Manager<br/>Discount > Policy Limit| P4[Pending TM<br/>Top Management Queue]
+    
+    P1 --> P3
+    P3 --> P4
+    P4 --> P5[TM Dual Approval<br/>Required]
+    P5 --> P2
+    
+    P2 --> Q[Mark as Accepted<br/>One per Deal]
+    
+    %% Blocking Flow
+    Q --> R[Request Unit Block<br/>POST /api/blocks/request<br/>Requires: AVAILABLE unit +<br/>(Approved Payment Plan OR ACCEPT Deal)]
+    R --> S[FM Approves Block<br/>→ BLOCKED Status]
+    
+    %% Reservation Flow
+    S --> T[FA Creates Reservation Form<br/>with Approved Plan]
+    T --> U{Reservation Decision}
+    U -->|Approve| V[→ RESERVED Status]
+    U -->|Reject| S
+    
+    %% Contract Flow (Planned)
+    V --> W[Contract Generation<br/>PDF Documents]
+    W --> X[Contract Workflow<br/>CM → TM Approval]
+    X --> Y[Contract Executed]
+
+    %% Core Business Terms Definitions
+    subgraph BusinessTerms [Core Business Terms & Definitions]
+        BT1[Default Financing Policy<br/>Standard Plan: Global financial terms<br/>rate, duration, frequency - configured by FM]
+        BT2[List Price Configuration<br/>Standard Pricing / Unit Model Pricing:<br/>Per-model/unit nominal components + FM stored PV]
+        BT3[List Price<br/>Standard Price: Total nominal price from<br/>List Price Configuration components]
+        BT4[Deal/Offer<br/>Sales offer record with frozen calculator<br/>snapshot for specific client/unit]
+        BT5[Payment Plan<br/>Workflow record for approval containing<br/>calculator snapshot + status]
+        BT6[Accepted Plan<br/>Single marked approved plan per deal<br/>used for reservations]
+        BT7[Block<br/>Temporary unit hold for specific offer<br/>Requires: AVAILABLE unit +<br/>(Approved Payment Plan OR ACCEPT Deal)]
+        BT8[Reservation<br/>Client commitment with preliminary payment<br/>requires blocked unit + approved plan]
+    end
+
+    %% Financial Terms Definitions
+    subgraph FinancialTerms [Financial Terms & Definitions]
+        FT1[Present Value PV<br/>Current value of future cash flows<br/>discounted at financial rate]
+        FT2[Standard PV<br/>Authoritative baseline PV from<br/>FM-approved List Price Configuration<br/>(stored calculated_pv or computed fallback)]
+        FT3[Nominal Price<br/>Total offer price before<br/>PV discounting]
+        FT4[Financial Discount Rate<br/>Annual rate used to calculate PV<br/>Set in Default Financing Policy]
+        FT5[Down Payment DP<br/>Initial payment percentage or amount<br/>Standard Mode: 20% fixed]
+        FT6[Equal Installments<br/>Regular payments after custom periods<br/>Calculated to balance total nominal]
+        FT7[Handover Payment<br/>Lump sum due at unit handover<br/>Standard Mode: Year 3]
+        FT8[Maintenance Deposit<br/>Separate from unit price<br/>Excluded from PV calculations]
+        FT9[Authority Limit<br/>Role-based discount limit<br/>Consultant: 2%, FM: 5%]
+        FT10[Policy Limit<br/>Global discount threshold<br/>Requires TM approval if exceeded]
+    end
+
+    %% Styling
+    classDef config fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef inventory fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef calculator fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
+    classDef workflow fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef approval fill:#ffebee,stroke:#c62828,stroke-width:2px
+    classDef final fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+    classDef business fill:#f0f4c3,stroke:#827717,stroke-width:3px
+    classDef financial fill:#e1f5fe,stroke:#01579b,stroke-width:3px
+    
+    class A,B config
+    class C,D inventory
+    class E,F,F1,F2,F3,F4,F5,G,H calculator
+    class I,J,K,L,M,N workflow
+    class O,P1,P2,P3,P4,P5,Q approval
+    class R,S,T,U,V,W,X,Y final
+    class BusinessTerms,BT1,BT2,BT3,BT4,BT5,BT6,BT7,BT8 business
+    class FinancialTerms,FT1,FT2,FT3,FT4,FT5,FT6,FT7,FT8,FT9,FT10 financial
+
+    %% Key Decision Points
+    linkStyle 5 stroke:#ff0000,stroke-width:2px,stroke-dasharray: 5 5
+    linkStyle 6 stroke:#ff0000,stroke-width:2px,stroke-dasharray: 5 5
+    linkStyle 13 stroke:#ff0000,stroke-width:2px,stroke-dasharray: 5 5
+    linkStyle 14 stroke:#ff0000,stroke-width:2px,stroke-dasharray: 5 5
+    linkStyle 15 stroke:#ff0000,stroke-width:2px,stroke-dasharray: 5 5
+```
+
+Note: This section is a draft for stakeholder review. It distinguishes between Current Enforcement (what the system enforces today) and Planned Enforcement (to be added). Once approved, we will convert any planned items into implemented features and remove the “Draft” label.
+
+Actors
+- Financial Manager (FM)
+- Top Management (TM: CEO/Chairman/Vice Chairman/Top Management)
+- Property Consultant (PC)
+- Sales Manager (SM)
+- Financial Admin (FA)
+- CRM Admin (CRM)
+- Contract Admin (CA)
+- Contract Manager (CM)
+
+Phase 1: Models, Standard Terms, and Inventory
+
+Compact visual flow (high level)
+
+- Configure Standard Terms and Prices:
+  - Standard Plan (global financial terms – rate, duration, frequency)
+  - Standard Pricing / Unit Model Pricing (per-model/unit nominal pieces and FM Calculated PV)
+- Build Inventory:
+  - CRM Admin creates unit drafts linked to models and pricing
+  - Top Management approves drafts → units become AVAILABLE
+
+End-to-end Offer → Contract pipeline (implemented today)
+
+- 1) Standard Terms and Inventory
+  - FM + TM:
+    - Configure Standard Plan and Standard Pricing / Unit Model Pricing
+  - CRM Admin + TM:
+    - Create units and approve to AVAILABLE
+
+- 2) Calculator and Plan Generation
+  - Property Consultant (PC) or Sales Manager (SM):
+    - Pick unit (AVAILABLE) from Deals → Inventory
+    - Use Calculator modes:
+      - Standard Mode (default structure)
+      - Discounted Standard Price (Compare to Standard)
+      - Target Price: Match Standard PV
+      - Custom Structure using Standard Price
+      - Custom Structure targeting Standard PV
+    - Call /api/generate-plan:
+      - Server resolves Standard Plan context from Standard Pricing/Unit Model/Standard Plan
+      - Computes schedule, totals, and Acceptance Evaluation (ACCEPT/REJECT)
+
+- 3) Deal (Offer) Creation
+  - PC/SM:
+    - Create a Deal via Create Deal (embedded calculator snapshot)
+      - POST /api/deals:
+        - Requires generatedPlan with schedule
+        - Requires unit_status='AVAILABLE'
+    - Submit Deal:
+      - POST /api/deals/:id/submit:
+        - Re-validates presence of plan and unit availability
+        - If evaluation.decision='REJECT', flags needs_override and requires override approval to proceed in strict flows
+
+- 4) Payment Plans Workflow
+  - Roles: PC, SM, FM, FA, TM
+  - PC/SM/FM/FA:
+    - Create payment_plans for a deal:
+      - POST /api/workflow/payment-plans (deal_id, details with calculator snapshot)
+      - Initial status:
+        - PC → pending_sm
+        - SM → approved (if discount ≤ 2%) or pending_fm
+        - FM → approved within policy_limit, otherwise pending_tm
+  - Queues:
+    - SM: /api/workflow/payment-plans/queue/sm
+    - FM: /api/workflow/payment-plans/queue/fm
+    - TM: /api/workflow/payment-plans/queue/tm
+  - Approvals:
+    - SM: approve-sm / reject-sm
+    - FM: approve / reject
+    - TM: approve-tm (dual approvals) / reject-tm
+  - One plan per deal can be marked accepted:
+    - PATCH /api/workflow/payment-plans/:id/mark-accepted (FM/CEO)
+  - For a given unit, FA/FM/SM/PC can list approved plans:
+    - GET /api/workflow/payment-plans/approved-for-unit?unit_id=…
+
+- 5) Blocks (Unit Holds)
+  - PC/SM:
+    - From Calculator or Deal, request a block for an AVAILABLE unit:
+      - POST /api/blocks/request
+        - Requires at least one approved consultant-created plan for the unit
+  - FM:
+    - Approves or rejects in Block Requests:
+      - PATCH /api/blocks/:id/approve (action='approve' or 'reject')
+      - On approve:
+        - unit_status='BLOCKED', available=FALSE
+        - For normal (ACCEPT) paths, related deal may be auto-approved and a payment_plan snapshot ensured
+
+- 6) Reservations
+  - FA:
+    - Uses Deals → Current Blocks:
+      - For each BLOCKED unit, selects an approved plan (auto-selected latest) and enters reservation date and preliminary payment
+      - Creates Reservation Form:
+        - POST /api/workflow/reservation-forms
+          - Requires BLOCKED unit + approved payment_plan
+  - FM:
+    - Approves or rejects Reservations in Reservations Queue:
+      - PATCH /api/workflow/reservation-forms/:id/approve:
+        - Sets reservation_forms.status='approved'
+        - unit_status='RESERVED', available=FALSE
+      - PATCH /api/workflow/reservation-forms/:id/reject:
+        - Keeps unit BLOCKED (block/unblock workflow is separate)
+
+- 7) Contracts (Partial / Planned)
+  - Contract Person (CP) and Contract Manager (CM):
+    - Generate contract PDFs from Deal Detail or Calculator using document endpoints:
+      - /api/generate-document or /api/documents/contract (per templates)
+    - Contracts table and audit history exist; a full CM/TM approval chain is planned:
+      - Draft → CM review → TM approval → Executed
+
+This flow uses the same terms as the application:
+- Standard Plan and Standard Pricing / Unit Model Pricing
+- AVAILABLE / BLOCKED / RESERVED unit states
+- Deals (offers) with embedded payment plans
+- Payment Plans workflow (PC/SM/FM/TM)
+- Blocks and Reservations
+- Contracts (document generation today; full approval workflow planned)
+
+1) Unit Models (structure, dimensions, features)
+- Owner: Financial Manager (requests), Top Management (approves)
+- Current Enforcement:
+  - FM submits model create/update/delete requests → /api/inventory/unit-models and /api/inventory/unit-models/changes
+  - TM approves/rejects via /api/inventory/unit-models/changes/:id/approve|reject
+  - Audit in unit_model_audit
+- Planned Enforcement: none
+
+2) Standard Plan (global financial terms)
+- Owner: Financial Manager; referenced by calculator and APIs
+- Current Enforcement:
+  - Latest active plan is used to build PV baselines and defaults
+- Planned Enforcement (High Priority):
+  - Introduce TM approval workflow:
+    - POST /api/standard-plan → status='pending_approval'
+    - PATCH /api/standard-plan/:id/approve|reject (TM roles)
+  - Consumers use latest status='approved' plan; if none, API returns 422 with guidance
+
+3) Standard Pricing (per-unit-model pricing)
+- Owner: FM creates; TM approves
+- Current Enforcement:
+  - POST /api/workflow/standard-pricing, PATCH /api/workflow/standard-pricing/:id/approve (TM)
+  - On approve: propagate price/area/unit_type to related unit; log standard_pricing_history and unit_inventory_changes
+- Planned Enforcement: none
+
+4) Inventory (units)
+- Owner: CRM Admin creates drafts; Top Management (TM) approves to AVAILABLE
+- Current Enforcement:
+  - CRM Admin: POST /api/inventory/units (requires approved model pricing) → unit_status='INVENTORY_DRAFT'
+  - TM: PATCH /api/inventory/units/:id/approve → unit_status='AVAILABLE'
+  - Sales roles only see AVAILABLE units in /api/inventory/units
+- Planned Enforcement: none
+
+Phase 2: Offers and Payment Plans
+
+5) Offer (Deal) creation with Calculator
+- Owner: PC (or SM)
+- Current Enforcement:
+  - POST /api/deals requires:
+    - details.calculator.generatedPlan with a non-empty schedule
+    - details.calculator.unitInfo.unit_id resolves to an AVAILABLE unit (available=TRUE AND unit_status='AVAILABLE')
+  - POST /api/deals/:id/submit enforces the same checks at submission time
+  - If evaluation.decision === 'REJECT', submission marks needs_override (does not block)
+- Planned Enforcement (optional, policy decision):
+  - Block submission when decision='REJECT' unless a deal-override has been approved (SM→FM→TM). Currently only auto-flags override.
+
+6) Payment Plans workflow
+- Owner: PC creates; SM/FM/TM approve per policy limits
+- Current Enforcement:
+  - POST /api/workflow/payment-plans (created_by role matters)
+  - FM approval; escalates to TM (dual approvals) if exceeding policy_limit_percent
+  - GET /api/workflow/payment-plans/approved-for-unit?unit_id=… returns approved, consultant-created plans for unit_id or unit_code
+- Planned Enforcement: none
+
+Phase 3: Blocks (Unit Holds)
+
+7) Request Block
+- Owner: PC/SM requests; FM approves
+- Current Enforcement:
+  - Preconditions: Unit AVAILABLE; at least one approved plan tied to the unit (match by unit_id or unit_code)
+  - Endpoint: POST /api/blocks/request
+  - FM approves via PATCH /api/blocks/:id/approve → unit_status='BLOCKED', available=FALSE
+- Planned Enforcement (High Priority):
+  - Financial criteria validation at block time:
+    - Use the approved plan’s snapshot (or recompute) and require evaluation.decision === 'ACCEPT'
+    - If decision='REJECT', require override chain:
+      - Override stages: SM → FM → TM; only with override_status='approved' can FM approve the block
+  - Add audit trail for block overrides (block_overrides table) and status fields (override_status, requested_plan_id)
+
+Phase 4: Reservations
+
+8) Create Reservation Form
+- Owner: FA
+- Current Enforcement:
+  - Requires payment_plan_id status='approved'
+  - Resolves unit_id from RF details or plan snapshot (unit_id or by unit_code mapping)
+  - Requires an active approved block: status='approved' and blocked_until > now()
+  - Endpoint: POST /api/workflow/reservation-forms; FM approves/rejects via PATCH …/approve|reject
+- Planned Enforcement: none
+
+Phase 5: Contracts (Draft → Approvals → Executed)
+
+9) Contracts workflow
+- Owner: CA drafts, CM reviews, TM finalizes
+- Current State:
+  - Tables and reports wiring exist (contracts, contracts_history), team membership exists
+  - No API endpoints implemented yet
+- Planned Enforcement (Medium Priority):
+  - contractsRoutes.js:
+    - POST /api/contracts (CA): requires approved reservation_form; creates contract status='draft'
+    - PATCH /api/contracts/:id/approve-cm (CM): draft → pending_tm
+    - PATCH /api/contracts/:id/approve-tm (TM): pending_tm → approved (ready for print)
+    - PATCH /api/contracts/:id/reject (CM/TM): reject with reason
+    - Optional: PATCH /api/contracts/:id/execute (CA): approved → executed
+
+Validation matrix (authoritative)
+- Offer create: generatedPlan + unit AVAILABLE (enforced)
+- Offer submit: generatedPlan + unit AVAILABLE (enforced)
+- Block request: unit AVAILABLE + approved plan (enforced) + [Planned] financial criteria pass OR override
+- Block approve: [Planned] require financial pass or override_status='approved'
+- Reservation form create: approved plan + active approved block (enforced)
+- Contracts: [Planned] approved reservation only; CM then TM approvals
+
+Key endpoints reference
+- Models: /api/inventory/unit-models, /api/inventory/unit-models/changes (approve by TM)
+- Standard Plan: /api/standard-plan (current), [Planned] approvals by TM
+- Standard Pricing: /api/workflow/standard-pricing (FM create) → approve by TM
+- Inventory Units: /api/inventory/units (CRM Admin create draft; TM approve to AVAILABLE)
+- Deals/Offers: /api/deals, /api/deals/:id/submit
+- Payment Plans: /api/workflow/payment-plans, /api/workflow/payment-plans/approved-for-unit
+- Blocks: /api/blocks/request, /api/blocks/:id/approve, /api/blocks/current
+- Reservations: /api/workflow/reservation-forms (create/list/approve/reject/cancel), /api/workflow/reservation-forms/amendments, /api/workflow/reservation-forms/:id/request-amendment, /api/workflow/reservation-forms/:id/approve-amendment, /api/workflow/reservation-forms/:id/reject-amendment
+- Contracts: [Planned] /api/contracts… ro_codeutnewe</s
+
+Open decisions before enforcement
+- Should deal submission be blocked when evaluation='REJECT' (with override path), or keep current “auto-flag only”?
+- For block overrides, do we require all three stages (SM→FM→TM) or allow FM-only exceptions within a policy limit?
+
+Once you approve this Draft, I will:
+- Convert “[Planned]” items into implementation tasks
+- Update this section to remove the Draft label and move details into the main User Guide
+
+## Roadmap (next sessions)
+
+Planned enhancements
+- Override Timeline UI refinements
+  - Improve visuals: larger circles, labels under nodes, responsive layout, and hover tooltips with timestamps and approver names.
+  - Show the same override timeline on the Sales Manager Approvals page (implemented initial compact timeline badge).
+- TM override visibility on block/unblock workflows
+  - Surface a clear “TM Override (FM bypassed)” badge in block/unblock UI views (e.g., Current Blocks, Block Requests, and any block detail drawer) whenever tm_override=true or when TM approved unblock directly from pending_fm.
+  - Ensure this flag appears both in per-row summaries and in any detailed modal/panel so auditors can see when FM was bypassed.
+- Unit Lifecycle Timeline (future)
+  - Add a similar timeline to track unit state across Blocked → Reserved → Contracted (and back if expired/unblocked).
+  - Integrate with blocks table and reservation/contract events to display timestamps per transition.
+- Reservation Cancellation Flow (future)
+  - Design and implement reservation cancellation with approval and audit trail.
+  - On cancellation, unit unblocks or reverts to AVAILABLE according to policy; notifications sent to stakeholders.
+- Contract Cancellation Flow (future)
+  - Design and implement contract cancellation workflow with approvals and audit trail.
+  - Update documents and notifications to reflect cancellation and unit state changes.
+- Document-generation UX polish (future)
+  - Extend the Reservation Form generation progress pattern (progress bar + disabled buttons) to other long-running document exports such as Client Offer PDF and Contract PDF, so users always see that a document is being generated and are discouraged from clicking actions multiple times.
+
+- Polish Client Offer PDF (server-rendered):
+  - Add branded header/logo, consistent typography, page headers/footers, and proper pagination (repeat table headers on page break).
+  - Improve RTL/Arabic typography and spacing; verify Noto Arabic fallback coverage.
+  - Add multi-language labels, currency formatting, optional unit summary block, and a configurable disclaimer.
+  - Source logo from VITE_COMPANY_LOGO_URL or client/public/logo/* with fallback.
+- Add UI-level access guards project-wide:
+  - Hide block/unblock related links, buttons, and pages from admin/superadmin across all screens (Dashboard, Create Deal, Inventory, queues, etc.).
+  - Keep server-side authorization as the source of truth; UI guards are UX hardening.
+  - Introduce a standard “Access Denied” page and wire RequireRole to render it as a fallback (instead of redirect) for unauthorized visits.
+  - Implement after current feature set is finalized, and test per role.
+- Reintroduce OCR into the Client Information flow incrementally (start from archived ClientInfoForm_OCR.jsx), keeping typing stability. Add explicit “Apply OCR” action with selective merge that never touches manual-only fields (phones, email).
+- Wire real inventory endpoints and types/units data model.
+- Implement authentication/authorization end‑to‑end (API issued tokens).
+- Persist thresholds and management controls (admin UI + API).
+- Finalize OCR pipeline and document generation templates.
+- Add CI for lint/test on PRs and container build.
+- Add “Export/Import” for local calculator state.
+
+---
+
+## Calculator Modularity Audit
+
+Scope: review of calculator architecture, unused/broken files, and drift from modular design (no deletions performed).
+
+Summary
+- The calculator is intentionally modular (InputsForm, LivePreview, PaymentSchedule, UnitInfoSection, ClientInfoForm, ContractDetailsForm, EvaluationPanel).
+- App.jsx has accumulated too many responsibilities (validation, payload building, comparison metrics, some deal-bridging). It still works, but should be split into hooks/utilities to restore clean modularity.
+
+Findings — likely broken filename mismatches
+- client/src/components/UnitDetailsDrawer.jsx.jsx
+  - Imports expect ../components/UnitDetailsDrawer.jsx (single .jsx). This mismatch will break admin drawers.
+- client/src/admin/InventoryChangeHistory.jsx.jsx
+  - Router imports InventoryChangeHistory.jsx (single .jsx).
+- client/src/admin/InventoryChanges.jsx.jsx
+  - Router imports InventoryChanges.jsx (single .jsx).
+
+Findings — present but currently unused in routes
+- client/src/components/dashboards/SalesManagerDashboard.jsx
+- client/src/components/dashboards/SalesRepDashboard.jsx
+- client/src/components/notifications/NotificationCenter.jsx
+
+Back-end legacy/unused
+- api/server.js (compose and scripts run src/index.js). Keep as legacy starter, but it is not used by the dev stack.
+
+What works well
+- useCalculatorSnapshot and CreateDeal.jsx integration to prefill and extract calculator state.
+- Payment schedule export (CSV/XLSX) and checks-sheet generator.
+- Codespaces-compatible HMR and API URL wiring.
+
+Recommended actions (future task list)
+- File hygiene
+  - Rename the three double-extension files to single .jsx to match imports and prevent runtime errors.
+- Refactor App.jsx (behavior must remain identical)
+  - Extract buildPayload and validateForm into client/src/lib/calculatorHelpers.js.
+  - Extract comparison calculations into a hook: client/src/lib/useCalculatorComparison.js.
+  - Keep App.jsx focused on composing UI and delegating logic.
+- Optional wiring
+  - If dashboards are desired now, add routes and minimal API stubs; otherwise mark as “future” and leave untouched.
+  - Wire NotificationCenter to notifications API or keep as “future module.”
+- DX/Quality
+  - Add ESLint + Prettier to catch duplicate declarations and file mismatches earlier.
+  - Consider TypeScript for types on calculator payloads and API responses (incremental).
+- Documentation
+  - Maintain this section (Calculator Modularity Audit) and “Recent Fixes and Changes” for every session.
+  - When renaming files or refactoring, summarize exactly what moved and why.
+
+No deletions were done in this audit.
+
+---
+
+## AI/Agent Contribution Rules
+
+Any automated agent (AI or script) committing changes MUST:
+1) Update this README in the “Recent Fixes and Changes” section with a concise bullet list of what changed and why.
+2) If developer experience changes (ports, env, run steps), update the corresponding sections.
+3) If new endpoints, routes, or commands are added, document them briefly under API Reference or a new section.
+4) Keep instructions accurate for both local Docker and Codespaces.
+5) Do not remove existing notes; append and refine.
+6) Prefix every new bullet in “Recent Fixes and Changes” with a timestamp in the form [YYYY-MM-DD HH:MM] (UTC).
+7) When fixing bugs or changing behavior, prioritize root-cause fixes that affect future flows. Do not add retroactive data fixes or one-off data migrations unless explicitly requested by the human owner; the system is still in the design phase and existing test data is not considered production.
+
+Checklist before finishing any task:
+- [ ] Code builds and runs locally (docker compose up -d) or in Codespaces
+- [ ] Ports are correct and forwarded
+- [ ] README updated with the changes
+- [ ] README entry is timestamped [YYYY-MM-DD HH:MM] (UTC) in “Recent Fixes and Changes”
+- [ ] Commit message references what was updated in README
+
+---
+`) when looking up the latest approved reservation_forms row for a contract’s deal_id. It safely resolves the DOCX template under api/templates, enriches contract documents with dp_total, dp_remaining, and the Arabic/English down-payment sentences, and converts the rendered DOCX to PDF using libreoffice-convert, without leaking control fields like templateName/documentType/deal_id into the placeholder data.
+  - Ops: Since only JS source files changed inside the API container, an image rebuild is not required; a standard container restart is enough for the fix to take effect under Docker or Codespaces.
 - [2026-01-02 01:10] Deal financial summary endpoint and contract DP clause alignment
   - API: Added GET /api/deals/:id/financial-summary (api/src/dealsRoutes.js), which locates the latest approved reservation_forms row linked to a deal and returns a normalized financial summary for the contract: total unit price excluding maintenance, maintenance deposit, total including maintenance, total down payment from the offer, preliminary payment amount and date, paid-down-payment amount and date, remaining down payment, and remaining price after the full down payment (total_excl - dp_total). This summary reuses the same dp breakdown stored in reservation_forms.details.dp and the unitPricingBreakdown snapshot used by Reservation Form and Contract documents, avoiding reimplementation of the math on the client.
   - Client: Updated the Deal Detail page (client/src/deals/DealDetail.jsx) to call the new endpoint and render a “Reservation / Down Payment Summary” card next to the Payment Schedule. The card shows the same figures that drive the contract clauses, making it clear that the “total amount” in the contract’s opening line refers to the total price excluding maintenance and that the down payment is split into preliminary, additional paid amount, and remaining balance consistent with the reservation form.

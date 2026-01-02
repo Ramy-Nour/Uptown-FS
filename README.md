@@ -121,6 +121,9 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2026-01-02 05:20] Contracts Queue — reservation selector for new contracts instead of ID prompt
+  - API: Added GET /api/contracts/candidates in api/src/contractsRoutes.js for contract_person, which returns approved reservation_forms that do not yet have a linked contract (status='approved' AND no contracts.reservation_form_id match). The result includes deal_id, unit_code, buyer_name, and reservation_date so the UI can present a clean selector instead of relying on numeric IDs.
+  - Client: Replaced the “prompt for Reservation Form ID” flow on the Contracts list page (client/src/deals/ContractsList.jsx) with an inline selector panel: clicking “New Contract from Reservation” now toggles a list of approved reservation forms without contracts, and each row has a “Create Contract” button that calls POST /api/contracts with the correct reservation_form_id. On success, the UI navigates directly to /contracts/:id. This reduces errors and makes the contract creation flow discoverable for Contract Admins.
 - [2026-01-02 05:00] Contracts Queue Phase 3 — financial snapshot and approval history on Contract Detail
   - API: Extended contracts history support in api/src/contractsRoutes.js by logging contracts_history rows on create, CM/TM approval, reject, and execute actions (change_type=create|approve|reject|execute) and exposing GET /api/contracts/:id/history, which joins users to show changed_by_name. The history is ordered chronologically for use in the UI.
   - API: Left the existing status-transition endpoints intact but broadened PATCH /api/contracts/:id/approve-cm to allow both contract_person and contract_manager roles to call it, so CA “submit to CM” and CM “approve” share the same status update and audit trail.

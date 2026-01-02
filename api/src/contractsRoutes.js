@@ -53,6 +53,33 @@ router.get('/', authMiddleware, requireRole([
   }
 })
 
+// Approved reservation forms that do not yet have a contract (candidates for new contracts)
+router.get('/candidates', authMiddleware, requireRole(['contract_person']), async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT
+         rf.id,
+         rf.deal_id,
+         rf.status,
+         rf.reservation_date,
+         rf.details,
+         d.unit_id,
+         u.unit_code,
+         (rf.details->'clientInfo'->>'buyer_name') AS buyer_name
+       FROM reservation_forms rf
+       LEFT JOIN contracts c ON c.reservation_form_id = rf.id
+       LEFT JOIN deals d ON d.id = rf.deal_id
+       LEFT JOIN units u ON u.id = d.unit_id
+       WHERE rf.status = 'approved' AND c.id IS NULL
+       ORDER BY rf.id DESC`
+    )
+    return ok(res, { reservation_forms: result.rows })
+  } catch (e) {
+    console.error('GET /api/contracts/candidates error:', e)
+    return bad(res, 500, 'Internal error')
+  }
+})
+
 // Get single contract
 router.get('/:id', authMiddleware, requireRole([
   'contract_person',

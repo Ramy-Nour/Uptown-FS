@@ -8,7 +8,10 @@ export default function ContractsList() {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(false)
   const [creating, setCreating] = useState(false)
-  const [error, setError] = useState('')
+  const [selecting, setSelecting] = useState(false)
+  const [candidates, setCandidates] = useState([])
+  const [candidatesLoading, setCandidatesLoading] = useState(false)
+  const [candidatesError, setCandidatesError] = useState('')
   const navigate = useNavigate()
 
   async function load() {
@@ -34,6 +37,27 @@ export default function ContractsList() {
   useEffect(() => {
     load()
   }, [])
+
+  async function loadCandidates() {
+    try {
+      setCandidatesLoading(true)
+      setCandidatesError('')
+      const resp = await fetchWithAuth(`${API_URL}/api/contracts/candidates`)
+      const data = await resp.json().catch(() => ({}))
+      if (!resp.ok) {
+        throw new Error(data?.error?.message || 'Failed to load reservation forms')
+      }
+      const list = Array.isArray(data.reservation_forms) ? data.reservation_forms : []
+      setCandidates(list)
+    } catch (e) {
+      const msg = e.message || String(e)
+      setCandidatesError(msg)
+      notifyError(msg, 'Failed to load reservation forms')
+      setCandidates([])
+    } finally {
+      setCandidatesLoading(false)
+    }
+  }
 
   function formatStatus(status) {
     if (!status) return '-'
@@ -66,43 +90,116 @@ export default function ContractsList() {
           <button
             style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #d1d9e6', background: '#fff', cursor: 'pointer' }}
             onClick={async () => {
-              try {
-                const rfIdRaw = window.prompt('Create contract from approved Reservation Form # (ID):', '')
-                if (!rfIdRaw) return
-                const rfId = Number(rfIdRaw)
-                if (!Number.isFinite(rfId) || rfId <= 0) {
-                  notifyError('Reservation Form ID must be a positive number.')
-                  return
-                }
-                setCreating(true)
-                const resp = await fetchWithAuth(`${API_URL}/api/contracts`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ reservation_form_id: rfId })
-                })
-                const data = await resp.json().catch(() => ({}))
-                if (!resp.ok) {
-                  throw new Error(data?.error?.message || 'Failed to create contract')
-                }
-                const created = data.contract
-                if (created && created.id) {
-                  navigate(`/contracts/${created.id}`)
-                } else {
-                  await load()
-                }
-              } catch (e) {
-                notifyError(e, 'Failed to create contract')
-              } finally {
-                setCreating(false)
+              const nextSelecting = !selecting
+              setSelecting(nextSelecting)
+              if (nextSelecting && candidates.length === 0) {
+                await loadCandidates()
               }
             }}
-            disabled={creating}
           >
-            {creating ? 'Creating…' : 'New Contract from Reservation'}
+            {selecting ? 'Hide Reservation Forms' : 'New Contract from Reservation'}
           </button>
         </div>
       </div>
       {error ? <p style={{ color: '#e11d48' }}>{error}</p> : null}
+
+      {selecting && (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: 12,
+            borderRadius: 12,
+            border: '1px solid #e5e7eb',
+            background: '#f9fafb'
+          }}
+        >
+          <h3 style={{ marginTop: 0, marginBottom: 8 }}>Approved Reservation Forms (no contract yet)</h3>
+          {candidatesError && (
+            <p style={{ color: '#e11d48', fontSize: 13 }}>{candidatesError}</p>
+          )}
+          {!candidatesError && candidatesLoading && (
+            <p style={{ fontSize: 13, color: '#6b7280' }}>Loading reservation forms…</p>
+          )}
+          {!candidatesLoading && candidates.length === 0 && !candidatesError && (
+            <p style={{ fontSize: 13, color: '#6b7280' }}>
+              No approved reservation forms without contracts were found.
+            </p>
+          )}
+          {!candidatesLoading && candidates.length > 0 && (
+            <div style={{ overflow: 'auto', border: '1px solid #e5e7eb', borderRadius: 10 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr>
+                    <th style={th}>RF #</th>
+                    <th style={th}>Deal #</th>
+                    <th style={th}>Unit</th>
+                    <th style={th}>Buyer</th>
+                    <th style={th}>Reservation Date</th>
+                    <th style={th}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {candidates.map(rf => (
+                    <tr key={rf.id}>
+                      <td style={td}>{rf.id}</td>
+                      <td style={td}>{rf.deal_id || '-'}</td>
+                      <td style={td}>{rf.unit_code || '-'}</td>
+                      <td style={td}>{rf.buyer_name || '-'}</td>
+                      <td style={td}>
+                        {rf.reservation_date
+                          ? new Date(rf.reservation_date).toISOString().slice(0, 10)
+                          : '-'}
+                      </td>
+                      <td style={{ ...td, textAlign: 'right' }}>
+                        <button
+                          type="button"
+                          style={{
+                            padding: '6px 10px',
+                            borderRadius: 8,
+                            border: '1px solid #10b981',
+                            background: '#10b981',
+                            color: '#fff',
+                            fontSize: 12,
+                            cursor: 'pointer'
+                          }}
+                          onClick={async () => {
+                            try {
+                              setCreating(true)
+                              const resp = await fetchWithAuth(`${API_URL}/api/contracts`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ reservation_form_id: rf.id })
+                              })
+                              const data = await resp.json().catch(() => ({}))
+                              if (!resp.ok) {
+                                throw new Error(data?.error?.message || 'Failed to create contract')
+                              }
+                              const created = data.contract
+                              if (created && created.id) {
+                                navigate(`/contracts/${created.id}`)
+                              } else {
+                                await load()
+                              }
+                            } catch (e) {
+                              notifyError(e, 'Failed to create contract')
+                            } finally {
+                              setCreating(false)
+                            }
+                          }}
+                          disabled={creating}
+                        >
+                          {creating ? 'Creating…' : 'Create Contract'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
       <div style={{ overflow: 'auto', border: '1px solid #e6eaf0', borderRadius: 12 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>

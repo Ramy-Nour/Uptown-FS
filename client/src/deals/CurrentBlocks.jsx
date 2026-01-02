@@ -23,7 +23,17 @@ export default function CurrentBlocks() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [creating, setCreating] = useState(new Set())
-  // keyed by block id: { selectedPlanId, reservationDate, preliminaryPayment, language, plans: [] }
+  // keyed by block id:
+  // {
+  //   selectedPlanId,
+  //   reservationDate,            // Reservation Form date (business date)
+  //   preliminaryPayment,         // Preliminary payment amount
+  //   preliminaryPaymentDate,     // Preliminary payment date
+  //   paidDownPaymentAmount,      // Additional paid part of down payment before reservation
+  //   paidDownPaymentDate,        // Date of that payment
+  //   language,
+  //   plans: []
+  // }
   const [form, setForm] = useState({})
   const [historyTarget, setHistoryTarget] = useState(null) // { unitId, unitCode }
   // keyed by payment_plan_id: latest approved reservation form row
@@ -157,6 +167,21 @@ export default function CurrentBlocks() {
         alert('Preliminary Payment must be a non-negative number.')
         return
       }
+      if (!f.preliminaryPaymentDate) {
+        alert('Preliminary Payment Date is required.')
+        return
+      }
+      if (f.paidDownPaymentAmount != null && f.paidDownPaymentAmount !== '') {
+        const paid = Number(f.paidDownPaymentAmount)
+        if (!Number.isFinite(paid) || paid < 0) {
+          alert('Paid Down Payment must be a non-negative number when provided.')
+          return
+        }
+        if (!f.paidDownPaymentDate) {
+          alert('Paid Down Payment Date is required when an amount is provided.')
+          return
+        }
+      }
       if (!f.reservationDate) {
         alert('Reservation Date is required.')
         return
@@ -173,6 +198,9 @@ export default function CurrentBlocks() {
           payment_plan_id: paymentPlanId,
           reservation_date: f.reservationDate,
           preliminary_payment: prelim,
+          preliminary_payment_date: f.preliminaryPaymentDate,
+          paid_down_payment_amount: f.paidDownPaymentAmount != null && f.paidDownPaymentAmount !== '' ? Number(f.paidDownPaymentAmount) : 0,
+          paid_down_payment_date: f.paidDownPaymentDate || null,
           language: f.language || 'ar',
           details
         })
@@ -366,12 +394,37 @@ export default function CurrentBlocks() {
               }
 
               let preliminaryValue = f.preliminaryPayment || ''
+              let preliminaryPaymentDateValue = f.preliminaryPaymentDate || ''
+              let paidDownPaymentAmountValue = f.paidDownPaymentAmount || ''
+              let paidDownPaymentDateValue = f.paidDownPaymentDate || ''
+
               if (isApproved) {
                 const fromColumn = approvedForPlan.preliminary_payment
                 const fromDetails = approvedForPlan.details?.preliminary_payment
                 const v = fromColumn != null ? fromColumn : fromDetails
                 if (v != null) {
                   preliminaryValue = String(v)
+                }
+
+                const dp = approvedForPlan.details?.dp || {}
+                if (dp.preliminary_date) {
+                  try {
+                    const d = new Date(dp.preliminary_date)
+                    if (!Number.isNaN(d.getTime())) {
+                      preliminaryPaymentDateValue = d.toISOString().slice(0, 10)
+                    }
+                  } catch {}
+                }
+                if (dp.paid_amount != null) {
+                  paidDownPaymentAmountValue = String(dp.paid_amount)
+                }
+                if (dp.paid_date) {
+                  try {
+                    const d = new Date(dp.paid_date)
+                    if (!Number.isNaN(d.getTime())) {
+                      paidDownPaymentDateValue = d.toISOString().slice(0, 10)
+                    }
+                  } catch {}
                 }
               }
 

@@ -39,8 +39,15 @@ router.post(
   requireRole(['financial_admin']),
   async (req, res) => {
     try {
-      const { payment_plan_id, reservation_date, preliminary_payment, language } =
-        req.body || {}
+      const {
+        payment_plan_id,
+        reservation_date,
+        preliminary_payment,
+        preliminary_payment_date,
+        paid_down_payment_amount,
+        paid_down_payment_date,
+        language
+      } = req.body || {}
       const planId = ensureNumber(payment_plan_id)
       if (!planId) return bad(res, 400, 'payment_plan_id is required and must be numeric')
 
@@ -64,6 +71,29 @@ router.post(
       const unitId = ensureNumber(unitIdRaw)
       if (!unitId) {
         return bad(res, 400, 'Unit information missing from plan snapshot')
+      }
+
+      // Derive total down payment from the calculator snapshot so it is stored once
+      // and reused by Reservation Form and Contract documents.
+      let dpTotal = 0
+      try {
+        const gp = calc?.generatedPlan || {}
+        if (gp.downPaymentAmount != null) {
+          const v = Number(gp.downPaymentAmount)
+          if (Number.isFinite(v) && v >= 0) dpTotal = v
+        }
+        if (!(dpTotal > 0)) {
+          const schedule = Array.isArray(gp.schedule) ? gp.schedule : []
+          const dpRow = schedule.find(r =>
+            String(r.label || '').toLowerCase().includes('down payment')
+          )
+          if (dpRow) {
+            const v = Number(dpRow.amount)
+            if (Number.isFinite(v) && v >= 0) dpTotal = v
+          }
+        }
+      } catch {
+        dpTotal = 0
       }
 
       const unitRes = await pool.query(
@@ -126,6 +156,28 @@ router.post(
         preliminary_payment != null && preliminary_payment !== ''
           ? Number(preliminary_payment)
           : 0
+
+      let prelimDateIso = null
+      if (preliminary_payment_date) {
+        prelimDateIso = parseReservationDateToIso(preliminary_payment_date)
+      }
+
+      let paidDpAmount = 0
+      if (paid_down_payment_amount != null && paid_down_payment_amount !== '') {
+        const v = Number(paid_down_payment_amount)
+        if (!Number.isFinite(v) || v < 0) {
+          return bad(res, 400, 'paid_down_payment_amount must be a non-negative number when provided')
+        }
+        paidDpAmount = v
+      }
+
+      let paidDpDateIso = null
+      if (paid_down_payment_date) {
+        paidDpDateIso = parseReservationDateToIso(paid_down_payment_date)
+      }
+
+      const dpRemaining = Math.max(0, Number(dpTotal) - Number(prelimValue) - Number(paidDpAmount))
+
       const details = {
         payment_plan_id: planId,
         unit_id: unitId,
@@ -133,7 +185,15 @@ router.post(
         preliminary_payment: prelimValue,
         language: language || 'ar',
         deal_id: plan.deal_id ?? null,
-        calculator: calc || null
+        calculator: calc || null,
+        dp: {
+          total: dpTotal,
+          preliminary_amount: prelimValue,
+          preliminary_date: prelimDateIso,
+          paid_amount: paidDpAmount,
+          paid_date: paidDpDateIso,
+          remaining: dpRemaining
+        }
       }
 
       const ins = await pool.query(

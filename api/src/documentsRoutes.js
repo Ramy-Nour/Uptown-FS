@@ -633,10 +633,15 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
 
     const calc = deal.details?.calculator || {}
 
+    // Total down payment should come from the calculator snapshot and be stored
+    // on the reservation form; we still compute it here as a fallback so older
+    // reservations (without dp.total) render correctly.
     let downPayment = Number(calc?.generatedPlan?.downPaymentAmount) || 0
     if (!(downPayment > 0)) {
       try {
-        const dpRow = (calc?.generatedPlan?.schedule || []).find(r => String(r.label || '').toLowerCase().includes('down payment'))
+        const dpRow = (calc?.generatedPlan?.schedule || []).find(r =>
+          String(r.label || '').toLowerCase().includes('down payment')
+        )
         if (dpRow) downPayment = Number(dpRow.amount) || 0
       } catch {}
     }
@@ -659,6 +664,65 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
       const fromBody = req.body?.preliminary_payment_amount ?? req.body?.preliminary_payment
       preliminaryPayment = Number(fromBody) || 0
     }
+
+    // Down payment breakdown (total / preliminary / additional paid / remaining) —
+    // prefer the stored dp object from reservation_forms.details when present.
+    let dpTotal = downPayment
+    let paidDpAmount = 0
+    let prelimDateForText = reservationDate // default: reservation date if we don't have a separate preliminary date
+    let paidDpDateForText = '' // date string for the additional paid DP line
+
+    if (approvedReservation && approvedReservation.details && approvedReservation.details.dp) {
+      const dp = approvedReservation.details.dp
+      if (dp.total != null) {
+        const v = Number(dp.total)
+        if (Number.isFinite(v) && v >= 0) dpTotal = v
+      }
+      if (dp.preliminary_amount != null) {
+        const v = Number(dp.preliminary_amount)
+        if (Number.isFinite(v) && v >= 0) {
+          preliminaryPayment = v
+        }
+      }
+      if (dp.preliminary_date) {
+        try {
+          const d = new Date(dp.preliminary_date)
+          if (!Number.isNaN(d.getTime())) {
+            const dd = String(d.getUTCDate()).padStart(2, '0')
+            const mm = String(d.getUTCMonth() + 1).padStart(2, '0')
+            const yyyy = d.getUTCFullYear()
+            prelimDateForText = `${dd}/${mm}/${yyyy}`
+          }
+        } catch {}
+      }
+      if (dp.paid_amount != null) {
+        const v = Number(dp.paid_amount)
+        if (Number.isFinite(v) && v >= 0) {
+          paidDpAmount = v
+        }
+      }
+      if (dp.paid_date) {
+        try {
+          const d = new Date(dp.paid_date)
+          if (!Number.isNaN(d.getTime())) {
+            const dd = String(d.getUTCDate()).padStart(2, '0')
+            const mm = String(d.getUTCMonth() + 1).padStart(2, '0')
+            const yyyy = d.getUTCFullYear()
+            paidDpDateForText = `${dd}/${mm}/${yyyy}`
+          }
+        } catch {}
+      }
+      // If dp.remaining is stored, prefer it; otherwise recompute as dpTotal - prelim - paid.
+      if (dp.remaining != null) {
+        const v = Number(dp.remaining)
+        if (Number.isFinite(v) && v >= 0) {
+          // we will recompute remainingAmount later using totals, but keep this
+          // value for down payment lines where needed.
+        }
+      }
+    }
+
+    const dpRemaining = Math.max(0, Number(dpTotal) - Number(preliminaryPayment) - Number(paidDpAmount))
 
     // Currency for RF comes from the calculator snapshot / deal details; there is
     // no separate UIcurrency variable in this route, so avoid referencing it.
@@ -697,7 +761,14 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
 
     const totalExcl = (Number(upb?.base||0)+Number(upb?.garden||0)+Number(upb?.roof||0)+Number(upb?.storage||0)+Number(upb?.garage||0))
     totalIncl = totalExcl + (Number(upb?.maintenance||0))
-    const remainingAmount = Math.max(0, Number(totalIncl) - Number(preliminaryPayment) - Number(downPayment))
+
+    // Remaining Amount (باقي المبلغ) should reflect the total price after
+    // deducting the full agreed Down Payment (regardless of how it is split
+    // between preliminary / paid / remaining portions).
+    const remainingAmount = Math.max(
+      0,
+      Number(totalIncl) - Number(dpTotal)
+    )
 
     // Amount-in-words helpers (respect RF language and currency)
     const langForWords = language
@@ -705,8 +776,8 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
     const maintenanceWords = convertToWords(Number(upb?.maintenance||0), langForWords, { currency })
     const totalWords = convertToWords(totalIncl, langForWords, { currency })
     const prelimWords = convertToWords(preliminaryPayment, langForWords, { currency })
-    const dpNetOfPrelim = Math.max(0, Number(downPayment) - Number(preliminaryPayment))
-    const dpNetWords = convertToWords(dpNetOfPrelim, langForWords, { currency })
+    const paidDpWords = convertToWords(paidDpAmount, langForWords, { currency })
+    const remainingDpWords = convertToWords(dpRemaining, langForWords, { currency })
     const remainingWords = convertToWords(remainingAmount, langForWords, { currency })
 
     const numBuyers = Math.min(Math.max(Number(calc?.clientInfo?.number_of_buyers) || 1, 1), 4)
@@ -917,12 +988,18 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
                     ${Number(preliminaryPayment).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} جم
                     (${prelimWords} لاغير)
                     تم سدادها بتاريخ
-                    ${reservationDate}
+                    ${prelimDateForText}
                   </p>
                   <p>
-                    دفعة المقدم:
-                    ${dpNetOfPrelim.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} جم
-                    (${dpNetWords} لاغير)
+                    دفعة من دفعة التعاقد:
+                    ${Number(paidDpAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} جم
+                    (${paidDpWords} لاغير)
+                    ${paidDpAmount > 0 && paidDpDateForText ? `تم سدادها بتاريخ ${paidDpDateForText}` : ''}
+                  </p>
+                  <p>
+                    باقي دفعة التعاقد:
+                    ${Number(dpRemaining).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} جم
+                    (${remainingDpWords} لاغير)
                   </p>
                   <p>
                     باقي المبلغ:

@@ -7,6 +7,7 @@ import { th, td } from '../lib/ui.js'
 export default function ContractsList() {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(false)
+  const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
   const navigate = useNavigate()
 
@@ -61,6 +62,43 @@ export default function ContractsList() {
             disabled={loading}
           >
             Refresh
+          </button>
+          <button
+            style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #d1d9e6', background: '#fff', cursor: 'pointer' }}
+            onClick={async () => {
+              try {
+                const rfIdRaw = window.prompt('Create contract from approved Reservation Form # (ID):', '')
+                if (!rfIdRaw) return
+                const rfId = Number(rfIdRaw)
+                if (!Number.isFinite(rfId) || rfId <= 0) {
+                  notifyError('Reservation Form ID must be a positive number.')
+                  return
+                }
+                setCreating(true)
+                const resp = await fetchWithAuth(`${API_URL}/api/contracts`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ reservation_form_id: rfId })
+                })
+                const data = await resp.json().catch(() => ({}))
+                if (!resp.ok) {
+                  throw new Error(data?.error?.message || 'Failed to create contract')
+                }
+                const created = data.contract
+                if (created && created.id) {
+                  navigate(`/contracts/${created.id}`)
+                } else {
+                  await load()
+                }
+              } catch (e) {
+                notifyError(e, 'Failed to create contract')
+              } finally {
+                setCreating(false)
+              }
+            }}
+            disabled={creating}
+          >
+            {creating ? 'Creating…' : 'New Contract from Reservation'}
           </button>
         </div>
       </div>

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { fetchWithAuth, API_URL } from '../lib/apiClient.js'
-import { notifyError } from '../lib/notifications.js'
+import { notifyError, notifySuccess } from '../lib/notifications.js'
 import { th, td } from '../lib/ui.js'
 
 export default function ContractDetail() {
@@ -10,6 +10,17 @@ export default function ContractDetail() {
   const [contract, setContract] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [actionLoading, setActionLoading] = useState(false)
+  const [pdfLoading, setPdfLoading] = useState(false)
+
+  const user = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('auth_user') || '{}')
+    } catch {
+      return {}
+    }
+  })()
+  const role = user?.role || 'user'
 
   async function load() {
     try {
@@ -61,6 +72,15 @@ export default function ContractDetail() {
     return '#64748b'
   }
 
+  const canSubmitToCm = role === 'contract_person' && status === 'DRAFT'
+  const canApproveAsCm = role === 'contract_manager' && status === 'DRAFT'
+  const canApproveAsTm = (role === 'ceo' || role === 'chairman' || role === 'vice_chairman' || role === 'top_management') && status === 'PENDING_TM'
+  const canRejectAsManager =
+    (role === 'contract_manager' && (status === 'DRAFT' || status === 'PENDING_CM' || status === 'PENDING_TM')) ||
+    (canApproveAsTm && status === 'PENDING_TM')
+  const canExecute = role === 'contract_person' && status === 'APPROVED'
+  const canGeneratePdf = !!dealId && (status === 'APPROVED' || status === 'EXECUTED')
+
   return (
     <div>
       <button
@@ -74,7 +94,7 @@ export default function ContractDetail() {
       <h2 style={{ marginTop: 0 }}>Contract #{contract.id}</h2>
 
       <div style={{
-        margin: '8px 0 16px 0',
+        margin: '8px 0 12px 0',
         padding: '10px 12px',
         borderRadius: 10,
         background: '#f9fafb',
@@ -124,10 +144,199 @@ export default function ContractDetail() {
         </div>
       </div>
 
+      {/* Actions bar – Phase 2: status transitions and PDF generation */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+        {canSubmitToCm && (
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                setActionLoading(true)
+                const resp = await fetchWithAuth(`${API_URL}/api/contracts/${contract.id}/approve-cm`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' }
+                })
+                const data = await resp.json().catch(() => ({}))
+                if (!resp.ok) throw new Error(data?.error?.message || 'Failed to submit to CM')
+                notifySuccess('Contract submitted to Contract Manager (pending TM).')
+                await load()
+              } catch (e) {
+                notifyError(e, 'Failed to submit contract to CM')
+              } finally {
+                setActionLoading(false)
+              }
+            }}
+            disabled={actionLoading}
+            style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #1f6feb', background: '#1f6feb', color: '#fff', cursor: 'pointer' }}
+          >
+            {actionLoading ? 'Submitting…' : 'Submit to CM (draft → pending TM)'}
+          </button>
+        )}
+
+        {canApproveAsCm && (
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                setActionLoading(true)
+                const resp = await fetchWithAuth(`${API_URL}/api/contracts/${contract.id}/approve-cm`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' }
+                })
+                const data = await resp.json().catch(() => ({}))
+                if (!resp.ok) throw new Error(data?.error?.message || 'Failed to approve as CM')
+                notifySuccess('Contract approved by CM (pending TM).')
+                await load()
+              } catch (e) {
+                notifyError(e, 'Failed to approve contract (CM)')
+              } finally {
+                setActionLoading(false)
+              }
+            }}
+            disabled={actionLoading}
+            style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #10b981', background: '#10b981', color: '#fff', cursor: 'pointer' }}
+          >
+            {actionLoading ? 'Approving…' : 'Approve (CM → pending TM)'}
+          </button>
+        )}
+
+        {canApproveAsTm && (
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                setActionLoading(true)
+                const resp = await fetchWithAuth(`${API_URL}/api/contracts/${contract.id}/approve-tm`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' }
+                })
+                const data = await resp.json().catch(() => ({}))
+                if (!resp.ok) throw new Error(data?.error?.message || 'Failed to approve as TM')
+                notifySuccess('Contract approved by Top Management.')
+                await load()
+              } catch (e) {
+                notifyError(e, 'Failed to approve contract (TM)')
+              } finally {
+                setActionLoading(false)
+              }
+            }}
+            disabled={actionLoading}
+            style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #16a34a', background: '#16a34a', color: '#fff', cursor: 'pointer' }}
+          >
+            {actionLoading ? 'Approving…' : 'Approve (TM → approved)'}
+          </button>
+        )}
+
+        {canRejectAsManager && (
+          <button
+            type="button"
+            onClick={async () => {
+              const reason = window.prompt('Rejection reason (optional, stored server-side when supported):', '') || ''
+              try {
+                setActionLoading(true)
+                const resp = await fetchWithAuth(`${API_URL}/api/contracts/${contract.id}/reject`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ reason })
+                })
+                const data = await resp.json().catch(() => ({}))
+                if (!resp.ok) throw new Error(data?.error?.message || 'Failed to reject contract')
+                notifySuccess('Contract rejected.')
+                await load()
+              } catch (e) {
+                notifyError(e, 'Failed to reject contract')
+              } finally {
+                setActionLoading(false)
+              }
+            }}
+            disabled={actionLoading}
+            style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #dc2626', background: '#fff', color: '#dc2626', cursor: 'pointer' }}
+          >
+            {actionLoading ? 'Rejecting…' : 'Reject'}
+          </button>
+        )}
+
+        {canExecute && (
+          <button
+            type="button"
+            onClick={async () => {
+              if (!window.confirm('Mark this contract as executed?')) return
+              try {
+                setActionLoading(true)
+                const resp = await fetchWithAuth(`${API_URL}/api/contracts/${contract.id}/execute`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' }
+                })
+                const data = await resp.json().catch(() => ({}))
+                if (!resp.ok) throw new Error(data?.error?.message || 'Failed to execute contract')
+                notifySuccess('Contract marked as executed.')
+                await load()
+              } catch (e) {
+                notifyError(e, 'Failed to execute contract')
+              } finally {
+                setActionLoading(false)
+              }
+            }}
+            disabled={actionLoading}
+            style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #a16207', background: '#a16207', color: '#fff', cursor: 'pointer' }}
+          >
+            {actionLoading ? 'Executing…' : 'Mark as Executed'}
+          </button>
+        )}
+
+        {canGeneratePdf && (
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                setPdfLoading(true)
+                const body = {
+                  documentType: 'contract',
+                  deal_id: Number(dealId)
+                }
+                const resp = await fetchWithAuth(`${API_URL}/api/generate-document`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(body)
+                })
+                if (!resp.ok) {
+                  let errMsg = 'Failed to generate contract PDF'
+                  try {
+                    const j = await resp.json()
+                    errMsg = j?.error?.message || errMsg
+                  } catch {}
+                  throw new Error(errMsg)
+                }
+                const blob = await resp.blob()
+                const ts = new Date().toISOString().replace(/[:.]/g, '-')
+                const filename = `contract_${contract.id || dealId || ts}.pdf`
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = filename
+                document.body.appendChild(a)
+                a.click()
+                document.body.removeChild(a)
+                URL.revokeObjectURL(url)
+                notifySuccess('Contract PDF generated successfully.')
+              } catch (e) {
+                notifyError(e, 'Failed to generate contract PDF')
+              } finally {
+                setPdfLoading(false)
+              }
+            }}
+            disabled={pdfLoading}
+            style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #4b5563', background: '#fff', color: '#111827', cursor: 'pointer' }}
+          >
+            {pdfLoading ? 'Generating PDF…' : 'Generate Contract PDF'}
+          </button>
+        )}
+      </div>
+
       <h3>Snapshot</h3>
       <p style={{ fontSize: 13, color: '#6b7280', marginTop: 0 }}>
         This section will eventually show the full contract snapshot (reservation, down payment breakdown,
-        calculator details, and approval trail). For Phase 1 it renders the raw payload for inspection only.
+        calculator details, and approval trail). For now it renders the raw payload for inspection only.
       </p>
 
       <div style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 12, background: '#111827', color: '#e5e7eb', overflow: 'auto' }}>

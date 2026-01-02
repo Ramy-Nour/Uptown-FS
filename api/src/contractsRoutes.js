@@ -10,6 +10,72 @@ function bad(res, code, message, details) {
 function ok(res, payload) { return res.json({ ok: true, ...payload }) }
 function num(v) { const n = Number(v); return Number.isFinite(n) ? n : null }
 
+// List contracts (basic queue view)
+router.get('/', authMiddleware, requireRole([
+  'contract_person',
+  'contract_manager',
+  'ceo',
+  'chairman',
+  'vice_chairman',
+  'top_management',
+  'admin',
+  'superadmin'
+]), async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT
+         c.*,
+         rf.deal_id,
+         u.unit_code,
+         (rf.details->'clientInfo'->>'buyer_name') AS buyer_name
+       FROM contracts c
+       LEFT JOIN reservation_forms rf ON rf.id = c.reservation_form_id
+       LEFT JOIN deals d ON d.id = rf.deal_id
+       LEFT JOIN units u ON u.id = d.unit_id
+       ORDER BY c.created_at DESC, c.id DESC`
+    )
+    return ok(res, { contracts: result.rows })
+  } catch (e) {
+    console.error('GET /api/contracts error:', e)
+    return bad(res, 500, 'Internal error')
+  }
+})
+
+// Get single contract
+router.get('/:id', authMiddleware, requireRole([
+  'contract_person',
+  'contract_manager',
+  'ceo',
+  'chairman',
+  'vice_chairman',
+  'top_management',
+  'admin',
+  'superadmin'
+]), async (req, res) => {
+  try {
+    const id = num(req.params.id)
+    if (!id) return bad(res, 400, 'Invalid id')
+    const result = await pool.query(
+      `SELECT
+         c.*,
+         rf.deal_id,
+         u.unit_code,
+         (rf.details->'clientInfo'->>'buyer_name') AS buyer_name
+       FROM contracts c
+       LEFT JOIN reservation_forms rf ON rf.id = c.reservation_form_id
+       LEFT JOIN deals d ON d.id = rf.deal_id
+       LEFT JOIN units u ON u.id = d.unit_id
+       WHERE c.id = $1`,
+      [id]
+    )
+    if (result.rows.length === 0) return bad(res, 404, 'Contract not found')
+    return ok(res, { contract: result.rows[0] })
+  } catch (e) {
+    console.error('GET /api/contracts/:id error:', e)
+    return bad(res, 500, 'Internal error')
+  }
+})
+
 // Create a contract from an approved reservation form (Contract Admin)
 router.post('/', authMiddleware, requireRole(['contract_person']), async (req, res) => {
   try {

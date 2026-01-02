@@ -26,6 +26,8 @@ export default function DealDetail() {
   const [calcCommissionLoading, setCalcCommissionLoading] = useState(false)
   const [dpSummary, setDpSummary] = useState(null)
   const [dpSummaryError, setDpSummaryError] = useState('')
+  const [clientOfferGenerating, setClientOfferGenerating] = useState(false)
+  const [contractGenerating, setContractGenerating] = useState(false)
   const { setShow, setMessage } = useLoader()
   const user = JSON.parse(localStorage.getItem('auth_user') || '{}')
   const role = user?.role || 'user'
@@ -1186,81 +1188,137 @@ export default function DealDetail() {
         calcCommissionLoading={calcCommissionLoading}
         onToggleEditCalc={() => setEditCalc(true)}
         onSubmitDeal={async () => {
-          const savedPlan = deal?.details?.calculator?.generatedPlan
-          if (
-            !savedPlan ||
-            !Array.isArray(savedPlan.schedule) ||
-            savedPlan.schedule.length === 0
-          ) {
-            notifyError(
-              'Please generate and save a payment plan before submitting.'
-            )
-            return
-          }
-          setSubmitting(true)
           try {
-            const resp = await fetchWithAuth(
-              `${API_URL}/api/deals/${id}/submit`,
-              { method: 'POST' }
-            )
+            setSubmitting(true)
+            const resp = await fetchWithAuth(`${API_URL}/api/deals/${id}/submit`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' }
+            })
             const data = await resp.json()
-            if (!resp.ok) {
-              notifyError(data?.error?.message || 'Submit failed')
-            } else {
-              notifySuccess('Deal submitted successfully.')
-              await load()
-            }
-          } catch (err) {
-            notifyError(err, 'Submit failed')
+            if (!resp.ok) throw new Error(data?.error?.message || 'Failed to submit deal')
+            notifySuccess('Deal submitted for approval.')
+            await load()
+          } catch (e) {
+            notifyError(e, 'Failed to submit deal')
           } finally {
             setSubmitting(false)
           }
         }}
         onApproveDealAsSM={async () => {
-          if (!window.confirm('Approve this deal?')) return
           try {
-            const resp = await fetchWithAuth(
-              `${API_URL}/api/deals/${id}/approve`,
-              { method: 'POST' }
-            )
+            setSubmitting(true)
+            const resp = await fetchWithAuth(`${API_URL}/api/deals/${id}/approve-sm`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' }
+            })
             const data = await resp.json()
-            if (!resp.ok) {
-              notifyError(data?.error?.message || 'Approval failed')
-            } else {
-              notifySuccess('Deal approved.')
-              await load()
-            }
-          } catch (err) {
-            notifyError(err, 'Approval failed')
+            if (!resp.ok) throw new Error(data?.error?.message || 'Failed to approve deal')
+            notifySuccess('Deal approved as Sales Manager.')
+            await load()
+          } catch (e) {
+            notifyError(e, 'Failed to approve deal')
+          } finally {
+            setSubmitting(false)
           }
         }}
         onRequestOverride={async () => {
-          const reason = window.prompt(
-            'Provide a reason for override request (optional):',
-            ''
-          )
           try {
-            const resp = await fetchWithAuth(
-              `${API_URL}/api/deals/${id}/request-override`,
-              {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ reason: reason || null })
-              }
-            )
-            const data = await resp.json()
-            if (!resp.ok) {
-              notifyError(
-                data?.error?.message || 'Failed to request override'
-              )
-            } else {
-              notifySuccess(
-                'Override requested. Waiting for Sales Manager review.'
-              )
-              await load()
+            const reason = window.prompt('Reason for override request:', '') || ''
+            if (!reason.trim()) {
+              notifyError('Override reason is required.')
+              return
             }
-          } catch (err) {
-            notifyError(err, 'Failed to request override')
+            setSubmitting(true)
+            const resp = await fetchWithAuth(`${API_URL}/api/deals/${id}/request-override`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ reason })
+            })
+            const data = await resp.json()
+            if (!resp.ok) throw new Error(data?.error?.message || 'Failed to request override')
+            notifySuccess('Override request submitted to management.')
+            await load()
+          } catch (e) {
+            notifyError(e, 'Failed to request override')
+          } finally {
+            setSubmitting(false)
+          }
+        }}
+        onGenerateClientOfferPdf={async () => {
+          try {
+            setClientOfferGenerating(true)
+            const snap = deal?.details?.calculator
+            if (!snap || !snap.generatedPlan || !Array.isArray(snap.generatedPlan.schedule)) {
+              notifyError('No generated plan found. Please calculate the plan first.')
+              return
+            }
+            const scheduleLocal = snap.generatedPlan.schedule
+            const totalsLocal = snap.generatedPlan.totals || {}
+            const ci = snap.clientInfo || {}
+            const numBuyers = Number(ci.num_buyers || 1)
+            const buyers = []
+            for (let i = 1; i <= numBuyers; i++) {
+              const sfx = i === 1 ? '' : `_${i}`
+              buyers.push({
+                buyer_name: ci[`buyer_name${sfx}`] || '',
+                phone_primary: ci[`phone_primary${sfx}`] || '',
+                phone_secondary: ci[`phone_secondary${sfx}`] || '',
+                email: ci[`email${sfx}`] || ''
+              })
+            }
+
+            const snapBreakdownLocal = snap?.unitPricingBreakdown
+            const body = {
+              language: snap?.language || 'en',
+              currency: snap?.currency || 'EGP',
+              buyers,
+              schedule: scheduleLocal,
+              totals: totalsLocal,
+              offer_date:
+                snap?.inputs?.offerDate ||
+                new Date().toISOString().slice(0, 10),
+              first_payment_date:
+                snap?.inputs?.firstPaymentDate ||
+                snap?.inputs?.offerDate ||
+                new Date().toISOString().slice(0, 10),
+              unit: {
+                unit_code: snap?.unitInfo?.unit_code || '',
+                unit_type: snap?.unitInfo?.unit_type || '',
+                unit_id: Number(snap?.unitInfo?.unit_id) || null
+              }
+            }
+
+            if (snapBreakdownLocal) {
+              body.unit_pricing_breakdown = {
+                base: Number(snapBreakdownLocal.base || 0),
+                garden: Number(snapBreakdownLocal.garden || 0),
+                roof: Number(snapBreakdownLocal.roof || 0),
+                storage: Number(snapBreakdownLocal.storage || 0),
+                garage: Number(snapBreakdownLocal.garage || 0),
+                maintenance: Number(snapBreakdownLocal.maintenance || 0),
+                totalExclMaintenance: Number(
+                  snapBreakdownLocal.totalExclMaintenance || 0
+                )
+              }
+            }
+
+            const { blob, filename } = await generateClientOfferPdf(
+              body,
+              API_URL
+            )
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = filename
+            document.body.appendChild(a)
+            a.click()
+            document.body.removeChild(a)
+            URL.revokeObjectURL(url)
+            notifySuccess('Client Offer PDF exported successfully.')
+          } catch (e) {
+            notifyError(e, 'Failed to export Client Offer PDF')
+          } finally {
+            setClientOfferGenerating(false)
           }
         }}
         onGenerateClientOfferPdf={async () => {
@@ -1504,7 +1562,14 @@ export default function DealDetail() {
           }
         }}
         onRequestEdits={() => setShowEditModal(true)}
-        onGenerateContractPdf={() => generateDocFromSaved('contract')}
+        onGenerateContractPdf={async () => {
+          try {
+            setContractGenerating(true)
+            await generateDocFromSaved('contract')
+          } finally {
+            setContractGenerating(false)
+          }
+        }}
         onGenerateChecksSheet={generateChecksSheetFromSaved}
         onCalculateCommission={async () => {
           const salesPersonId = deal.sales_rep_id || deal.created_by
@@ -1544,6 +1609,8 @@ export default function DealDetail() {
             setCalcCommissionLoading(false)
           }
         }}
+        clientOfferGenerating={clientOfferGenerating}
+        contractGenerating={contractGenerating}
       />
 
       <DealAuditTrail

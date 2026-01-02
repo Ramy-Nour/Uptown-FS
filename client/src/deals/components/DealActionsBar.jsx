@@ -14,6 +14,8 @@ export default function DealActionsBar({
   reservationGenerating,
   reservationProgress,
   calcCommissionLoading,
+  clientOfferGenerating,
+  contractGenerating,
   onToggleEditCalc,
   onSubmitDeal,
   onApproveDealAsSM,
@@ -72,7 +74,10 @@ export default function DealActionsBar({
       {role === 'property_consultant' &&
         (deal.status === 'approved' || deal.status === 'draft') && (
           <>
-            <LoadingButton onClick={onGenerateClientOfferPdf}>
+            <LoadingButton
+              onClick={onGenerateClientOfferPdf}
+              loading={clientOfferGenerating}
+            >
               Print Offer (Client Offer PDF)
             </LoadingButton>
             <LoadingButton onClick={onBlockOrUnblockUnit}>
@@ -123,7 +128,10 @@ export default function DealActionsBar({
 
       {/* Contract PDF generation */}
       {role === 'contract_person' && deal.status === 'approved' && (
-        <LoadingButton onClick={onGenerateContractPdf}>
+        <LoadingButton
+          onClick={onGenerateContractPdf}
+          loading={contractGenerating}
+        >
           Generate Contract (PDF)
         </LoadingButton>
       )}

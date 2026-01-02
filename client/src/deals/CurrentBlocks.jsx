@@ -275,15 +275,6 @@ export default function CurrentBlocks() {
         return n
       })
     }
-  } catch (e) {
-      alert(e.message || String(e))
-    } finally {
-      setPrinting(s => {
-        const n = new Set(s)
-        n.delete(id)
-        return n
-      })
-    }
   }
 
   async function cancelPendingReservation(paymentPlanId) {

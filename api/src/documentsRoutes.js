@@ -761,9 +761,13 @@ router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']
 
     const totalExcl = (Number(upb?.base||0)+Number(upb?.garden||0)+Number(upb?.roof||0)+Number(upb?.storage||0)+Number(upb?.garage||0))
     totalIncl = totalExcl + (Number(upb?.maintenance||0))
+
+    // Remaining Amount (باقي المبلغ) should reflect the total price after
+    // deducting the full agreed Down Payment (regardless of how it is split
+    // between preliminary / paid / remaining portions).
     const remainingAmount = Math.max(
       0,
-      Number(totalIncl) - Number(preliminaryPayment) - Number(dpTotal)
+      Number(totalIncl) - Number(dpTotal)
     )
 
     // Amount-in-words helpers (respect RF language and currency)

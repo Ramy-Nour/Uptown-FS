@@ -271,7 +271,7 @@ app.post('/api/generate-document', authMiddleware, validate(generateDocumentSche
               AND (
                 pp.deal_id = $1
                 OR (
-                  rf.details->>'deal_id' ~ '^[0-9]+
+                  rf.details->>'deal_id' ~ '^[0-9]+`
 
     // Read, compile and render the docx
     const content = fs.readFileSync(requestedPath, 'binary')
@@ -335,16 +335,76 @@ export default app
             const row = rf.rows[0]
             const details = row.details || {}
             const dp = details.dp || {}
+
+            let dpTotal = null
+            let dpRemaining = null
+            let dpPrelim = null
+            let dpPaid = null
+
             if (dp.total != null) {
               const v = Number(dp.total)
               if (Number.isFinite(v) &amp;&amp; v >= 0) {
+                dpTotal = v
                 docData.dp_total = v
               }
             }
             if (dp.remaining != null) {
               const v = Number(dp.remaining)
               if (Number.isFinite(v) &amp;&amp; v >= 0) {
+                dpRemaining = v
                 docData.dp_remaining = v
+              }
+            }
+            if (dp.preliminary_amount != null) {
+              const v = Number(dp.preliminary_amount)
+              if (Number.isFinite(v) &amp;&amp; v >= 0) {
+                dpPrelim = v
+              }
+            }
+            if (dp.paid_amount != null) {
+              const v = Number(dp.paid_amount)
+              if (Number.isFinite(v) &amp;&amp; v >= 0) {
+                dpPaid = v
+              }
+            }
+
+            // Map to Arabic contract placeholders while keeping template names:
+            // - «الدفعة التعاقد بالأرقام» should show the remaining Down Payment.
+            // - «الدفعة التعاقد كتابتا» should show the same amount in words.
+            // - «بيان الباقي من دفعة التعاقد» should be a full Arabic sentence
+            //   describing total DP, what has been paid so far, and what remains.
+            const total = dpTotal != null ? dpTotal : 0
+            const remaining = dpRemaining != null ? dpRemaining : Math.max(0, total - (dpPrelim || 0) - (dpPaid || 0))
+            const paidSoFar = (dpPrelim || 0) + (dpPaid || 0)
+
+            // Numeric placeholders
+            docData['الدفعة التعاقد بالأرقام'] = remaining
+
+            // Words for remaining DP (explicit, in addition to auto *_words fields)
+            const remainingWordsForContract = convertToWords(remaining, lang, { currency })
+            docData['الدفعة التعاقد كتابتا'] = remainingWordsForContract
+
+            // Statement about what remains from the Down Payment
+            if (lang === 'ar') {
+              if (remaining > 0) {
+                docData['بيان الباقي من دفعة التعاقد'] =
+                  `دفعة التعاقد المتفق عليها هي مبلغ ${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} جم، ` +
+                  `تم سداد مبلغ ${paidSoFar.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} جم من قيمة دفعة التعاقد حتى تاريخه، ` +
+                  `ويتبيقى مبلغ ${remaining.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} جم يسدد عند توقيع العقد.`
+              } else {
+                docData['بيان الباقي من دفعة التعاقد'] =
+                  `دفعة التعاقد المتفق عليها هي مبلغ ${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} جم، تم سداده بالكامل.`
+              }
+            } else {
+              // Simple English fallback if the contract is ever generated in English
+              if (remaining > 0) {
+                docData['بيان الباقي من دفعة التعاقد'] =
+                  `The agreed down payment is ${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EGP, ` +
+                  `of which ${paidSoFar.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EGP has been paid so far, ` +
+                  `leaving ${remaining.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EGP to be paid upon signing the contract.`
+              } else {
+                docData['بيان الباقي من دفعة التعاقد'] =
+                  `The agreed down payment is ${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EGP and it has been fully paid.`
               }
             }
           }

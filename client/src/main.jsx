@@ -33,6 +33,7 @@ import InventoryChangeHistory from './admin/InventoryChangeHistory.jsx'
 import UnitHistory from './admin/UnitHistory.jsx'
 import ContractsList from './deals/ContractsList.jsx'
 import ContractDetail from './deals/ContractDetail.jsx'
+import ReservationFormDetail from './deals/ReservationFormDetail.jsx'
 
 function RoleBasedRoute({ children, allowedRoles }) {
   const token = localStorage.getItem('auth_token');
@@ -207,6 +208,27 @@ createRoot(document.getElementById('root')).render(
                 ]}
               >
                 <ContractDetail />
+              </RoleBasedRoute>
+            }
+          />
+          <Route
+            path="/reservation-forms/:id"
+            element={
+              <RoleBasedRoute
+                allowedRoles={[
+                  'financial_admin',
+                  'financial_manager',
+                  'contract_person',
+                  'contract_manager',
+                  'ceo',
+                  'chairman',
+                  'vice_chairman',
+                  'top_management',
+                  'admin',
+                  'superadmin'
+                ]}
+              >
+                <ReservationFormDetail />
               </RoleBasedRoute>
             }
           />

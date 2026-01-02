@@ -173,7 +173,13 @@ export default function ContractDetail() {
         </div>
         <div>
           <strong>Reservation Form:</strong>{' '}
-          {reservationFormId ? `#${reservationFormId}` : '-'}
+          {reservationFormId ? (
+            <Link to={`/reservation-forms/${reservationFormId}`}>
+              #{reservationFormId}
+            </Link>
+          ) : (
+            '-'
+          )}
         </div>
         <div>
           <strong>Unit:</strong> {unitCode}

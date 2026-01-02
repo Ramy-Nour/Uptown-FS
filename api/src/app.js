@@ -255,13 +255,112 @@ app.post('/api/generate-document', authMiddleware, validate(generateDocumentSche
       return bad(res, 404, `Template not found: ${templateName}`)
     }
 
+    // For contract documents, if a deal_id is provided, try to enrich the data with
+    // down payment breakdown from the approved reservation form so templates can
+    // reuse the same DP totals as the Reservation Form without re-calculating.
+    if (type === 'contract' &amp;&amp; deal_id != null) {
+      const id = Number(deal_id)
+      if (Number.isFinite(id) &amp;&amp; id > 0) {
+        try {
+          const rf = await pool.query(
+            `
+            SELECT rf.*
+            FROM reservation_forms rf
+            LEFT JOIN payment_plans pp ON pp.id = rf.payment_plan_id
+            WHERE rf.status = 'approved'
+              AND (
+                pp.deal_id = $1
+                OR (
+                  rf.details->>'deal_id' ~ '^[0-9]+
+
+    // Read, compile and render the docx
+    const content = fs.readFileSync(requestedPath, 'binary')
+    const zip = new PizZip(content)
+    const doc = new Docxtemplater(zip, {
+      paragraphLoop: true,
+      linebreaks: true,
+      delimiters: { start: '<<', end: '>>' } // Autocrat-style placeholders
+    })
+
+    doc.setData(renderData)
+    try {
+      doc.render()
+    } catch (e) {
+      console.error('Docxtemplater render error:', e)
+      return bad(res, 400, 'Failed to render document. Check placeholders and provided data.')
+    }
+
+    const docxBuffer = doc.getZip().generate({ type: 'nodebuffer' })
+    // Convert the filled DOCX to PDF
+    let pdfBuffer
+    try {
+      pdfBuffer = await new Promise((resolve, reject) => {
+        libre.convert(docxBuffer, '.pdf', undefined, (err, done) => {
+          if (err) return reject(err)
+          resolve(done)
+        })
+      })
+    } catch (convErr) {
+      console.error('DOCX -> PDF conversion error:', convErr)
+      return bad(res, 500, 'Failed to convert DOCX to PDF')
+    }
+
+    const outName = path.basename(templateName, path.extname(templateName)) + '-filled.pdf'
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `attachment; filename="${outName}"`)
+    return res.send(pdfBuffer)
+  } catch (err) {
+    console.error('POST /api/generate-document error:', err)
+    return bad(res, 500, 'Internal error during document generation')
+  }
+})
+// Mount documents routes (Client Offer + Reservation Form)
+app.use('/api/documents', documentsRoutes)
+
+// moved: Client Offer PDF endpoint is now in documentsRoutes.js (mounted at /api/documents/client-offer)
+
+// Global error handler
+app.use(errorHandler)
+
+export default app
+                  AND (rf.details->>'deal_id')::numeric = $1
+                )
+              )
+            ORDER BY rf.id DESC
+            LIMIT 1
+            `,
+            [id]
+          )
+          if (rf.rows.length) {
+            const row = rf.rows[0]
+            const details = row.details || {}
+            const dp = details.dp || {}
+            if (dp.total != null) {
+              const v = Number(dp.total)
+              if (Number.isFinite(v) &amp;&amp; v >= 0) {
+                docData.dp_total = v
+              }
+            }
+            if (dp.remaining != null) {
+              const v = Number(dp.remaining)
+              if (Number.isFinite(v) &amp;&amp; v >= 0) {
+                docData.dp_remaining = v
+              }
+            }
+          }
+        } catch (e) {
+          console.error('generate-document: failed to enrich contract with DP data from reservation_forms:', e)
+        }
+      }
+    }
+
     // Build rendering data:
     // - Original keys
-    // - For numeric fields, add "<key>_words" using the convertToWords helper
+    // - For numeric fields, add \"<key>_words\" using the convertToWords helper
     const renderData = { ...docData }
     for (const [k, v] of Object.entries(docData)) {
       const num = Number(v)
-      if (typeof v === 'number' || (typeof v === 'string' && v.trim() !== '' && isFinite(num))) {
+      if (typeof v === 'number' || (typeof v === 'string' &amp;&amp; v.trim() !== '' &amp;&amp; isFinite(num))) {
         renderData[`${k}_words`] = convertToWords(num, lang, { currency })
       }
     }

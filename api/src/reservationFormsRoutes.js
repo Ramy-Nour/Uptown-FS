@@ -261,6 +261,43 @@ router.get(
 )
 
 /**
+ * FM list of approved reservations that have pending amendment requests
+ * NOTE: This route must be declared before /reservation-forms/:id so that
+ *       the literal "amendments" segment is not interpreted as an :id param.
+ */
+router.get(
+  '/reservation-forms/amendments',
+  authMiddleware,
+  requireRole(['financial_manager']),
+  async (req, res) => {
+    try {
+      const q = `
+        SELECT
+          rf.*,
+          pp.deal_id,
+          u.code AS unit_code,
+          u.unit_type
+        FROM reservation_forms rf
+        LEFT JOIN payment_plans pp ON pp.id = rf.payment_plan_id
+        LEFT JOIN units u ON u.id = rf.unit_id
+        WHERE rf.status = 'approved'
+        ORDER BY rf.id DESC`
+      const result = await pool.query(q)
+      const rows = result.rows || []
+      const filtered = rows.filter(r => {
+        const d = r.details || {}
+        const ar = d.amendment_request
+        return ar && ar.state === 'pending'
+      })
+      return ok(res, { reservation_forms: filtered })
+    } catch (e) {
+      console.error('GET /api/workflow/reservation-forms/amendments error:', e)
+      return bad(res, 500, 'Internal error')
+    }
+  }
+)
+
+/**
  * Get a single reservation form by id with deal/unit joins.
  * Accessible to FA/FM, contract roles, and top management for read-only inspection.
  */
@@ -532,40 +569,7 @@ router.post(
   }
 )
 
-/**
- * FM list of approved reservations that have pending amendment requests
- */
-router.get(
-  '/reservation-forms/amendments',
-  authMiddleware,
-  requireRole(['financial_manager']),
-  async (req, res) => {
-    try {
-      const q = `
-        SELECT
-          rf.*,
-          pp.deal_id,
-          u.code AS unit_code,
-          u.unit_type
-        FROM reservation_forms rf
-        LEFT JOIN payment_plans pp ON pp.id = rf.payment_plan_id
-        LEFT JOIN units u ON u.id = rf.unit_id
-        WHERE rf.status = 'approved'
-        ORDER BY rf.id DESC`
-      const result = await pool.query(q)
-      const rows = result.rows || []
-      const filtered = rows.filter(r => {
-        const d = r.details || {}
-        const ar = d.amendment_request
-        return ar && ar.state === 'pending'
-      })
-      return ok(res, { reservation_forms: filtered })
-    } catch (e) {
-      console.error('GET /api/workflow/reservation-forms/amendments error:', e)
-      return bad(res, 500, 'Internal error')
-    }
-  }
-)
+
 
 /**
  * FM approve an amendment request: updates reservation_date/preliminary_payment and records history

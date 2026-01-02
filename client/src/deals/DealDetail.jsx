@@ -24,6 +24,8 @@ export default function DealDetail() {
   const [savingCalc, setSavingCalc] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [calcCommissionLoading, setCalcCommissionLoading] = useState(false)
+  const [dpSummary, setDpSummary] = useState(null)
+  const [dpSummaryError, setDpSummaryError] = useState('')
   const { setShow, setMessage } = useLoader()
   const user = JSON.parse(localStorage.getItem('auth_user') || '{}')
   const role = user?.role || 'user'
@@ -86,6 +88,33 @@ export default function DealDetail() {
   }
 
   useEffect(() => { load() }, [id])
+
+  // Load financial summary (Down Payment breakdown and remaining price) from server
+  useEffect(() => {
+    async function loadDpSummary() {
+      try {
+        setDpSummaryError('')
+        if (!deal?.id) {
+          setDpSummary(null)
+          return
+        }
+        const resp = await fetchWithAuth(`${API_URL}/api/deals/${deal.id}/financial-summary`)
+        const data = await resp.json().catch(() => null)
+        if (!resp.ok) {
+          const msg = data?.error?.message || 'Failed to load financial summary'
+          setDpSummary(null)
+          setDpSummaryError(msg)
+          return
+        }
+        setDpSummary(data?.summary || null)
+      } catch (e) {
+        setDpSummary(null)
+        setDpSummaryError(e?.message || String(e))
+      }
+    }
+    loadDpSummary()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deal?.id])
 
   // Load other deals for this unit (for visibility only; no locking)
   useEffect(() => {
@@ -695,6 +724,61 @@ export default function DealDetail() {
                 new Date().toISOString().slice(0, 10)}
             </div>
           </div>
+
+          {dpSummary && (
+            <div
+              style={{
+                margin: '0 0 12px 0',
+                padding: '10px 12px',
+                borderRadius: 8,
+                background: '#f0f4ff',
+                border: '1px solid #c7d2fe',
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 16
+              }}
+            >
+              <div>
+                <strong>Total Price (excl. maintenance):</strong>{' '}
+                {Number(dpSummary.total_excl || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EGP
+              </div>
+              <div>
+                <strong>Maintenance Deposit:</strong>{' '}
+                {Number(dpSummary.maintenance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EGP
+              </div>
+              <div>
+                <strong>Total Price (incl. maintenance):</strong>{' '}
+                {Number(dpSummary.total_incl || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EGP
+              </div>
+              <div>
+                <strong>Total Down Payment:</strong>{' '}
+                {Number(dpSummary.dp_total || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EGP
+              </div>
+              <div>
+                <strong>Preliminary Payment:</strong>{' '}
+                {Number(dpSummary.dp_preliminary_amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EGP
+                {dpSummary.dp_preliminary_date && (
+                  <> ({new Date(dpSummary.dp_preliminary_date).toLocaleDateString()})</>
+                )}
+              </div>
+              <div>
+                <strong>Paid from Down Payment:</strong>{' '}
+                {Number(dpSummary.dp_paid_amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EGP
+                {dpSummary.dp_paid_date && (
+                  <> ({new Date(dpSummary.dp_paid_date).toLocaleDateString()})</>
+                )}
+              </div>
+              <div>
+                <strong>Remaining Down Payment:</strong>{' '}
+                {Number(dpSummary.dp_remaining || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EGP
+              </div>
+              <div>
+                <strong>Remaining Price after Down Payment:</strong>{' '}
+                {Number(dpSummary.remaining_after_dp || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EGP
+              </div>
+            </div>
+          )}
+
           {schedule.length === 0 ? (
             <p style={{ color: '#64748b' }}>
               No saved schedule. Use Edit Offer to generate and save one.

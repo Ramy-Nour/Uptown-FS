@@ -271,7 +271,7 @@ app.post('/api/generate-document', authMiddleware, validate(generateDocumentSche
               AND (
                 pp.deal_id = $1
                 OR (
-                  rf.details->>'deal_id' ~ '^[0-9]+`
+                  rf.details->>'deal_id' ~ '^[0-9]+
 
     // Read, compile and render the docx
     const content = fs.readFileSync(requestedPath, 'binary')
@@ -369,20 +369,21 @@ export default app
             }
 
             // Map to Arabic contract placeholders while keeping template names:
-            // - «الدفعة التعاقد بالأرقام» should show the remaining Down Payment.
-            // - «الدفعة التعاقد كتابتا» should show the same amount in words.
+            // - «الدفعة التعاقد بالأرقام» should show the Total Down Payment (from the offer).
+            // - «الدفعة التعاقد كتابتا» should show the same total amount in words.
             // - «بيان الباقي من دفعة التعاقد» should be a full Arabic sentence
-            //   describing total DP, what has been paid so far, and what remains.
+            //   describing what remains from the Down Payment (and, when 0, that it
+            //   has been fully paid with the relevant date).
             const total = dpTotal != null ? dpTotal : 0
             const remaining = dpRemaining != null ? dpRemaining : Math.max(0, total - (dpPrelim || 0) - (dpPaid || 0))
             const paidSoFar = (dpPrelim || 0) + (dpPaid || 0)
 
-            // Numeric placeholders
-            docData['الدفعة التعاقد بالأرقام'] = remaining
+            // Numeric placeholders (Total Down Payment)
+            docData['الدفعة التعاقد بالأرقام'] = total
 
-            // Words for remaining DP (explicit, in addition to auto *_words fields)
-            const remainingWordsForContract = convertToWords(remaining, lang, { currency })
-            docData['الدفعة التعاقد كتابتا'] = remainingWordsForContract
+            // Words for Total Down Payment (explicit, in addition to auto *_words fields)
+            const totalDpWordsForContract = convertToWords(total, lang, { currency })
+            docData['الدفعة التعاقد كتابتا'] = totalDpWordsForContract
 
             // Statement about what remains from the Down Payment
             if (lang === 'ar') {
@@ -392,8 +393,29 @@ export default app
                   `تم سداد مبلغ ${paidSoFar.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} جم من قيمة دفعة التعاقد حتى تاريخه، ` +
                   `ويتبيقى مبلغ ${remaining.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} جم يسدد عند توقيع العقد.`
               } else {
+                // When remaining DP == 0, it has been fully paid. Use the last
+                // DP-related date from the reservation process (paid_date, then
+                // preliminary_date, then reservation_date) as the completion date.
+                let completionDateText = ''
+                try {
+                  const srcDate =
+                    dp.paid_date ||
+                    dp.preliminary_date ||
+                    row.reservation_date ||
+                    null
+                  if (srcDate) {
+                    const d = new Date(srcDate)
+                    if (!Number.isNaN(d.getTime())) {
+                      const dd = String(d.getDate()).padStart(2, '0')
+                      const mm = String(d.getMonth() + 1).padStart(2, '0')
+                      const yyyy = d.getFullYear()
+                      completionDateText = `${dd}/${mm}/${yyyy}`
+                    }
+                  }
+                } catch {}
                 docData['بيان الباقي من دفعة التعاقد'] =
-                  `دفعة التعاقد المتفق عليها هي مبلغ ${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} جم، تم سداده بالكامل.`
+                  `دفعة التعاقد المتفق عليها هي مبلغ ${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} جم، تم سداده بالكامل` +
+                  (completionDateText ? ` بتاريخ ${completionDateText}.` : '.')
               }
             } else {
               // Simple English fallback if the contract is ever generated in English
@@ -403,8 +425,269 @@ export default app
                   `of which ${paidSoFar.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EGP has been paid so far, ` +
                   `leaving ${remaining.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EGP to be paid upon signing the contract.`
               } else {
+                let completionDateText = ''
+                try {
+                  const srcDate =
+                    dp.paid_date ||
+                    dp.preliminary_date ||
+                    row.reservation_date ||
+                    null
+                  if (srcDate) {
+                    const d = new Date(srcDate)
+                    if (!Number.isNaN(d.getTime())) {
+                      const dd = String(d.getDate()).padStart(2, '0')
+                      const mm = String(d.getMonth() + 1).padStart(2, '0')
+                      const yyyy = d.getFullYear()
+                      completionDateText = `${dd}/${mm}/${yyyy}`
+                    }
+                  }
+                } catch {}
                 docData['بيان الباقي من دفعة التعاقد'] =
-                  `The agreed down payment is ${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EGP and it has been fully paid.`
+                  `The agreed down payment is ${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EGP and it has been fully paid` +
+                  (completionDateText ? ` on ${completionDateText}.` : '.')
+              }
+            }
+          }
+        } catch (e) {
+          console.error('generate-document: failed to enrich contract with DP data from reservation_forms:', e)
+        }
+      }
+    }
+
+    // Build rendering data:
+    // - Original keys
+    // - For numeric fields, add \"<key>_words\" using the convertToWords helper
+    const renderData = { ...docData }
+    for (const [k, v] of Object.entries(docData)) {
+      const num = Number(v)
+      if (typeof v === 'number' || (typeof v === 'string' &amp;&amp; v.trim() !== '' &amp;&amp; isFinite(num))) {
+        renderData[`${k}_words`] = convertToWords(num, lang, { currency })
+      }
+    }
+
+    // Read, compile and render the docx
+    const content = fs.readFileSync(requestedPath, 'binary')
+    const zip = new PizZip(content)
+    const doc = new Docxtemplater(zip, {
+      paragraphLoop: true,
+      linebreaks: true,
+      delimiters: { start: '<<', end: '>>' } // Autocrat-style placeholders
+    })
+
+    doc.setData(renderData)
+    try {
+      doc.render()
+    } catch (e) {
+      console.error('Docxtemplater render error:', e)
+      return bad(res, 400, 'Failed to render document. Check placeholders and provided data.')
+    }
+
+    const docxBuffer = doc.getZip().generate({ type: 'nodebuffer' })
+    // Convert the filled DOCX to PDF
+    let pdfBuffer
+    try {
+      pdfBuffer = await new Promise((resolve, reject) => {
+        libre.convert(docxBuffer, '.pdf', undefined, (err, done) => {
+          if (err) return reject(err)
+          resolve(done)
+        })
+      })
+    } catch (convErr) {
+      console.error('DOCX -> PDF conversion error:', convErr)
+      return bad(res, 500, 'Failed to convert DOCX to PDF')
+    }
+
+    const outName = path.basename(templateName, path.extname(templateName)) + '-filled.pdf'
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `attachment; filename="${outName}"`)
+    return res.send(pdfBuffer)
+  } catch (err) {
+    console.error('POST /api/generate-document error:', err)
+    return bad(res, 500, 'Internal error during document generation')
+  }
+})
+// Mount documents routes (Client Offer + Reservation Form)
+app.use('/api/documents', documentsRoutes)
+
+// moved: Client Offer PDF endpoint is now in documentsRoutes.js (mounted at /api/documents/client-offer)
+
+// Global error handler
+app.use(errorHandler)
+
+export default app
+
+    // Read, compile and render the docx
+    const content = fs.readFileSync(requestedPath, 'binary')
+    const zip = new PizZip(content)
+    const doc = new Docxtemplater(zip, {
+      paragraphLoop: true,
+      linebreaks: true,
+      delimiters: { start: '<<', end: '>>' } // Autocrat-style placeholders
+    })
+
+    doc.setData(renderData)
+    try {
+      doc.render()
+    } catch (e) {
+      console.error('Docxtemplater render error:', e)
+      return bad(res, 400, 'Failed to render document. Check placeholders and provided data.')
+    }
+
+    const docxBuffer = doc.getZip().generate({ type: 'nodebuffer' })
+    // Convert the filled DOCX to PDF
+    let pdfBuffer
+    try {
+      pdfBuffer = await new Promise((resolve, reject) => {
+        libre.convert(docxBuffer, '.pdf', undefined, (err, done) => {
+          if (err) return reject(err)
+          resolve(done)
+        })
+      })
+    } catch (convErr) {
+      console.error('DOCX -> PDF conversion error:', convErr)
+      return bad(res, 500, 'Failed to convert DOCX to PDF')
+    }
+
+    const outName = path.basename(templateName, path.extname(templateName)) + '-filled.pdf'
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `attachment; filename="${outName}"`)
+    return res.send(pdfBuffer)
+  } catch (err) {
+    console.error('POST /api/generate-document error:', err)
+    return bad(res, 500, 'Internal error during document generation')
+  }
+})
+// Mount documents routes (Client Offer + Reservation Form)
+app.use('/api/documents', documentsRoutes)
+
+// moved: Client Offer PDF endpoint is now in documentsRoutes.js (mounted at /api/documents/client-offer)
+
+// Global error handler
+app.use(errorHandler)
+
+export default app
+                  AND (rf.details->>'deal_id')::numeric = $1
+                )
+              )
+            ORDER BY rf.id DESC
+            LIMIT 1
+            `,
+            [id]
+          )
+          if (rf.rows.length) {
+            const row = rf.rows[0]
+            const details = row.details || {}
+            const dp = details.dp || {}
+
+            let dpTotal = null
+            let dpRemaining = null
+            let dpPrelim = null
+            let dpPaid = null
+
+            if (dp.total != null) {
+              const v = Number(dp.total)
+              if (Number.isFinite(v) &amp;&amp; v >= 0) {
+                dpTotal = v
+                docData.dp_total = v
+              }
+            }
+            if (dp.remaining != null) {
+              const v = Number(dp.remaining)
+              if (Number.isFinite(v) &amp;&amp; v >= 0) {
+                dpRemaining = v
+                docData.dp_remaining = v
+              }
+            }
+            if (dp.preliminary_amount != null) {
+              const v = Number(dp.preliminary_amount)
+              if (Number.isFinite(v) &amp;&amp; v >= 0) {
+                dpPrelim = v
+              }
+            }
+            if (dp.paid_amount != null) {
+              const v = Number(dp.paid_amount)
+              if (Number.isFinite(v) &amp;&amp; v >= 0) {
+                dpPaid = v
+              }
+            }
+
+            // Map to Arabic contract placeholders while keeping template names:
+            // - «الدفعة التعاقد بالأرقام» should show the Total Down Payment (from the offer).
+            // - «الدفعة التعاقد كتابتا» should show the same total amount in words.
+            // - «بيان الباقي من دفعة التعاقد» should be a full Arabic sentence
+            //   describing what remains from the Down Payment (and, when 0, that it
+            //   has been fully paid with the relevant date).
+            const total = dpTotal != null ? dpTotal : 0
+            const remaining = dpRemaining != null ? dpRemaining : Math.max(0, total - (dpPrelim || 0) - (dpPaid || 0))
+            const paidSoFar = (dpPrelim || 0) + (dpPaid || 0)
+
+            // Numeric placeholders (Total Down Payment)
+            docData['الدفعة التعاقد بالأرقام'] = total
+
+            // Words for Total Down Payment (explicit, in addition to auto *_words fields)
+            const totalDpWordsForContract = convertToWords(total, lang, { currency })
+            docData['الدفعة التعاقد كتابتا'] = totalDpWordsForContract
+
+            // Statement about what remains from the Down Payment
+            if (lang === 'ar') {
+              if (remaining > 0) {
+                docData['بيان الباقي من دفعة التعاقد'] =
+                  `دفعة التعاقد المتفق عليها هي مبلغ ${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} جم، ` +
+                  `تم سداد مبلغ ${paidSoFar.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} جم من قيمة دفعة التعاقد حتى تاريخه، ` +
+                  `ويتبيقى مبلغ ${remaining.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} جم يسدد عند توقيع العقد.`
+              } else {
+                // When remaining DP == 0, it has been fully paid. Use the last
+                // DP-related date from the reservation process (paid_date, then
+                // preliminary_date, then reservation_date) as the completion date.
+                let completionDateText = ''
+                try {
+                  const srcDate =
+                    dp.paid_date ||
+                    dp.preliminary_date ||
+                    row.reservation_date ||
+                    null
+                  if (srcDate) {
+                    const d = new Date(srcDate)
+                    if (!Number.isNaN(d.getTime())) {
+                      const dd = String(d.getDate()).padStart(2, '0')
+                      const mm = String(d.getMonth() + 1).padStart(2, '0')
+                      const yyyy = d.getFullYear()
+                      completionDateText = `${dd}/${mm}/${yyyy}`
+                    }
+                  }
+                } catch {}
+                docData['بيان الباقي من دفعة التعاقد'] =
+                  `دفعة التعاقد المتفق عليها هي مبلغ ${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} جم، تم سداده بالكامل` +
+                  (completionDateText ? ` بتاريخ ${completionDateText}.` : '.')
+              }
+            } else {
+              // Simple English fallback if the contract is ever generated in English
+              if (remaining > 0) {
+                docData['بيان الباقي من دفعة التعاقد'] =
+                  `The agreed down payment is ${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EGP, ` +
+                  `of which ${paidSoFar.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EGP has been paid so far, ` +
+                  `leaving ${remaining.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EGP to be paid upon signing the contract.`
+              } else {
+                let completionDateText = ''
+                try {
+                  const srcDate =
+                    dp.paid_date ||
+                    dp.preliminary_date ||
+                    row.reservation_date ||
+                    null
+                  if (srcDate) {
+                    const d = new Date(srcDate)
+                    if (!Number.isNaN(d.getTime())) {
+                      const dd = String(d.getDate()).padStart(2, '0')
+                      const mm = String(d.getMonth() + 1).padStart(2, '0')
+                      const yyyy = d.getFullYear()
+                      completionDateText = `${dd}/${mm}/${yyyy}`
+                    }
+                  }
+                } catch {}
+                docData['بيان الباقي من دفعة التعاقد'] =
+                  `The agreed down payment is ${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EGP and it has been fully paid` +
+                  (completionDateText ? ` on ${completionDateText}.` : '.')
               }
             }
           }

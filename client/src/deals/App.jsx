@@ -16,7 +16,6 @@ import InventoryList from './InventoryList.jsx'
 import PaymentPlanEdits from './PaymentPlanEdits.jsx'
 import ContractsList from './ContractsList.jsx'
 import ContractDetail from './ContractDetail.jsx'
-import BrandHeaderLayout from '../components/BrandHeaderLayout.jsx'
 
 export default function DealsApp() {
   const handleLogout = async () => {

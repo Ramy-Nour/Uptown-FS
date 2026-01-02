@@ -4,6 +4,38 @@ import { fetchWithAuth, API_URL } from '../lib/apiClient.js'
 import { notifyError, notifySuccess } from '../lib/notifications.js'
 import { th, td } from '../lib/ui.js'
 import { generateReservationFormPdf } from '../lib/docExports.js'
+import BrandHeader from '../lib/BrandHeader.jsx'
+
+const APP_TITLE = import.meta.env.VITE_APP_TITLE || 'Uptown Financial System'
+
+async function handleLogout() {
+  try {
+    const rt = localStorage.getItem('refresh_token')
+    if (rt) {
+      await fetch(`${API_URL}/api/auth/logout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken: rt })
+      }).catch(() => {})
+    }
+  } finally {
+    localStorage.removeItem('auth_token')
+    localStorage.removeItem('refresh_token')
+    localStorage.removeItem('auth_user')
+    window.location.href = '/login'
+  }
+}
+
+function renderWithShell(content) {
+  return (
+    <div>
+      <BrandHeader title={APP_TITLE} onLogout={handleLogout} />
+      <div style={{ padding: 20, maxWidth: 1200, margin: '0 auto' }}>
+        {content}
+      </div>
+    </div>
+  )
+}
 
 export default function ContractDetail() {
   const { id } = useParams()
@@ -86,15 +118,15 @@ export default function ContractDetail() {
   }, [id])
 
   if (loading && !contract) {
-    return <p>Loading…</p>
+    return renderWithShell(<p>Loading…</p>)
   }
 
   if (error && !contract) {
-    return <p style={{ color: '#e11d48' }}>{error}</p>
+    return renderWithShell(<p style={{ color: '#e11d48' }}>{error}</p>)
   }
 
   if (!contract) {
-    return <p>No contract found.</p>
+    return renderWithShell(<p>No contract found.</p>)
   }
 
   const status = String(contract.status || '').toUpperCase()
@@ -122,7 +154,7 @@ export default function ContractDetail() {
   const canExecute = role === 'contract_person' && status === 'APPROVED'
   const canGeneratePdf = !!dealId && (status === 'APPROVED' || status === 'EXECUTED')
 
-  return (
+  return renderWithShell(
     <div>
       <button
         type="button"

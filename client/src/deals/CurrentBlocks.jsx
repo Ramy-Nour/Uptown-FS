@@ -23,6 +23,7 @@ export default function CurrentBlocks() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [creating, setCreating] = useState(new Set())
+  const [printing, setPrinting] = useState(new Set())
   // keyed by block id:
   // {
   //   selectedPlanId,
@@ -227,6 +228,9 @@ export default function CurrentBlocks() {
 
   async function printReservationPdf(id) {
     try {
+      // mark this row as printing so the button can be disabled and show a progress label
+      setPrinting(s => new Set([...s, id]))
+
       const f = form[id] || {}
       const plans = f.plans || []
       const plan = plans.find(p => p.id === f.selectedPlanId) || plans[0]
@@ -263,6 +267,22 @@ export default function CurrentBlocks() {
       URL.revokeObjectURL(url)
     } catch (e) {
       alert(e.message || String(e))
+    } finally {
+      // clear printing state so the button re-enables even if an error occurs
+      setPrinting(s => {
+        const n = new Set(s)
+        n.delete(id)
+        return n
+      })
+    }
+  } catch (e) {
+      alert(e.message || String(e))
+    } finally {
+      setPrinting(s => {
+        const n = new Set(s)
+        n.delete(id)
+        return n
+      })
     }
   }
 
@@ -561,12 +581,12 @@ export default function CurrentBlocks() {
                         <button
                           style={btn}
                           onClick={() => printReservationPdf(r.id)}
-                          disabled={!isApproved}
+                          disabled={!isApproved || printing.has(r.id)}
                           title={isApproved
                             ? 'Generate Reservation Form PDF using the approved reservation (date and Preliminary Payment are locked).'
                             : 'Reservation PDF can only be printed after the reservation is approved by the Financial Manager.'}
                         >
-                          Print Reservation PDF
+                          {printing.has(r.id) ? 'Generating…' : 'Print Reservation PDF'}
                         </button>
                         {isApproved && (
                           <button

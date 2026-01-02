@@ -201,11 +201,13 @@ export default function BrandHeader({ title, onLogout }) {
         ]
       case 'contract_person':
         return [
-          ...baseWithoutCalc
+          ...baseWithoutCalc,
+          { label: 'Contracts', href: '/contracts' }
         ]
       case 'contract_manager':
         return [
           ...baseWithoutCalc,
+          { label: 'Contracts', href: '/contracts' },
           { label: 'Contracts Team', href: '/admin/contracts-team' },
           { label: 'Workflow Logs', href: '/admin/workflow-logs' },
           { label: 'Hold Approvals', href: '/admin/hold-approvals' }
@@ -218,6 +220,7 @@ export default function BrandHeader({ title, onLogout }) {
           ...baseWithoutCalc,
           { label: 'Unit Model Queue', href: '/deals/queues' },
           { label: 'Pricing Queue', href: '/admin/standard-pricing-approvals' },
+          { label: 'Contracts', href: '/contracts' },
           { label: 'Inventory Drafts', href: '/admin/inventory-drafts' },
           { label: 'Unit History', href: '/admin/unit-history' },
           { label: 'Payment Threshold Approvals', href: '/admin/payment-thresholds' },

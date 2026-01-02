@@ -261,6 +261,51 @@ router.get(
 )
 
 /**
+ * Get a single reservation form by id with deal/unit joins.
+ * Accessible to FA/FM, contract roles, and top management for read-only inspection.
+ */
+router.get(
+  '/reservation-forms/:id',
+  authMiddleware,
+  requireRole([
+    'financial_admin',
+    'financial_manager',
+    'contract_person',
+    'contract_manager',
+    'ceo',
+    'chairman',
+    'vice_chairman',
+    'top_management',
+    'admin',
+    'superadmin'
+  ]),
+  async (req, res) => {
+    try {
+      const id = ensureNumber(req.params.id)
+      if (!id) return bad(res, 400, 'Invalid id')
+      const q = `
+        SELECT
+          rf.*,
+          pp.deal_id,
+          u.code AS unit_code,
+          u.unit_type,
+          (rf.details->'clientInfo'->>'buyer_name') AS buyer_name
+        FROM reservation_forms rf
+        LEFT JOIN payment_plans pp ON pp.id = rf.payment_plan_id
+        LEFT JOIN units u ON u.id = rf.unit_id
+        WHERE rf.id = $1
+      `
+      const result = await pool.query(q, [id])
+      if (result.rows.length === 0) return bad(res, 404, 'Reservation form not found')
+      return ok(res, { reservation_form: result.rows[0] })
+    } catch (e) {
+      console.error('GET /api/workflow/reservation-forms/:id error:', e)
+      return bad(res, 500, 'Internal error')
+    }
+  }
+)
+
+/**
  * FA cancel a pending reservation form
  * - Only allowed while status='pending_approval'
  * - Marks status='cancelled' and records cancellation metadata in details

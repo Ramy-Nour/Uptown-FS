@@ -23,6 +23,7 @@ export default function CurrentBlocks() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [creating, setCreating] = useState(new Set())
+  const [printing, setPrinting] = useState(new Set())
   // keyed by block id:
   // {
   //   selectedPlanId,
@@ -227,6 +228,9 @@ export default function CurrentBlocks() {
 
   async function printReservationPdf(id) {
     try {
+      // mark this row as printing so the button can be disabled and show a progress label
+      setPrinting(s => new Set([...s, id]))
+
       const f = form[id] || {}
       const plans = f.plans || []
       const plan = plans.find(p => p.id === f.selectedPlanId) || plans[0]
@@ -263,6 +267,22 @@ export default function CurrentBlocks() {
       URL.revokeObjectURL(url)
     } catch (e) {
       alert(e.message || String(e))
+    } finally {
+      // clear printing state so the button re-enables even if an error occurs
+      setPrinting(s => {
+        const n = new Set(s)
+        n.delete(id)
+        return n
+      })
+    }
+  } catch (e) {
+      alert(e.message || String(e))
+    } finally {
+      setPrinting(s => {
+        const n = new Set(s)
+        n.delete(id)
+        return n
+      })
     }
   }
 
@@ -481,6 +501,44 @@ export default function CurrentBlocks() {
                           ? 'Preliminary Payment is locked after Financial Manager approval.'
                           : 'Preliminary Reservation Payment to be approved by the Financial Manager (enter 0 if none).'}
                       />
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <input
+                          style={{ ...ctrl, background: isApproved ? '#f8fafc' : '#fff' }}
+                          type="date"
+                          placeholder="Preliminary Payment Date"
+                          value={preliminaryPaymentDateValue}
+                          onChange={e => setBlockForm(r.id, { preliminaryPaymentDate: e.target.value })}
+                          disabled={isApproved}
+                          title={isApproved
+                            ? 'Preliminary Payment Date is locked after Financial Manager approval.'
+                            : 'Business date when the Preliminary Payment was or will be paid.'}
+                        />
+                        <span style={{ fontSize: 11, color: '#64748b' }}>Format: dd/MM/YYYY</span>
+                      </div>
+                      <input
+                        style={{ ...ctrl, background: isApproved ? '#f8fafc' : '#fff' }}
+                        placeholder="Paid from Down Payment (before reservation)"
+                        value={paidDownPaymentAmountValue}
+                        onChange={e => setBlockForm(r.id, { paidDownPaymentAmount: e.target.value })}
+                        disabled={isApproved}
+                        title={isApproved
+                          ? 'Paid Down Payment is locked after Financial Manager approval.'
+                          : 'Optional amount already paid from the down payment before the reservation form (can be 0 or empty).'}
+                      />
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <input
+                          style={{ ...ctrl, background: isApproved ? '#f8fafc' : '#fff' }}
+                          type="date"
+                          placeholder="Paid Down Payment Date"
+                          value={paidDownPaymentDateValue}
+                          onChange={e => setBlockForm(r.id, { paidDownPaymentDate: e.target.value })}
+                          disabled={isApproved}
+                          title={isApproved
+                            ? 'Paid Down Payment Date is locked after Financial Manager approval.'
+                            : 'Date when the additional paid down payment amount was or will be paid (required if an amount is entered).'}
+                        />
+                        <span style={{ fontSize: 11, color: '#64748b' }}>Format: dd/MM/YYYY</span>
+                      </div>
                       <select
                         style={ctrl}
                         value={languageValue}
@@ -523,12 +581,12 @@ export default function CurrentBlocks() {
                         <button
                           style={btn}
                           onClick={() => printReservationPdf(r.id)}
-                          disabled={!isApproved}
+                          disabled={!isApproved || printing.has(r.id)}
                           title={isApproved
                             ? 'Generate Reservation Form PDF using the approved reservation (date and Preliminary Payment are locked).'
                             : 'Reservation PDF can only be printed after the reservation is approved by the Financial Manager.'}
                         >
-                          Print Reservation PDF
+                          {printing.has(r.id) ? 'Generating…' : 'Print Reservation PDF'}
                         </button>
                         {isApproved && (
                           <button

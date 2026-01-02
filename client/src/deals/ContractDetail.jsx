@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { fetchWithAuth, API_URL } from '../lib/apiClient.js'
 import { notifyError, notifySuccess } from '../lib/notifications.js'
 import { th, td } from '../lib/ui.js'
+import { generateReservationFormPdf } from '../lib/docExports.js'
 
 export default function ContractDetail() {
   const { id } = useParams()
@@ -98,6 +99,7 @@ export default function ContractDetail() {
 
   const status = String(contract.status || '').toUpperCase()
   const dealId = contract.deal_id || null
+  const reservationFormId = contract.reservation_form_id || null
   const unitCode = contract.unit_code || contract.unit?.unit_code || '-'
   const buyerName = contract.buyer_name || contract.buyer || contract.client_name || '-'
   const createdAt = contract.created_at ? new Date(contract.created_at).toLocaleString() : '-'
@@ -168,6 +170,10 @@ export default function ContractDetail() {
           ) : (
             '-'
           )}
+        </div>
+        <div>
+          <strong>Reservation Form:</strong>{' '}
+          {reservationFormId ? `#${reservationFormId}` : '-'}
         </div>
         <div>
           <strong>Unit:</strong> {unitCode}
@@ -368,6 +374,39 @@ export default function ContractDetail() {
             style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #4b5563', background: '#fff', color: '#111827', cursor: 'pointer' }}
           >
             {pdfLoading ? 'Generating PDF…' : 'Generate Contract PDF'}
+          </button>
+        )}
+
+        {reservationFormId && (
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                setPdfLoading(true)
+                const body = {
+                  deal_id: dealId ? Number(dealId) : undefined,
+                  reservation_form_id: Number(reservationFormId)
+                }
+                const { blob, filename } = await generateReservationFormPdf(body, API_URL)
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = filename
+                document.body.appendChild(a)
+                a.click()
+                document.body.removeChild(a)
+                URL.revokeObjectURL(url)
+                notifySuccess('Reservation Form PDF generated successfully.')
+              } catch (e) {
+                notifyError(e, 'Failed to generate Reservation Form PDF')
+              } finally {
+                setPdfLoading(false)
+              }
+            }}
+            disabled={pdfLoading}
+            style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #4b5563', background: '#fff', color: '#111827', cursor: 'pointer' }}
+          >
+            {pdfLoading ? 'Generating…' : 'View Reservation Form PDF'}
           </button>
         )}
       </div>

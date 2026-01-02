@@ -12,6 +12,9 @@ export default function ContractDetail() {
   const [error, setError] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
   const [pdfLoading, setPdfLoading] = useState(false)
+  const [dpSummary, setDpSummary] = useState(null)
+  const [dpSummaryError, setDpSummaryError] = useState('')
+  const [historyRows, setHistoryRows] = useState([])
 
   const user = (() => {
     try {
@@ -31,7 +34,43 @@ export default function ContractDetail() {
       if (!resp.ok) {
         throw new Error(data?.error?.message || 'Failed to load contract')
       }
-      setContract(data.contract || data)
+      const c = data.contract || data
+      setContract(c)
+
+      // Load financial summary when we know deal_id
+      const dealIdNum = Number(c.deal_id || 0)
+      if (dealIdNum) {
+        try {
+          setDpSummaryError('')
+          const sResp = await fetchWithAuth(`${API_URL}/api/deals/${dealIdNum}/financial-summary`)
+          const sData = await sResp.json().catch(() => null)
+          if (!sResp.ok) {
+            setDpSummary(null)
+            setDpSummaryError(sData?.error?.message || 'Failed to load financial summary')
+          } else {
+            setDpSummary(sData?.summary || null)
+          }
+        } catch (e) {
+          setDpSummary(null)
+          setDpSummaryError(e?.message || String(e))
+        }
+      } else {
+        setDpSummary(null)
+        setDpSummaryError('')
+      }
+
+      // Load contracts history
+      try {
+        const hResp = await fetchWithAuth(`${API_URL}/api/contracts/${c.id}/history`)
+        const hData = await hResp.json().catch(() => ({}))
+        if (hResp.ok && Array.isArray(hData.history)) {
+          setHistoryRows(hData.history)
+        } else {
+          setHistoryRows([])
+        }
+      } catch {
+        setHistoryRows([])
+      }
     } catch (e) {
       const msg = e.message || String(e)
       setError(msg)
@@ -333,12 +372,123 @@ export default function ContractDetail() {
         )}
       </div>
 
-      <h3>Snapshot</h3>
-      <p style={{ fontSize: 13, color: '#6b7280', marginTop: 0 }}>
-        This section will eventually show the full contract snapshot (reservation, down payment breakdown,
-        calculator details, and approval trail). For now it renders the raw payload for inspection only.
-      </p>
+      {/* Financial summary (down payment and remaining price) */}
+      <h3>Financial Summary</h3>
+      {dpSummaryError && (
+        <p style={{ fontSize: 13, color: '#e11d48', marginTop: 0 }}>{dpSummaryError}</p>
+      )}
+      {dpSummary ? (
+        <div
+          style={{
+            margin: '6px 0 16px 0',
+            padding: '10px 12px',
+            borderRadius: 10,
+            border: '1px solid #e5e7eb',
+            background: '#fefce8',
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 16
+          }}
+        >
+          <div>
+            <strong>Total Price (excl. maintenance):</strong>{' '}
+            {Number(dpSummary.total_excl || 0).toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2
+            })}
+          </div>
+          <div>
+            <strong>Maintenance Deposit:</strong>{' '}
+            {Number(dpSummary.maintenance_deposit || 0).toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2
+            })}
+          </div>
+          <div>
+            <strong>Total Down Payment:</strong>{' '}
+            {Number(dpSummary.dp_total || 0).toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2
+            })}
+          </div>
+          <div>
+            <strong>Preliminary Payment:</strong>{' '}
+            {Number(dpSummary.preliminary_amount || 0).toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2
+            })}
+          </div>
+          <div>
+            <strong>Paid from Down Payment:</strong>{' '}
+            {Number(dpSummary.paid_amount || 0).toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2
+            })}
+          </div>
+          <div>
+            <strong>Remaining Down Payment:</strong>{' '}
+            {Number(dpSummary.dp_remaining || 0).toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2
+            })}
+          </div>
+          <div>
+            <strong>Remaining Price after DP:</strong>{' '}
+            {Number(dpSummary.remaining_after_dp || 0).toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2
+            })}
+          </div>
+        </div>
+      ) : (
+        !dpSummaryError && (
+          <p style={{ fontSize: 13, color: '#6b7280', marginTop: 0 }}>
+            No financial summary available for this contract&apos;s deal yet.
+          </p>
+        )
+      )}
 
+      {/* History table */}
+      <h3>Approval History</h3>
+      <p style={{ fontSize: 13, color: '#6b7280', marginTop: 0 }}>
+        History entries are recorded whenever a contract is created, approved, rejected, or executed.
+      </p>
+      <div style={{ overflow: 'auto', border: '1px solid #e5e7eb', borderRadius: 10, marginBottom: 16 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              <th style={th}>#</th>
+              <th style={th}>When</th>
+              <th style={th}>Action</th>
+              <th style={th}>By</th>
+            </tr>
+          </thead>
+          <tbody>
+            {historyRows.length === 0 && (
+              <tr>
+                <td style={td} colSpan={4}>No history entries yet.</td>
+              </tr>
+            )}
+            {historyRows.map((h, idx) => (
+              <tr key={h.id}>
+                <td style={td}>{idx + 1}</td>
+                <td style={td}>
+                  {h.created_at ? new Date(h.created_at).toLocaleString() : '-'}
+                </td>
+                <td style={td}>{h.change_type || '-'}</td>
+                <td style={td}>{h.changed_by_name || h.changed_by || '-'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Raw JSON snapshot for debugging */}
+      <h3>Raw Snapshot</h3>
+      <p style={{ fontSize: 13, color: '#6b7280', marginTop: 0 }}>
+        Full contract row as returned by /api/contracts/:id. This is kept for debugging and will be
+        gradually replaced by structured sections.
+      </p>
       <div style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 12, background: '#111827', color: '#e5e7eb', overflow: 'auto' }}>
         <pre style={{ margin: 0, fontSize: 12 }}>
 {JSON.stringify(contract, null, 2)}

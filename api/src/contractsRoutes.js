@@ -10,6 +10,18 @@ function bad(res, code, message, details) {
 function ok(res, payload) { return res.json({ ok: true, ...payload }) }
 function num(v) { const n = Number(v); return Number.isFinite(n) ? n : null }
 
+async function logHistory({ contractId, changeType, changedBy, oldValues, newValues }) {
+  try {
+    await pool.query(
+      `INSERT INTO contracts_history (contract_id, change_type, changed_by, old_values, new_values)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [contractId, changeType, changedBy || null, oldValues || null, newValues || null]
+    )
+  } catch (e) {
+    console.error('contracts_history insert error:', e)
+  }
+}
+
 // List contracts (basic queue view)
 router.get('/', authMiddleware, requireRole([
   'contract_person',
@@ -96,7 +108,15 @@ router.post('/', authMiddleware, requireRole(['contract_person']), async (req, r
        RETURNING *`,
       [rfId, det, req.user.id]
     )
-    return ok(res, { contract: ins.rows[0] })
+    const created = ins.rows[0]
+    await logHistory({
+      contractId: created.id,
+      changeType: 'create',
+      changedBy: req.user.id,
+      oldValues: null,
+      newValues: created
+    })
+    return ok(res, { contract: created })
   } catch (e) {
     console.error('POST /api/contracts error:', e)
     return bad(res, 500, 'Internal error')
@@ -104,7 +124,7 @@ router.post('/', authMiddleware, requireRole(['contract_person']), async (req, r
 })
 
 // Contract Manager approval: draft -> pending_tm
-router.patch('/:id/approve-cm', authMiddleware, requireRole(['contract_manager']), async (req, res) => {
+router.patch('/:id/approve-cm', authMiddleware, requireRole(['contract_manager', 'contract_person']), async (req, res) => {
   try {
     const id = num(req.params.id)
     if (!id) return bad(res, 400, 'Invalid id')
@@ -115,7 +135,15 @@ router.patch('/:id/approve-cm', authMiddleware, requireRole(['contract_manager']
       `UPDATE contracts SET status='pending_tm', approved_by=$1, updated_at=now() WHERE id=$2 RETURNING *`,
       [req.user.id, id]
     )
-    return ok(res, { contract: upd.rows[0] })
+    const updated = upd.rows[0]
+    await logHistory({
+      contractId: updated.id,
+      changeType: 'approve',
+      changedBy: req.user.id,
+      oldValues: cur.rows[0],
+      newValues: updated
+    })
+    return ok(res, { contract: updated })
   } catch (e) {
     console.error('PATCH /api/contracts/:id/approve-cm error:', e)
     return bad(res, 500, 'Internal error')
@@ -134,7 +162,15 @@ router.patch('/:id/approve-tm', authMiddleware, requireRole(['ceo','chairman','v
       `UPDATE contracts SET status='approved', approved_by=$1, updated_at=now() WHERE id=$2 RETURNING *`,
       [req.user.id, id]
     )
-    return ok(res, { contract: upd.rows[0] })
+    const updated = upd.rows[0]
+    await logHistory({
+      contractId: updated.id,
+      changeType: 'approve',
+      changedBy: req.user.id,
+      oldValues: cur.rows[0],
+      newValues: updated
+    })
+    return ok(res, { contract: updated })
   } catch (e) {
     console.error('PATCH /api/contracts/:id/approve-tm error:', e)
     return bad(res, 500, 'Internal error')
@@ -152,7 +188,15 @@ router.patch('/:id/reject', authMiddleware, requireRole(['contract_manager','ceo
       `UPDATE contracts SET status='rejected', approved_by=$1, updated_at=now() WHERE id=$2 RETURNING *`,
       [req.user.id, id]
     )
-    return ok(res, { contract: upd.rows[0] })
+    const updated = upd.rows[0]
+    await logHistory({
+      contractId: updated.id,
+      changeType: 'reject',
+      changedBy: req.user.id,
+      oldValues: cur.rows[0],
+      newValues: updated
+    })
+    return ok(res, { contract: updated })
   } catch (e) {
     console.error('PATCH /api/contracts/:id/reject error:', e)
     return bad(res, 500, 'Internal error')
@@ -171,9 +215,46 @@ router.patch('/:id/execute', authMiddleware, requireRole(['contract_person']), a
       `UPDATE contracts SET status='executed', updated_at=now() WHERE id=$1 RETURNING *`,
       [id]
     )
-    return ok(res, { contract: upd.rows[0] })
+    const updated = upd.rows[0]
+    await logHistory({
+      contractId: updated.id,
+      changeType: 'execute',
+      changedBy: req.user.id,
+      oldValues: cur.rows[0],
+      newValues: updated
+    })
+    return ok(res, { contract: updated })
   } catch (e) {
     console.error('PATCH /api/contracts/:id/execute error:', e)
+    return bad(res, 500, 'Internal error')
+  }
+})
+
+// History for a single contract
+router.get('/:id/history', authMiddleware, requireRole([
+  'contract_person',
+  'contract_manager',
+  'ceo',
+  'chairman',
+  'vice_chairman',
+  'top_management',
+  'admin',
+  'superadmin'
+]), async (req, res) => {
+  try {
+    const id = num(req.params.id)
+    if (!id) return bad(res, 400, 'Invalid id')
+    const result = await pool.query(
+      `SELECT h.*, COALESCE(u.meta->>'name', u.email) AS changed_by_name
+       FROM contracts_history h
+       LEFT JOIN users u ON u.id = h.changed_by
+       WHERE h.contract_id = $1
+       ORDER BY h.created_at ASC, h.id ASC`,
+      [id]
+    )
+    return ok(res, { history: result.rows })
+  } catch (e) {
+    console.error('GET /api/contracts/:id/history error:', e)
     return bad(res, 500, 'Internal error')
   }
 })

@@ -121,6 +121,8 @@ If no active Standard Plan exists or its values are invalid, the server will att
 
 7) Recent Fixes and Changes
 Timestamp convention: prefix new bullets with [YYYY-MM-DD HH:MM] (UTC) to track when changes were applied.
+- [2026-01-02 07:30] Contracts Queue — fix contracts list crash for contract_person role
+  - Client: Added a missing error state hook (error / setError) in client/src/deals/ContractsList.jsx. Previously the component referenced setError and error without defining them, causing a “ReferenceError: error is not defined” React crash when contract_person opened /contracts. The Contracts Queue list now renders correctly and surfaces backend failures via the inline error message and toast notifications instead of a blank page.
 - [2026-01-02 07:15] Reservations Queue — fix “Invalid id” error and show pending reservations for Financial Manager
   - API: Reordered reservationFormsRoutes so GET /api/workflow/reservation-forms/amendments is declared before GET /api/workflow/reservation-forms/:id, ensuring the literal /amendments path no longer falls into the :id handler and returns “Invalid id” for financial_manager requests.
   - Client: Because the amendments endpoint now responds successfully, the Financial Manager Reservations Queue (client/src/deals/ReservationsQueue.jsx) can apply the pending-approval data returned from GET /api/workflow/reservation-forms?status=pending_approval instead of discarding it when /amendments fails. New reservation requests created from the Financial Admin “Current Blocks” page now appear under “Reservation Forms — Pending Approval” without the red “Invalid id” banner.

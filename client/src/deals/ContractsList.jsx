@@ -7,6 +7,7 @@ import { th, td } from '../lib/ui.js'
 export default function ContractsList() {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
   const [creating, setCreating] = useState(false)
   const [selecting, setSelecting] = useState(false)
   const [candidates, setCandidates] = useState([])

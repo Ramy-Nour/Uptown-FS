@@ -50,6 +50,7 @@ export default function ContractDetail() {
   const [viewingReservation, setViewingReservation] = useState(false)
   const [viewingReservationError, setViewingReservationError] = useState('')
   const [generatingContractPdf, setGeneratingContractPdf] = useState(false)
+  const [historyRows, setHistoryRows] = useState([])
 
   const user = JSON.parse(localStorage.getItem('auth_user') || '{}')
   const role = user?.role || 'user'

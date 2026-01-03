@@ -38,7 +38,7 @@ router.get('/', authMiddleware, requireRole([
       `SELECT
          c.*,
          pp.deal_id,
-         u.unit_code,
+         u.code AS unit_code,
          (rf.details->'clientInfo'->>'buyer_name') AS buyer_name
        FROM contracts c
        LEFT JOIN reservation_forms rf ON rf.id = c.reservation_form_id
@@ -64,7 +64,7 @@ router.get('/candidates', authMiddleware, requireRole(['contract_person']), asyn
          rf.reservation_date,
          rf.details,
          rf.unit_id,
-         u.unit_code,
+         u.code AS unit_code,
          (rf.details->'clientInfo'->>'buyer_name') AS buyer_name
        FROM reservation_forms rf
        LEFT JOIN contracts c ON c.reservation_form_id = rf.id
@@ -98,7 +98,7 @@ router.get('/:id', authMiddleware, requireRole([
       `SELECT
          c.*,
          pp.deal_id,
-         u.unit_code,
+         u.code AS unit_code,
          (rf.details->'clientInfo'->>'buyer_name') AS buyer_name
        FROM contracts c
        LEFT JOIN reservation_forms rf ON rf.id = c.reservation_form_id

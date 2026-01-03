@@ -47,15 +47,11 @@ export default function ContractDetail() {
   const [pdfLoading, setPdfLoading] = useState(false)
   const [dpSummary, setDpSummary] = useState(null)
   const [dpSummaryError, setDpSummaryError] = useState('')
-  const [historyRows, setHistoryRows] = useState([])
+  const [viewingReservation, setViewingReservation] = useState(false)
+  const [viewingReservationError, setViewingReservationError] = useState('')
+  const [generatingContractPdf, setGeneratingContractPdf] = useState(false)
 
-  const user = (() => {
-    try {
-      return JSON.parse(localStorage.getItem('auth_user') || '{}')
-    } catch {
-      return {}
-    }
-  })()
+  const user = JSON.parse(localStorage.getItem('auth_user') || '{}')
   const role = user?.role || 'user'
 
   async function load() {
@@ -156,14 +152,35 @@ export default function ContractDetail() {
     return '#64748b'
   }
 
-  const canSubmitToCm = role === 'contract_person' && status === 'DRAFT'
-  const canApproveAsCm = role === 'contract_manager' && status === 'DRAFT'
-  const canApproveAsTm = (role === 'ceo' || role === 'chairman' || role === 'vice_chairman' || role === 'top_management') && status === 'PENDING_TM'
+  // Workflow gates:
+  // - Contract Admin (contract_person) drafts and submits to CM.
+  // - Contract Manager reviews and forwards to TM.
+  // - Top Management gives final approval.
+  const canSubmitToCm =
+    role === 'contract_person' && status === 'DRAFT' && !!dealId
+
+  const canApproveAsCm =
+    role === 'contract_manager' && status === 'PENDING_CM'
+
+  const canApproveAsTm =
+    (role === 'ceo' ||
+      role === 'chairman' ||
+      role === 'vice_chairman' ||
+      role === 'top_management') &&
+    status === 'PENDING_TM'
+
   const canRejectAsManager =
-    (role === 'contract_manager' && (status === 'DRAFT' || status === 'PENDING_CM' || status === 'PENDING_TM')) ||
+    (role === 'contract_manager' && (status === 'PENDING_CM' || status === 'PENDING_TM')) ||
     (canApproveAsTm && status === 'PENDING_TM')
+
   const canExecute = role === 'contract_person' && status === 'APPROVED'
-  const canGeneratePdf = !!dealId && (status === 'APPROVED' || status === 'EXECUTED')
+
+  // Contract Admin can generate a draft/final contract PDF as long as the
+  // underlying deal is approved, regardless of the contract status.
+  const canGeneratePdf =
+    role === 'contract_person' &&
+    !!dealId &&
+    ['DRAFT', 'PENDING_CM', 'PENDING_TM', 'APPROVED', 'EXECUTED'].includes(status)
 
   return renderWithShell(
     <div>
@@ -299,11 +316,19 @@ export default function ContractDetail() {
             </div>
             <div>
               <strong>Area:</strong>{' '}
-              {unitInfo?.area || unitInfo?.net_area || unitInfo?.built_up_area || '-'}
+              {unitInfo?.unit_area ||
+                unitInfo?.area ||
+                unitInfo?.net_area ||
+                unitInfo?.built_up_area ||
+                '-'}
             </div>
             <div>
-              <strong>Building / Block:</strong>{' '}
-              {unitInfo?.building || unitInfo?.block || '-'}
+              <strong>Building / Block / Zone:</strong>{' '}
+              {unitInfo?.building_number || unitInfo?.building || '-'}
+              {' / '}
+              {unitInfo?.block_sector || unitInfo?.block || '-'}
+              {' / '}
+              {unitInfo?.zone || '-'}
             </div>
             <div>
               <strong>Delivery (Handover) Year:</strong>{' '}
@@ -321,13 +346,16 @@ export default function ContractDetail() {
             onClick={async () => {
               try {
                 setActionLoading(true)
-                const resp = await fetchWithAuth(`${API_URL}/api/contracts/${contract.id}/approve-cm`, {
-                  method: 'PATCH',
-                  headers: { 'Content-Type': 'application/json' }
-                })
+                const resp = await fetchWithAuth(
+                  `${API_URL}/api/contracts/${contract.id}/submit`,
+                  {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' }
+                  }
+                )
                 const data = await resp.json().catch(() => ({}))
                 if (!resp.ok) throw new Error(data?.error?.message || 'Failed to submit to CM')
-                notifySuccess('Contract submitted to Contract Manager (pending TM).')
+                notifySuccess('Contract submitted to Contract Manager (pending CM).')
                 await load()
               } catch (e) {
                 notifyError(e, 'Failed to submit contract to CM')
@@ -336,9 +364,16 @@ export default function ContractDetail() {
               }
             }}
             disabled={actionLoading}
-            style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #1f6feb', background: '#1f6feb', color: '#fff', cursor: 'pointer' }}
+            style={{
+              padding: '8px 12px',
+              borderRadius: 8,
+              border: '1px solid #1f6feb',
+              background: '#1f6feb',
+              color: '#fff',
+              cursor: 'pointer'
+            }}
           >
-            {actionLoading ? 'Submitting…' : 'Submit to CM (draft → pending TM)'}
+            {actionLoading ? 'Submitting…' : 'Submit to CM (draft → pending CM)'}
           </button>
         )}
 
@@ -348,13 +383,16 @@ export default function ContractDetail() {
             onClick={async () => {
               try {
                 setActionLoading(true)
-                const resp = await fetchWithAuth(`${API_URL}/api/contracts/${contract.id}/approve-cm`, {
-                  method: 'PATCH',
-                  headers: { 'Content-Type': 'application/json' }
-                })
+                const resp = await fetchWithAuth(
+                  `${API_URL}/api/contracts/${contract.id}/approve-cm`,
+                  {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' }
+                  }
+                )
                 const data = await resp.json().catch(() => ({}))
                 if (!resp.ok) throw new Error(data?.error?.message || 'Failed to approve as CM')
-                notifySuccess('Contract approved by CM (pending TM).')
+                notifySuccess('Contract approved by Contract Manager (pending TM).')
                 await load()
               } catch (e) {
                 notifyError(e, 'Failed to approve contract (CM)')
@@ -363,7 +401,14 @@ export default function ContractDetail() {
               }
             }}
             disabled={actionLoading}
-            style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #10b981', background: '#10b981', color: '#fff', cursor: 'pointer' }}
+            style={{
+              padding: '8px 12px',
+              borderRadius: 8,
+              border: '1px solid #10b981',
+              background: '#10b981',
+              color: '#fff',
+              cursor: 'pointer'
+            }}
           >
             {actionLoading ? 'Approving…' : 'Approve (CM → pending TM)'}
           </button>
@@ -495,7 +540,14 @@ export default function ContractDetail() {
               }
             }}
             disabled={pdfLoading}
-            style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #4b5563', background: '#fff', color: '#111827', cursor: 'pointer' }}
+            style={{
+              padding: '8px 12px',
+              borderRadius: 8,
+              border: '1px solid #4b5563',
+              background: '#fff',
+              color: '#111827',
+              cursor: 'pointer'
+            }}
           >
             {pdfLoading ? 'Generating PDF…' : 'Generate Contract PDF'}
           </button>
@@ -509,7 +561,10 @@ export default function ContractDetail() {
                 setPdfLoading(true)
                 const body = {
                   deal_id: dealId ? Number(dealId) : undefined,
-                  reservation_form_id: Number(reservationFormId)
+                  reservation_form_id: Number(reservationFormId),
+                  // Prefer Arabic by default to match the RF template, but allow
+                  // the server to override with the stored RF language when present.
+                  language: 'ar'
                 }
                 const { blob, filename } = await generateReservationFormPdf(body, API_URL)
                 const url = URL.createObjectURL(blob)
@@ -528,7 +583,14 @@ export default function ContractDetail() {
               }
             }}
             disabled={pdfLoading}
-            style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #4b5563', background: '#fff', color: '#111827', cursor: 'pointer' }}
+            style={{
+              padding: '8px 12px',
+              borderRadius: 8,
+              border: '1px solid #4b5563',
+              background: '#fff',
+              color: '#111827',
+              cursor: 'pointer'
+            }}
           >
             {pdfLoading ? 'Generating…' : 'View Reservation Form PDF'}
           </button>
@@ -614,7 +676,7 @@ export default function ContractDetail() {
       {/* History table */}
       <h3>Approval History</h3>
       <p style={{ fontSize: 13, color: '#6b7280', marginTop: 0 }}>
-        History entries are recorded whenever a contract is created, approved, rejected, or executed.
+        History entries are recorded whenever a contract is created, submitted, approved, rejected, or executed.
       </p>
       <div style={{ overflow: 'auto', border: '1px solid #e5e7eb', borderRadius: 10, marginBottom: 16 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -632,16 +694,27 @@ export default function ContractDetail() {
                 <td style={td} colSpan={4}>No history entries yet.</td>
               </tr>
             )}
-            {historyRows.map((h, idx) => (
-              <tr key={h.id}>
-                <td style={td}>{idx + 1}</td>
-                <td style={td}>
-                  {h.created_at ? new Date(h.created_at).toLocaleString() : '-'}
-                </td>
-                <td style={td}>{h.change_type || '-'}</td>
-                <td style={td}>{h.changed_by_name || h.changed_by || '-'}</td>
-              </tr>
-            ))}
+            {historyRows.map((h, idx) => {
+              const raw = h.change_type || ''
+              let label = raw
+              if (raw === 'create') label = 'Created (Contract Admin)'
+              else if (raw === 'submit') label = 'Submitted to CM'
+              else if (raw === 'approve_cm') label = 'Approved by Contract Manager'
+              else if (raw === 'approve_tm') label = 'Approved by Top Management'
+              else if (raw === 'approve') label = 'Approved' // legacy entries
+              else if (raw === 'reject') label = 'Rejected'
+              else if (raw === 'execute') label = 'Executed (printed/handed over)'
+              return (
+                <tr key={h.id}>
+                  <td style={td}>{idx + 1}</td>
+                  <td style={td}>
+                    {h.created_at ? new Date(h.created_at).toLocaleString() : '-'}
+                  </td>
+                  <td style={td}>{label || '-'}</td>
+                  <td style={td}>{h.changed_by_name || h.changed_by || '-'}</td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>

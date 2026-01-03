@@ -100,50 +100,95 @@ router.get('/candidates', authMiddleware, requireRole(['contract_person']), asyn
 })
 
 // Get single contract
-router.get('/:id', authMiddleware, requireRole([
-  'contract_person',
-  'contract_manager',
-  'ceo',
-  'chairman',
-  'vice_chairman',
-  'top_management',
-  'admin',
-  'superadmin'
-]), async (req, res) => {
+router.get('/:id', authMiddleware, async (req, res) => {
   try {
-    const id = num(req.params.id)
-    if (!id) return bad(res, 400, 'Invalid id')
-    const result = await pool.query(
-      `SELECT
-         c.*,
-         pp.deal_id,
-         u.code AS unit_code,
-         COALESCE(
-           rf.details->'clientInfo'->>'buyer_name',
-           (d.details->'calculator'->'clientInfo'->>'buyer_name')
-         ) AS buyer_name,
-         COALESCE(
-           rf.details->'clientInfo',
-           d.details->'calculator'->'clientInfo'
-         ) AS client_info,
-         COALESCE(
-           rf.details->'calculator'->'unitInfo',
-           d.details->'calculator'->'unitInfo'
-         ) AS unit_info,
-         (d.details->'calculator'->'inputs'->>'handoverYear')::int AS handover_year
-       FROM contracts c
-       LEFT JOIN reservation_forms rf ON rf.id = c.reservation_form_id
-       LEFT JOIN payment_plans pp ON pp.id = rf.payment_plan_id
-       LEFT JOIN deals d ON d.id = pp.deal_id
-       LEFT JOIN units u ON u.id = rf.unit_id
-       WHERE c.id = $1`,
+    const id = Number(req.params.id)
+    const role = req.user?.role
+
+    const allowedRoles = [
+      'contract_person',
+      'contract_manager',
+      'ceo',
+      'chairman',
+      'vice_chairman',
+      'top_management',
+      'admin',
+      'superadmin'
+    ]
+    if (!allowedRoles.includes(role)) {
+      return res.status(403).json({ error: { message: 'Forbidden' } })
+    }
+
+    const q = await pool.query(
+      `
+      SELECT
+        c.*,
+        u.email AS created_by_email,
+        cu.email AS created_by_contract_email,
+        cu.role  AS created_by_contract_role,
+        pp.deal_id,
+        rf.id AS reservation_form_id,
+        rf.details->'clientInfo' AS client_info,
+        COALESCE(
+          rf.details->'calculator'->'unitInfo',
+          d.details->'calculator'->'unitInfo'
+        ) AS unit_info_snapshot,
+        (d.details->'calculator'->'inputs'->>'handoverYear')::int AS handover_year,
+        un.area AS unit_area,
+        un.building_number,
+        un.block_sector,
+        un.zone
+      FROM contracts c
+      LEFT JOIN users u ON u.id = c.created_by
+      LEFT JOIN users cu ON cu.id = c.created_by
+      LEFT JOIN reservation_forms rf ON rf.id = c.reservation_form_id
+      LEFT JOIN payment_plans pp ON pp.id = rf.payment_plan_id
+      LEFT JOIN deals d ON d.id = pp.deal_id
+      LEFT JOIN units un ON un.id = rf.unit_id
+      WHERE c.id = $1
+      LIMIT 1
+      `,
       [id]
     )
-    if (result.rows.length === 0) return bad(res, 404, 'Contract not found')
-    return ok(res, { contract: result.rows[0] })
+    if (q.rows.length === 0) {
+      return res.status(404).json({ error: { message: 'Contract not found' } })
+    }
+
+    const row = q.rows[0]
+    const unitInfoSnapshot = row.unit_info_snapshot || {}
+
+    // Merge structural metadata from the units table into the snapshot so
+    // Contract Detail can always show the complete Unit Summary, even when
+    // the calculator snapshot was missing building/block/zone fields.
+    const enrichedUnitInfo = {
+      ...unitInfoSnapshot,
+      unit_area:
+        unitInfoSnapshot.unit_area != null
+          ? unitInfoSnapshot.unit_area
+          : (row.unit_area != null ? Number(row.unit_area) : null),
+      building_number:
+        unitInfoSnapshot.building_number != null
+          ? unitInfoSnapshot.building_number
+          : (row.building_number != null ? String(row.building_number) : null),
+      block_sector:
+        unitInfoSnapshot.block_sector != null
+          ? unitInfoSnapshot.block_sector
+          : (row.block_sector != null ? String(row.block_sector) : null),
+      zone:
+        unitInfoSnapshot.zone != null
+          ? unitInfoSnapshot.zone
+          : (row.zone != null ? String(row.zone) : null)
+    }
+
+    const contract = {
+      ...row,
+      unit_info: enrichedUnitInfo
+    }
+
+    return res.json({ ok: true, contract })
   } catch (e) {
-    console.error('GET /api/contracts/:id error:', e)
-    return bad(res, 500, 'Internal error')
+    console.error('GET /api/contracts/:id error', e)
+    return res.status(500).json({ error: { message: 'Internal error' } })
   }
 })
 
@@ -216,58 +261,91 @@ router.patch('/:id/submit', authMiddleware, requireRole(['contract_person']), as
 })
 
 // Contract Manager approval: pending_cm -> pending_tm
-router.patch('/:id/approve-cm', authMiddleware, requireRole(['contract_manager']), async (req, res) => {
+router.patch('/:id/approve-cm', authMiddleware, async (req, res) => {
   try {
-    const id = num(req.params.id)
-    if (!id) return bad(res, 400, 'Invalid id')
-    const cur = await pool.query(`SELECT * FROM contracts WHERE id=$1`, [id])
-    if (cur.rows.length === 0) return bad(res, 404, 'Contract not found')
-    if (cur.rows[0].status !== 'pending_cm') {
-      return bad(res, 400, 'Contract must be pending CM to approve')
+    const id = Number(req.params.id)
+    const role = req.user?.role
+    if (!['contract_manager', 'admin', 'superadmin'].includes(role)) {
+      return res.status(403).json({ error: { message: 'Forbidden' } })
     }
+
+    const q = await pool.query('SELECT * FROM contracts WHERE id=$1', [id])
+    if (q.rows.length === 0) {
+      return res.status(404).json({ error: { message: 'Contract not found' } })
+    }
+    const contract = q.rows[0]
+
+    // CM approval is only meaningful once the contract has been submitted by
+    // Contract Admin. Require pending_cm here to keep the workflow explicit.
+    if (contract.status !== 'pending_cm') {
+      return res.status(400).json({ error: { message: 'Contract must be in pending_cm for CM approval' } })
+    }
+
     const upd = await pool.query(
-      `UPDATE contracts SET status='pending_tm', approved_by=$1, updated_at=now() WHERE id=$2 RETURNING *`,
+      `UPDATE contracts
+       SET status='pending_tm',
+           approved_by=$1,
+           approved_at=now()
+       WHERE id=$2
+       RETURNING *`,
       [req.user.id, id]
     )
     const updated = upd.rows[0]
     await logHistory({
-      contractId: updated.id,
-      changeType: 'approve',
+      contractId: id,
+      changeType: 'approve_cm',
       changedBy: req.user.id,
-      oldValues: cur.rows[0],
+      oldValues: contract,
       newValues: updated
     })
-    return ok(res, { contract: updated })
+
+    return res.json({ ok: true, contract: updated })
   } catch (e) {
-    console.error('PATCH /api/contracts/:id/approve-cm error:', e)
-    return bad(res, 500, 'Internal error')
+    console.error('PATCH /api/contracts/:id/approve-cm error', e)
+    return res.status(500).json({ error: { message: 'Internal error' } })
   }
 })
 
-// Top-Management approval: pending_tm -> approved
-router.patch('/:id/approve-tm', authMiddleware, requireRole(['ceo','chairman','vice_chairman','top_management']), async (req, res) => {
+router.patch('/:id/approve-tm', authMiddleware, async (req, res) => {
   try {
-    const id = num(req.params.id)
-    if (!id) return bad(res, 400, 'Invalid id')
-    const cur = await pool.query(`SELECT * FROM contracts WHERE id=$1`, [id])
-    if (cur.rows.length === 0) return bad(res, 404, 'Contract not found')
-    if (cur.rows[0].status !== 'pending_tm') return bad(res, 400, 'Contract must be pending TM to approve')
+    const id = Number(req.params.id)
+    const role = req.user?.role
+    const allowed = ['ceo', 'chairman', 'vice_chairman', 'top_management', 'admin', 'superadmin']
+    if (!allowed.includes(role)) {
+      return res.status(403).json({ error: { message: 'Forbidden' } })
+    }
+
+    const q = await pool.query('SELECT * FROM contracts WHERE id=$1', [id])
+    if (q.rows.length === 0) {
+      return res.status(404).json({ error: { message: 'Contract not found' } })
+    }
+    const contract = q.rows[0]
+    if (contract.status !== 'pending_tm') {
+      return res.status(400).json({ error: { message: 'Contract must be in pending_tm for TM approval' } })
+    }
+
     const upd = await pool.query(
-      `UPDATE contracts SET status='approved', approved_by=$1, updated_at=now() WHERE id=$2 RETURNING *`,
+      `UPDATE contracts
+       SET status='approved',
+           approved_by=$1,
+           approved_at=now()
+       WHERE id=$2
+       RETURNING *`,
       [req.user.id, id]
     )
     const updated = upd.rows[0]
     await logHistory({
-      contractId: updated.id,
-      changeType: 'approve',
+      contractId: id,
+      changeType: 'approve_tm',
       changedBy: req.user.id,
-      oldValues: cur.rows[0],
+      oldValues: contract,
       newValues: updated
     })
-    return ok(res, { contract: updated })
+
+    return res.json({ ok: true, contract: updated })
   } catch (e) {
-    console.error('PATCH /api/contracts/:id/approve-tm error:', e)
-    return bad(res, 500, 'Internal error')
+    console.error('PATCH /api/contracts/:id/approve-tm error', e)
+    return res.status(500).json({ error: { message: 'Internal error' } })
   }
 })
 

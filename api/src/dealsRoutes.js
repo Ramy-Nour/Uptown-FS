@@ -360,7 +360,22 @@ router.get('/:id/financial-summary', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: { message: 'Deal not found' } })
     }
     const deal = dq.rows[0]
-    const elevatedRoles = new Set(['admin', 'superadmin', 'sales_manager', 'financial_manager'])
+
+    // Elevate visibility for contract workflow roles so CM/TM/CA can always see the
+    // financial summary needed to review and approve contracts, even when they did
+    // not create the originating deal.
+    const elevatedRoles = new Set([
+      'admin',
+      'superadmin',
+      'sales_manager',
+      'financial_manager',
+      'contract_person',
+      'contract_manager',
+      'ceo',
+      'chairman',
+      'vice_chairman',
+      'top_management'
+    ])
     const isElevated = elevatedRoles.has(req.user?.role)
     if (!isElevated && deal.created_by !== req.user.id) {
       return res.status(403).json({ error: { message: 'Forbidden' } })

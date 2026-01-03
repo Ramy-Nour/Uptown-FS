@@ -39,10 +39,25 @@ router.get('/', authMiddleware, requireRole([
          c.*,
          pp.deal_id,
          u.code AS unit_code,
-         (rf.details->'clientInfo'->>'buyer_name') AS buyer_name
+         -- Prefer client info stored on the reservation form; fall back to the
+         -- original deal snapshot so older reservations still show buyer data.
+         COALESCE(
+           rf.details->'clientInfo'->>'buyer_name',
+           (d.details->'calculator'->'clientInfo'->>'buyer_name')
+         ) AS buyer_name,
+         COALESCE(
+           rf.details->'clientInfo',
+           d.details->'calculator'->'clientInfo'
+         ) AS client_info,
+         COALESCE(
+           rf.details->'calculator'->'unitInfo',
+           d.details->'calculator'->'unitInfo'
+         ) AS unit_info,
+         (d.details->'calculator'->'inputs'->>'handoverYear')::int AS handover_year
        FROM contracts c
        LEFT JOIN reservation_forms rf ON rf.id = c.reservation_form_id
        LEFT JOIN payment_plans pp ON pp.id = rf.payment_plan_id
+       LEFT JOIN deals d ON d.id = pp.deal_id
        LEFT JOIN units u ON u.id = rf.unit_id
        ORDER BY c.created_at DESC, c.id DESC`
     )
@@ -65,10 +80,14 @@ router.get('/candidates', authMiddleware, requireRole(['contract_person']), asyn
          rf.details,
          rf.unit_id,
          u.code AS unit_code,
-         (rf.details->'clientInfo'->>'buyer_name') AS buyer_name
+         COALESCE(
+           rf.details->'clientInfo'->>'buyer_name',
+           (d.details->'calculator'->'clientInfo'->>'buyer_name')
+         ) AS buyer_name
        FROM reservation_forms rf
        LEFT JOIN contracts c ON c.reservation_form_id = rf.id
        LEFT JOIN payment_plans pp ON pp.id = rf.payment_plan_id
+       LEFT JOIN deals d ON d.id = pp.deal_id
        LEFT JOIN units u ON u.id = rf.unit_id
        WHERE rf.status = 'approved' AND c.id IS NULL
        ORDER BY rf.id DESC`
@@ -99,10 +118,23 @@ router.get('/:id', authMiddleware, requireRole([
          c.*,
          pp.deal_id,
          u.code AS unit_code,
-         (rf.details->'clientInfo'->>'buyer_name') AS buyer_name
+         COALESCE(
+           rf.details->'clientInfo'->>'buyer_name',
+           (d.details->'calculator'->'clientInfo'->>'buyer_name')
+         ) AS buyer_name,
+         COALESCE(
+           rf.details->'clientInfo',
+           d.details->'calculator'->'clientInfo'
+         ) AS client_info,
+         COALESCE(
+           rf.details->'calculator'->'unitInfo',
+           d.details->'calculator'->'unitInfo'
+         ) AS unit_info,
+         (d.details->'calculator'->'inputs'->>'handoverYear')::int AS handover_year
        FROM contracts c
        LEFT JOIN reservation_forms rf ON rf.id = c.reservation_form_id
        LEFT JOIN payment_plans pp ON pp.id = rf.payment_plan_id
+       LEFT JOIN deals d ON d.id = pp.deal_id
        LEFT JOIN units u ON u.id = rf.unit_id
        WHERE c.id = $1`,
       [id]
@@ -150,14 +182,49 @@ router.post('/', authMiddleware, requireRole(['contract_person']), async (req, r
   }
 })
 
-// Contract Manager approval: draft -> pending_tm
-router.patch('/:id/approve-cm', authMiddleware, requireRole(['contract_manager', 'contract_person']), async (req, res) => {
+// Contract Admin submit: draft -> pending_cm
+router.patch('/:id/submit', authMiddleware, requireRole(['contract_person']), async (req, res) => {
+  try {
+    const id = num(req.params.id)
+    if (!id) return bad(res, 400, 'Invalid id')
+    const cur = await pool.query('SELECT * FROM contracts WHERE id=$1', [id])
+    if (cur.rows.length === 0) return bad(res, 404, 'Contract not found')
+    if (cur.rows[0].status !== 'draft') {
+      return bad(res, 400, 'Contract must be in draft to submit for Contract Manager review')
+    }
+    const upd = await pool.query(
+      `UPDATE contracts
+         SET status='pending_cm',
+             updated_at=now()
+       WHERE id=$1
+       RETURNING *`,
+      [id]
+    )
+    const updated = upd.rows[0]
+    await logHistory({
+      contractId: updated.id,
+      changeType: 'submit',
+      changedBy: req.user.id,
+      oldValues: cur.rows[0],
+      newValues: updated
+    })
+    return ok(res, { contract: updated })
+  } catch (e) {
+    console.error('PATCH /api/contracts/:id/submit error:', e)
+    return bad(res, 500, 'Internal error')
+  }
+})
+
+// Contract Manager approval: pending_cm -> pending_tm
+router.patch('/:id/approve-cm', authMiddleware, requireRole(['contract_manager']), async (req, res) => {
   try {
     const id = num(req.params.id)
     if (!id) return bad(res, 400, 'Invalid id')
     const cur = await pool.query(`SELECT * FROM contracts WHERE id=$1`, [id])
     if (cur.rows.length === 0) return bad(res, 404, 'Contract not found')
-    if (cur.rows[0].status !== 'draft') return bad(res, 400, 'Contract must be in draft to approve (CM)')
+    if (cur.rows[0].status !== 'pending_cm') {
+      return bad(res, 400, 'Contract must be pending CM to approve')
+    }
     const upd = await pool.query(
       `UPDATE contracts SET status='pending_tm', approved_by=$1, updated_at=now() WHERE id=$2 RETURNING *`,
       [req.user.id, id]

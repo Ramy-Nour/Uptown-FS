@@ -137,6 +137,17 @@ export default function ContractDetail() {
   const createdAt = contract.created_at ? new Date(contract.created_at).toLocaleString() : '-'
   const updatedAt = contract.updated_at ? new Date(contract.updated_at).toLocaleString() : '-'
 
+  // Enriched snapshots from the originating offer/reservation to drive CM/TM review:
+  // - client_info carries buyer identity and contacts (imported from offer)
+  // - unit_info carries unit metadata (code, type, area, building, etc.)
+  // - handover_year carries the contractual delivery year used in the payment plan.
+  const clientInfo = contract.client_info || contract.details?.clientInfo || {}
+  const unitInfo = contract.unit_info || contract.details?.calculator?.unitInfo || {}
+  const handoverYear =
+    contract.handover_year ||
+    contract.details?.calculator?.inputs?.handoverYear ||
+    null
+
   function statusColor() {
     const s = status.toLowerCase()
     if (s === 'approved' || s === 'executed') return '#16a34a'
@@ -224,6 +235,81 @@ export default function ContractDetail() {
         </div>
         <div>
           <strong>Last Updated:</strong> {updatedAt}
+        </div>
+      </div>
+
+      {/* Buyer + Unit summaries to support CM/TM review */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginBottom: 16 }}>
+        <div
+          style={{
+            flex: '1 1 260px',
+            borderRadius: 10,
+            border: '1px solid #e5e7eb',
+            background: '#fff',
+            padding: 12,
+            minWidth: 260
+          }}
+        >
+          <h3 style={{ marginTop: 0, marginBottom: 8 }}>Buyer Summary</h3>
+          {buyerName === '-' && !clientInfo?.buyer_name ? (
+            <p style={{ fontSize: 13, color: '#6b7280', margin: 0 }}>
+              No buyer details were found on the originating offer snapshot.
+            </p>
+          ) : (
+            <div style={{ fontSize: 13, color: '#111827', display: 'grid', rowGap: 4 }}>
+              <div>
+                <strong>Name:</strong>{' '}
+                {clientInfo?.buyer_name || buyerName || '-'}
+              </div>
+              <div>
+                <strong>ID No. / Passport:</strong>{' '}
+                {clientInfo?.id_or_passport || '-'}
+              </div>
+              <div>
+                <strong>Address:</strong>{' '}
+                {clientInfo?.address || '-'}
+              </div>
+              <div>
+                <strong>Telephone:</strong>{' '}
+                {clientInfo?.phone_primary || clientInfo?.phone_secondary || '-'}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div
+          style={{
+            flex: '1 1 260px',
+            borderRadius: 10,
+            border: '1px solid #e5e7eb',
+            background: '#fff',
+            padding: 12,
+            minWidth: 260
+          }}
+        >
+          <h3 style={{ marginTop: 0, marginBottom: 8 }}>Unit Summary &amp; Delivery</h3>
+          <div style={{ fontSize: 13, color: '#111827', display: 'grid', rowGap: 4 }}>
+            <div>
+              <strong>Unit Code:</strong>{' '}
+              {unitCode || unitInfo?.unit_code || '-'}
+            </div>
+            <div>
+              <strong>Unit Type:</strong>{' '}
+              {unitInfo?.unit_type || '-'}
+            </div>
+            <div>
+              <strong>Area:</strong>{' '}
+              {unitInfo?.area || unitInfo?.net_area || unitInfo?.built_up_area || '-'}
+            </div>
+            <div>
+              <strong>Building / Block:</strong>{' '}
+              {unitInfo?.building || unitInfo?.block || '-'}
+            </div>
+            <div>
+              <strong>Delivery (Handover) Year:</strong>{' '}
+              {handoverYear ? `Year ${handoverYear}` : '-'}
+            </div>
+          </div>
         </div>
       </div>
 

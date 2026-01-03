@@ -456,7 +456,24 @@ router.post('/client-offer', authMiddleware, requireRole(['property_consultant']
 })
 
 // Server-rendered Reservation Form PDF
-router.post('/reservation-form', authMiddleware, requireRole(['financial_admin']), async (req, res) => {
+// Allow read-only generation for contract workflow and management roles so
+// Contract Admin / CM / TM can inspect the same RF document used for the deal.
+router.post(
+  '/reservation-form',
+  authMiddleware,
+  requireRole([
+    'financial_admin',
+    'financial_manager',
+    'contract_person',
+    'contract_manager',
+    'ceo',
+    'chairman',
+    'vice_chairman',
+    'top_management',
+    'admin',
+    'superadmin'
+  ]),
+  async (req, res) => {
   try {
     const dealId = Number(req.body?.deal_id)
     if (!Number.isFinite(dealId) || dealId <= 0) {

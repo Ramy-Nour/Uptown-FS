@@ -37,13 +37,13 @@ router.get('/', authMiddleware, requireRole([
     const result = await pool.query(
       `SELECT
          c.*,
-         rf.deal_id,
+         pp.deal_id,
          u.unit_code,
          (rf.details->'clientInfo'->>'buyer_name') AS buyer_name
        FROM contracts c
        LEFT JOIN reservation_forms rf ON rf.id = c.reservation_form_id
-       LEFT JOIN deals d ON d.id = rf.deal_id
-       LEFT JOIN units u ON u.id = d.unit_id
+       LEFT JOIN payment_plans pp ON pp.id = rf.payment_plan_id
+       LEFT JOIN units u ON u.id = rf.unit_id
        ORDER BY c.created_at DESC, c.id DESC`
     )
     return ok(res, { contracts: result.rows })
@@ -59,17 +59,17 @@ router.get('/candidates', authMiddleware, requireRole(['contract_person']), asyn
     const result = await pool.query(
       `SELECT
          rf.id,
-         rf.deal_id,
+         pp.deal_id,
          rf.status,
          rf.reservation_date,
          rf.details,
-         d.unit_id,
+         rf.unit_id,
          u.unit_code,
          (rf.details->'clientInfo'->>'buyer_name') AS buyer_name
        FROM reservation_forms rf
        LEFT JOIN contracts c ON c.reservation_form_id = rf.id
-       LEFT JOIN deals d ON d.id = rf.deal_id
-       LEFT JOIN units u ON u.id = d.unit_id
+       LEFT JOIN payment_plans pp ON pp.id = rf.payment_plan_id
+       LEFT JOIN units u ON u.id = rf.unit_id
        WHERE rf.status = 'approved' AND c.id IS NULL
        ORDER BY rf.id DESC`
     )
@@ -97,13 +97,13 @@ router.get('/:id', authMiddleware, requireRole([
     const result = await pool.query(
       `SELECT
          c.*,
-         rf.deal_id,
+         pp.deal_id,
          u.unit_code,
          (rf.details->'clientInfo'->>'buyer_name') AS buyer_name
        FROM contracts c
        LEFT JOIN reservation_forms rf ON rf.id = c.reservation_form_id
-       LEFT JOIN deals d ON d.id = rf.deal_id
-       LEFT JOIN units u ON u.id = d.unit_id
+       LEFT JOIN payment_plans pp ON pp.id = rf.payment_plan_id
+       LEFT JOIN units u ON u.id = rf.unit_id
        WHERE c.id = $1`,
       [id]
     )

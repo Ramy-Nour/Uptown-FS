@@ -3,6 +3,27 @@ import { useNavigate } from 'react-router-dom'
 import { fetchWithAuth, API_URL } from '../lib/apiClient.js'
 import { notifyError } from '../lib/notifications.js'
 import { th, td } from '../lib/ui.js'
+import BrandHeader from '../lib/BrandHeader.jsx'
+
+const APP_TITLE = import.meta.env.VITE_APP_TITLE || 'Uptown Financial System'
+
+async function handleLogout() {
+  try {
+    const rt = localStorage.getItem('refresh_token')
+    if (rt) {
+      await fetch(`${API_URL}/api/auth/logout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken: rt })
+      }).catch(() => {})
+    }
+  } finally {
+    localStorage.removeItem('auth_token')
+    localStorage.removeItem('refresh_token')
+    localStorage.removeItem('auth_user')
+    window.location.href = '/login'
+  }
+}
 
 export default function ContractsList() {
   const [rows, setRows] = useState([])
@@ -78,200 +99,203 @@ export default function ContractsList() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
-        <h2 style={{ marginTop: 0 }}>Contracts Queue</h2>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #d1d9e6', background: '#fff', cursor: 'pointer' }}
-            onClick={load}
-            disabled={loading}
-          >
-            Refresh
-          </button>
-          <button
-            style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #d1d9e6', background: '#fff', cursor: 'pointer' }}
-            onClick={async () => {
-              const nextSelecting = !selecting
-              setSelecting(nextSelecting)
-              if (nextSelecting && candidates.length === 0) {
-                await loadCandidates()
-              }
+      <BrandHeader title={APP_TITLE} onLogout={handleLogout} />
+      <div style={{ padding: 20, maxWidth: 1200, margin: '0 auto' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
+          <h2 style={{ marginTop: 0 }}>Contracts Queue</h2>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #d1d9e6', background: '#fff', cursor: 'pointer' }}
+              onClick={load}
+              disabled={loading}
+            >
+              Refresh
+            </button>
+            <button
+              style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #d1d9e6', background: '#fff', cursor: 'pointer' }}
+              onClick={async () => {
+                const nextSelecting = !selecting
+                setSelecting(nextSelecting)
+                if (nextSelecting && candidates.length === 0) {
+                  await loadCandidates()
+                }
+              }}
+            >
+              {selecting ? 'Hide Reservation Forms' : 'New Contract from Reservation'}
+            </button>
+          </div>
+        </div>
+        {error ? <p style={{ color: '#e11d48' }}>{error}</p> : null}
+
+        {selecting && (
+          <div
+            style={{
+              marginBottom: 16,
+              padding: 12,
+              borderRadius: 12,
+              border: '1px solid #e5e7eb',
+              background: '#f9fafb'
             }}
           >
-            {selecting ? 'Hide Reservation Forms' : 'New Contract from Reservation'}
-          </button>
-        </div>
-      </div>
-      {error ? <p style={{ color: '#e11d48' }}>{error}</p> : null}
-
-      {selecting && (
-        <div
-          style={{
-            marginBottom: 16,
-            padding: 12,
-            borderRadius: 12,
-            border: '1px solid #e5e7eb',
-            background: '#f9fafb'
-          }}
-        >
-          <h3 style={{ marginTop: 0, marginBottom: 8 }}>Approved Reservation Forms (no contract yet)</h3>
-          {candidatesError && (
-            <p style={{ color: '#e11d48', fontSize: 13 }}>{candidatesError}</p>
-          )}
-          {!candidatesError && candidatesLoading && (
-            <p style={{ fontSize: 13, color: '#6b7280' }}>Loading reservation forms…</p>
-          )}
-          {!candidatesLoading && candidates.length === 0 && !candidatesError && (
-            <p style={{ fontSize: 13, color: '#6b7280' }}>
-              No approved reservation forms without contracts were found.
-            </p>
-          )}
-          {!candidatesLoading && candidates.length > 0 && (
-            <div style={{ overflow: 'auto', border: '1px solid #e5e7eb', borderRadius: 10 }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                <thead>
-                  <tr>
-                    <th style={th}>RF #</th>
-                    <th style={th}>Deal #</th>
-                    <th style={th}>Unit</th>
-                    <th style={th}>Buyer</th>
-                    <th style={th}>Reservation Date</th>
-                    <th style={th}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {candidates.map(rf => (
-                    <tr key={rf.id}>
-                      <td style={td}>{rf.id}</td>
-                      <td style={td}>{rf.deal_id || '-'}</td>
-                      <td style={td}>{rf.unit_code || '-'}</td>
-                      <td style={td}>{rf.buyer_name || '-'}</td>
-                      <td style={td}>
-                        {rf.reservation_date
-                          ? new Date(rf.reservation_date).toISOString().slice(0, 10)
-                          : '-'}
-                      </td>
-                      <td style={{ ...td, textAlign: 'right' }}>
-                        <button
-                          type="button"
-                          style={{
-                            padding: '6px 10px',
-                            borderRadius: 8,
-                            border: '1px solid #10b981',
-                            background: '#10b981',
-                            color: '#fff',
-                            fontSize: 12,
-                            cursor: 'pointer'
-                          }}
-                          onClick={async () => {
-                            try {
-                              setCreating(true)
-                              const resp = await fetchWithAuth(`${API_URL}/api/contracts`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ reservation_form_id: rf.id })
-                              })
-                              const data = await resp.json().catch(() => ({}))
-                              if (!resp.ok) {
-                                throw new Error(data?.error?.message || 'Failed to create contract')
-                              }
-                              const created = data.contract
-                              if (created && created.id) {
-                                navigate(`/contracts/${created.id}`)
-                              } else {
-                                await load()
-                              }
-                            } catch (e) {
-                              notifyError(e, 'Failed to create contract')
-                            } finally {
-                              setCreating(false)
-                            }
-                          }}
-                          disabled={creating}
-                        >
-                          {creating ? 'Creating…' : 'Create Contract'}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-
-      <div style={{ overflow: 'auto', border: '1px solid #e6eaf0', borderRadius: 12 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr>
-              <th style={th}>Contract #</th>
-              <th style={th}>Deal #</th>
-              <th style={th}>Unit</th>
-              <th style={th}>Buyer</th>
-              <th style={th}>Status</th>
-              <th style={th}>Created At</th>
-              <th style={th}></th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && <tr><td style={td} colSpan={7}>Loading…</td></tr>}
-            {!loading && rows.map(c => {
-              const status = formatStatus(c.status)
-              const color = statusColor(c.status)
-              const unitCode = c.unit_code || c.unit?.unit_code || '-'
-              const buyerName = c.buyer_name || c.buyer || c.client_name || '-'
-              const createdAt = c.created_at ? new Date(c.created_at).toLocaleString() : '-'
-              return (
-                <tr key={c.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/contracts/${c.id}`)}>
-                  <td style={td}>{c.id}</td>
-                  <td style={td}>{c.deal_id || '-'}</td>
-                  <td style={td}>{unitCode}</td>
-                  <td style={td}>{buyerName}</td>
-                  <td style={td}>
-                    <span
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        padding: '2px 8px',
-                        borderRadius: 999,
-                        fontSize: 12,
-                        fontWeight: 500,
-                        background: '#f9fafb',
-                        color
-                      }}
-                    >
-                      {status}
-                    </span>
-                  </td>
-                  <td style={td}>{createdAt}</td>
-                  <td style={{ ...td, textAlign: 'right' }}>
-                    <button
-                      type="button"
-                      style={{
-                        padding: '6px 10px',
-                        borderRadius: 8,
-                        border: '1px solid #d1d9e6',
-                        background: '#fff',
-                        fontSize: 12,
-                        cursor: 'pointer'
-                      }}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        navigate(`/contracts/${c.id}`)
-                      }}
-                    >
-                      View
-                    </button>
-                  </td>
-                </tr>
-              )
-            })}
-            {!loading && rows.length === 0 && (
-              <tr><td style={td} colSpan={7}>No contracts found.</td></tr>
+            <h3 style={{ marginTop: 0, marginBottom: 8 }}>Approved Reservation Forms (no contract yet)</h3>
+            {candidatesError && (
+              <p style={{ color: '#e11d48', fontSize: 13 }}>{candidatesError}</p>
             )}
-          </tbody>
-        </table>
+            {!candidatesError && candidatesLoading && (
+              <p style={{ fontSize: 13, color: '#6b7280' }}>Loading reservation forms…</p>
+            )}
+            {!candidatesLoading && candidates.length === 0 && !candidatesError && (
+              <p style={{ fontSize: 13, color: '#6b7280' }}>
+                No approved reservation forms without contracts were found.
+              </p>
+            )}
+            {!candidatesLoading && candidates.length > 0 && (
+              <div style={{ overflow: 'auto', border: '1px solid #e5e7eb', borderRadius: 10 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr>
+                      <th style={th}>RF #</th>
+                      <th style={th}>Deal #</th>
+                      <th style={th}>Unit</th>
+                      <th style={th}>Buyer</th>
+                      <th style={th}>Reservation Date</th>
+                      <th style={th}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {candidates.map(rf => (
+                      <tr key={rf.id}>
+                        <td style={td}>{rf.id}</td>
+                        <td style={td}>{rf.deal_id || '-'}</td>
+                        <td style={td}>{rf.unit_code || '-'}</td>
+                        <td style={td}>{rf.buyer_name || '-'}</td>
+                        <td style={td}>
+                          {rf.reservation_date
+                            ? new Date(rf.reservation_date).toISOString().slice(0, 10)
+                            : '-'}
+                        </td>
+                        <td style={{ ...td, textAlign: 'right' }}>
+                          <button
+                            type="button"
+                            style={{
+                              padding: '6px 10px',
+                              borderRadius: 8,
+                              border: '1px solid #10b981',
+                              background: '#10b981',
+                              color: '#fff',
+                              fontSize: 12,
+                              cursor: 'pointer'
+                            }}
+                            onClick={async () => {
+                              try {
+                                setCreating(true)
+                                const resp = await fetchWithAuth(`${API_URL}/api/contracts`, {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ reservation_form_id: rf.id })
+                                })
+                                const data = await resp.json().catch(() => ({}))
+                                if (!resp.ok) {
+                                  throw new Error(data?.error?.message || 'Failed to create contract')
+                                }
+                                const created = data.contract
+                                if (created && created.id) {
+                                  navigate(`/contracts/${created.id}`)
+                                } else {
+                                  await load()
+                                }
+                              } catch (e) {
+                                notifyError(e, 'Failed to create contract')
+                              } finally {
+                                setCreating(false)
+                              }
+                            }}
+                            disabled={creating}
+                          >
+                            {creating ? 'Creating…' : 'Create Contract'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div style={{ overflow: 'auto', border: '1px solid #e6eaf0', borderRadius: 12 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={th}>Contract #</th>
+                <th style={th}>Deal #</th>
+                <th style={th}>Unit</th>
+                <th style={th}>Buyer</th>
+                <th style={th}>Status</th>
+                <th style={th}>Created At</th>
+                <th style={th}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading && <tr><td style={td} colSpan={7}>Loading…</td></tr>}
+              {!loading && rows.map(c => {
+                const status = formatStatus(c.status)
+                const color = statusColor(c.status)
+                const unitCode = c.unit_code || c.unit?.unit_code || '-'
+                const buyerName = c.buyer_name || c.buyer || c.client_name || '-'
+                const createdAt = c.created_at ? new Date(c.created_at).toLocaleString() : '-'
+                return (
+                  <tr key={c.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/contracts/${c.id}`)}>
+                    <td style={td}>{c.id}</td>
+                    <td style={td}>{c.deal_id || '-'}</td>
+                    <td style={td}>{unitCode}</td>
+                    <td style={td}>{buyerName}</td>
+                    <td style={td}>
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          padding: '2px 8px',
+                          borderRadius: 999,
+                          fontSize: 12,
+                          fontWeight: 500,
+                          background: '#f9fafb',
+                          color
+                        }}
+                      >
+                        {status}
+                      </span>
+                    </td>
+                    <td style={td}>{createdAt}</td>
+                    <td style={{ ...td, textAlign: 'right' }}>
+                      <button
+                        type="button"
+                        style={{
+                          padding: '6px 10px',
+                          borderRadius: 8,
+                          border: '1px solid #d1d9e6',
+                          background: '#fff',
+                          fontSize: 12,
+                          cursor: 'pointer'
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          navigate(`/contracts/${c.id}`)
+                        }}
+                      >
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
+              {!loading && rows.length === 0 && (
+                <tr><td style={td} colSpan={7}>No contracts found.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   )

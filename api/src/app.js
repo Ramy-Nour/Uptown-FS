@@ -32,7 +32,7 @@ import pricingRoutes from './pricingRoutes.js' // THIS LINE IS NEW
 import configRoutes from './configRoutes.js'
 import standardPlanRoutes from './standardPlanRoutes.js' // NEW
 import calculateRoutes from './calculateRoutes.js' // NEW
-import documentsRoutes from './documentsRoutes.js'
+import documentsRoutes from './documentsRoutes2.js'
 import planningRoutes from './planningRoutes.js'
 import notificationsRoutes from './notificationsRoutes.js'
 import contractsRoutes from './contractsRoutes.js'

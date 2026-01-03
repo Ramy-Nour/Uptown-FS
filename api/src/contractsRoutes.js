@@ -128,12 +128,20 @@ router.get('/:id', authMiddleware, async (req, res) => {
         cu.role  AS created_by_contract_role,
         pp.deal_id,
         rf.id AS reservation_form_id,
-        rf.details->'clientInfo' AS client_info,
+        COALESCE(
+          rf.details->'clientInfo',
+          d.details->'calculator'->'clientInfo'
+        ) AS client_info,
+        COALESCE(
+          rf.details->'clientInfo'->>'buyer_name',
+          d.details->'calculator'->'clientInfo'->>'buyer_name'
+        ) AS buyer_name,
         COALESCE(
           rf.details->'calculator'->'unitInfo',
           d.details->'calculator'->'unitInfo'
         ) AS unit_info_snapshot,
         (d.details->'calculator'->'inputs'->>'handoverYear')::int AS handover_year,
+        un.code AS unit_code,
         un.area AS unit_area,
         un.building_number,
         un.block_sector,

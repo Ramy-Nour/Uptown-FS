@@ -10,7 +10,8 @@
     "migrate": "node src/migrate.js",
     "test": "node src/calculationService.spec.js",
     "test:integration": "node src/app.int.test.js",
-    "test:helpers": "node src/tests/paymentPlanHelpers.test.js"
+    "test:helpers": "node src/tests/paymentPlanHelpers.test.js",
+    "migrate:contract": "node src/add_contract_fields.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

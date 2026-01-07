@@ -594,14 +594,15 @@ export default function ContractDetail() {
                       setActionLoading(false)
                     }
                   }}
-                  disabled={actionLoading}
+                  disabled={actionLoading || !deal?.contract_settings_locked}
+                  title={!deal?.contract_settings_locked ? 'Lock Contract Settings first' : ''}
                   style={{
                     padding: '8px 16px',
                     borderRadius: 8,
-                    border: '1px solid #16a34a',
-                    background: '#16a34a',
-                    color: '#fff',
-                    cursor: 'pointer'
+                    border: '1px solid #d1d5db',
+                    background: (!deal?.contract_settings_locked) ? '#f3f4f6' : '#fff',
+                    color: (!deal?.contract_settings_locked) ? '#9ca3af' : 'inherit',
+                    cursor: (!deal?.contract_settings_locked) ? 'not-allowed' : 'pointer'
                   }}
                 >
                   {actionLoading ? 'Submitting…' : 'Submit to CM'}
@@ -775,6 +776,10 @@ export default function ContractDetail() {
           <button
             type="button"
             onClick={async () => {
+              if (!deal?.contract_settings_locked) {
+                 alert('Please Lock Contract Settings before submitting.')
+                 return
+              }
               try {
                 setActionLoading(true)
                 const resp = await fetchWithAuth(
@@ -794,14 +799,15 @@ export default function ContractDetail() {
                 setActionLoading(false)
               }
             }}
-            disabled={actionLoading}
+            disabled={actionLoading || !deal?.contract_settings_locked}
+            title={!deal?.contract_settings_locked ? 'Lock Contract Settings first' : ''}
             style={{
               padding: '8px 12px',
               borderRadius: 8,
               border: '1px solid #1f6feb',
-              background: '#1f6feb',
+              background: (!deal?.contract_settings_locked) ? '#94a3b8' : '#1f6feb',
               color: '#fff',
-              cursor: 'pointer'
+              cursor: (!deal?.contract_settings_locked) ? 'not-allowed' : 'pointer'
             }}
           >
             {actionLoading ? 'Submitting…' : 'Submit to CM (draft → pending CM)'}

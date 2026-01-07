@@ -97,7 +97,6 @@ export async function initDb() {
     );
 
     -- Deals
-    CREATE TABLE IF NOT EXISTS deals (
       id SERIAL PRIMARY KEY,
       title TEXT NOT NULL,
       amount NUMERIC(18,2) NOT NULL DEFAULT 0,
@@ -106,6 +105,9 @@ export async function initDb() {
       sales_rep_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
       policy_id INTEGER REFERENCES commission_policies(id) ON DELETE SET NULL,
       status TEXT NOT NULL DEFAULT 'draft',
+      contract_date DATE,
+      poa_statement TEXT,
+      contract_settings_locked BOOLEAN DEFAULT FALSE,
       created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -118,6 +120,10 @@ export async function initDb() {
       ADD COLUMN IF NOT EXISTS sales_rep_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
     ALTER TABLE IF EXISTS deals
       ADD COLUMN IF NOT EXISTS policy_id INTEGER REFERENCES commission_policies(id) ON DELETE SET NULL;
+    ALTER TABLE IF EXISTS deals
+      ADD COLUMN IF NOT EXISTS contract_date DATE,
+      ADD COLUMN IF NOT EXISTS poa_statement TEXT,
+      ADD COLUMN IF NOT EXISTS contract_settings_locked BOOLEAN DEFAULT FALSE;
 
     CREATE TABLE IF NOT EXISTS deal_history (
       id SERIAL PRIMARY KEY,

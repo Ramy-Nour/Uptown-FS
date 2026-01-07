@@ -752,8 +752,30 @@ router.post(
       const unit = {
         unit_code: calc?.unitInfo?.unit_code || '',
         unit_type: calc?.unitInfo?.unit_type || '',
-        unit_id: calc?.unitInfo?.unit_id || null
+        unit_id: calc?.unitInfo?.unit_id || null,
+        unit_area: calc?.unitInfo?.unit_area || calc?.unitInfo?.area || '',
+        garden_area: calc?.unitInfo?.garden_area || calc?.unitInfo?.garden || '',
+        building_number: calc?.unitInfo?.building_number || calc?.unitInfo?.building || '',
+        block_sector: calc?.unitInfo?.block_sector || calc?.unitInfo?.block || '',
+        zone: calc?.unitInfo?.zone || ''
       }
+
+      // Extract payment dates if available
+      const prelimDateRaw = approvedReservation?.details?.dp?.preliminary_date || null
+      const paidDateRaw = approvedReservation?.details?.dp?.paid_date || null
+      
+      const formatPaymentDate = (rawDate) => {
+        if (!rawDate) return ''
+        const d = new Date(rawDate)
+        if (Number.isNaN(d.getTime())) return ''
+        const dd = String(d.getDate()).padStart(2, '0')
+        const mm = String(d.getMonth() + 1).padStart(2, '0')
+        const yyyy = d.getFullYear()
+        return `${dd}/${mm}/${yyyy}`
+      }
+
+      const prelimDateStr = formatPaymentDate(prelimDateRaw)
+      const paidDateStr = formatPaymentDate(paidDateRaw)
 
       // Helpers
       const fmtNum = (n) =>
@@ -862,9 +884,16 @@ router.post(
           </div>
           <div class="section">
             <strong>${rtl ? 'الوحدة' : 'Unit'}:</strong>
-            ${unit.unit_code || ''} ${
-        unit.unit_type ? '— ' + unit.unit_type : ''
-      }
+            <br/>
+            ${rtl 
+              ? `نوع الوحدة / ${unit.unit_type} (مساحة الوحدة / ${unit.unit_area} م2) ${unit.garden_area ? `(مساحة الحديقة / ${unit.garden_area} م2)` : ''}`
+              : `Unit Type / ${unit.unit_type} (Unit Area / ${unit.unit_area} m2) ${unit.garden_area ? `(Garden Area / ${unit.garden_area} m2)` : ''}`
+            }
+            <br/>
+            ${rtl
+              ? `كود الوحدة ${unit.unit_code} ( رقم المبنى ${unit.building_number} ) رقم البلوك ( ${unit.block_sector} ) رقم المجاورة ( ${unit.zone} ) بمشروع ابتاون ريزيدنس - حي ابتاون 6 أكتوبر`
+              : `Unit Code ${unit.unit_code} ( Bldg ${unit.building_number} ) Block ( ${unit.block_sector} ) Zone ( ${unit.zone} ) - Uptown Residence Project`
+            }
           </div>
           <div class="section">
             <h3>${rtl ? 'بيانات العملاء' : 'Buyer Information'}</h3>
@@ -898,7 +927,7 @@ router.post(
             </table>
           </div>
           <div class="section">
-            <h3>${rtl ? 'الدفعة التعاقدية (مقدم الحجز)' : 'Down Payment / Reservation'}</h3>
+            <h3>${rtl ? 'دفعة التعاقد' : 'Contract Down Payment'}</h3>
             <table>
               <tbody>
                 <tr>
@@ -907,17 +936,23 @@ router.post(
                   <td>${convertToWords(dpTotal, lang, { currency })}</td>
                 </tr>
                 <tr>
-                  <th>${rtl ? 'الدفعة المبدئية عند الحجز' : 'Preliminary payment at reservation'}</th>
+                  <th>
+                    ${rtl ? 'الدفعة المبدئية عند الحجز' : 'Preliminary payment at reservation'}
+                    ${prelimDateStr ? (rtl ? ` (تم سدادها بتاريخ ${prelimDateStr})` : ` (Paid on ${prelimDateStr})`) : ''}
+                  </th>
                   <td>${fmtNum(preliminaryPayment)} ${currency}</td>
                   <td>${prelimWords}</td>
                 </tr>
                 <tr>
-                  <th>${rtl ? 'مبالغ مدفوعة إضافية من الدفعة' : 'Additional paid amount towards DP'}</th>
+                  <th>
+                    ${rtl ? 'مبالغ مدفوعة من قيمة الدفعة' : 'Additional amounts paid from DP'}
+                    ${paidDateStr ? (rtl ? ` (تم سدادها بتاريخ ${paidDateStr})` : ` (Paid on ${paidDateStr})`) : ''}
+                  </th>
                   <td>${fmtNum(paidDpAmount)} ${currency}</td>
                   <td>${paidDpWords}</td>
                 </tr>
                 <tr>
-                  <th>${rtl ? 'المتبقي من الدفعة' : 'Remaining Down Payment'}</th>
+                  <th>${rtl ? 'المتبقي من قيمة الدفعة' : 'Remaining from Down Payment'}</th>
                   <td>${fmtNum(dpRemaining)} ${currency}</td>
                   <td>${remainingDpWords}</td>
                 </tr>
@@ -925,17 +960,69 @@ router.post(
             </table>
           </div>
           <div class="section">
-            <h3>${rtl ? 'المتبقي بعد الدفعة' : 'Remaining Price After DP'}</h3>
+            <h3>${rtl ? 'المتبقي من قيمة الوحدة' : 'Remaining Unit Price'}</h3>
             <table>
               <tbody>
                 <tr>
-                  <th>${rtl ? 'المتبقي' : 'Remaining amount'}</th>
+                  <th>${rtl ? 'يتم سداد باقي المبلغ طبقا لملحق السداد المرفق' : 'Remaining amount to be paid per attached schedule'}</th>
                   <td>${fmtNum(remainingPriceAfterDp)} ${currency}</td>
                   <td>${remainingWords}</td>
                 </tr>
               </tbody>
             </table>
           </div>
+          <div class="section" style="margin-top:20px; border:2px solid #000; padding:10px;">
+            <h3 style="text-align:center; margin:0; padding-bottom:10px; border-bottom:1px solid #ccc;">
+              ${rtl ? 'شروط عامة متفق عليها' : 'General Agreed Conditions'}
+            </h3>
+            <ol style="font-size:10px; line-height:1.4; padding-${rtl ? 'right' : 'left'}:20px; margin:10px 0;">
+              <li>${rtl 
+                ? 'لا يجوز للعميل التنازل عن استمارة الحجز للغير إلا بموافقة كتابية من الشركة.' 
+                : 'The Client may not assign this Reservation Form to third parties without written approval from the Company.'}</li>
+              <li>${rtl 
+                ? 'يلتزم العميل بتسليم الشيكات للشركة في مدة أقصاها (15) خمسة عشر يوم من تاريخ تحرير استمارة الحجز، يجوز مد المدة بموافقة الشركة اذا كان سبب التأخير راجع لإجراءات بنك العميل.' 
+                : 'The Client commits to delivering checks to the Company within a maximum of (15) fifteen days from the date of this Reservation Form. This period may be extended with Company approval if the delay is due to Client bank procedures.'}</li>
+              <li>${rtl 
+                ? 'ينتهي العمل بهذه الاستمارة فور توقيع العميل على عقد الشراء وتطبق بنود العقد ويحل محل هذه الاستمارة.' 
+                : 'This Form ceases to be effective immediately upon the Client signing the Purchase Contract, at which point the Contract terms apply and replace this Form.'}</li>
+              <li>${rtl 
+                ? 'في حالة رغبة العميل، في العدول عن إتمام البيع قبل استلامه للعقد، يقوم بإخطار الشركة برغبته في ذلك كتابة وفي هذه الحالة يخصم من العميل (20%) من الدفعة المقدمة.' 
+                : 'In the event the Client wishes to withdraw from the sale before receiving the Contract, they must notify the Company in writing. In this case, (20%) of the Down Payment will be deducted.'}</li>
+              <li>${rtl 
+                ? 'يقر العميل بصحة جميع بياناته المذكورة أعلاه وأن عنوان المراسلات المذكور أعلاه بهذه الاستمارة محلا مختارا له وأن أي إعلانات أو إنذارات أو إخطارات أو مراسلات مرسلة إلى هذا العنوان تعتبر صحيحة وينتج عنها آثارها القانونية، وفي حالة تغيير العنوان المذكور أعلاه لا تعتبر أي إعلانات أو إنذارات أو إخطارات أو مراسلات مرسلة إلى على العنوان الجديد صحيحة ومنتجة لآثارها القانونية إلا بعد أن يرسل العميل إقرار جديد إلى الشركة يقر فيه بعنوانه الجديد.' 
+                : 'The Client declares the accuracy of all data above and that the correspondence address listed is their chosen domicile. Any notices, warnings, or correspondence sent to this address are considered valid and legally binding. In case of address change, no notices sent to the new address are valid unless the Client sends a new written declaration to the Company with the new address.'}</li>
+              <li>${rtl 
+                ? 'يقر العميل انه إطلع على نسخة العقد على تطبيق و/أو موقع إلكتروني و/أو من خلال حضوره لمقر الشركة ويوافق عليه وليس عليه أي اعتراض على أي من بنوده.' 
+                : 'The Client acknowledges having viewed a copy of the Contract via the app/website and/or by visiting Company premises, agrees to it, and has no objections to any of its clauses.'}</li>
+              <li>${rtl 
+                ? 'لا تعتبر هذه الاستمارة منتجة لآثارها مالم تكن موقعة من العميل ومسئول الحجز بالشركة ومختومة بختم الشركة دون كشط أو تعديل أو تحشير.' 
+                : 'This Form is not legally binding unless signed by the Client and the Company Reservation Officer, and stamped with the Company seal without scratching, alteration, or insertion.'}</li>
+              <li>${rtl 
+                ? 'حررت استمارة الحجز من عدد 2 نسخة للعمل بموجبها عند اللزوم.' 
+                : 'This Reservation Form is executed in two copies to be acted upon when necessary.'}</li>
+            </ol>
+          </div>
+
+          <div class="section" style="margin-top:20px;">
+            <div style="text-align:${rtl ? 'left' : 'right'}; font-weight:bold; margin-bottom:20px;">
+              ${rtl ? 'حررت في تاريخ' : 'Edited on Date'} &nbsp;&nbsp;&nbsp;&nbsp; / &nbsp;&nbsp;&nbsp;&nbsp; / 20
+            </div>
+            <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:12px;">
+              <div style="text-align:center;">
+                ${rtl ? 'مسئول الحجز /' : 'Reservation Officer /'}<br/><br/>
+                .........................
+              </div>
+              <div style="text-align:center;">
+                ${rtl ? 'مدير الحسابات/' : 'Accounts Manager /'}<br/><br/>
+                .........................
+              </div>
+              <div style="text-align:center;">
+                ${rtl ? 'العميل /' : 'Client /'}<br/><br/>
+                .........................
+              </div>
+            </div>
+          </div>
+
           <div class="foot">
             ${
               rtl

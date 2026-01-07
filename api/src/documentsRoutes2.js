@@ -844,19 +844,20 @@ router.post(
 
       const css = `
       <style>
-        @page { size: A4; margin: 14mm; }
-        body { font-family: "Noto Naskh Arabic","Amiri","DejaVu Sans",Arial,sans-serif; direction:${dir}; }
-        h1,h2,h3 { margin:0 0 8px; }
-        .header { display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:10px; }
-        .brand { font-size:16px; color:#A97E34; font-weight:700; }
-        .meta { font-size:11px; color:#6b7280; }
-        .section { margin:10px 0; }
+        @page { size: A4; margin: 10mm; }
+        body { font-family: "Noto Naskh Arabic","Amiri","DejaVu Sans",Arial,sans-serif; direction:${dir}; font-size:10px; }
+        h1,h2 { margin:0 0 6px; font-size:16px; }
+        h3 { margin:0 0 4px; font-size:12px; }
+        .header { display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:8px; }
+        .brand { font-size:14px; color:#A97E34; font-weight:700; }
+        .meta { font-size:10px; color:#6b7280; }
+        .section { margin:8px 0; }
         table { width:100%; border-collapse:collapse; }
-        th, td { border:1px solid #1f2937; padding:6px; font-size:11px; background:#fffdf5; }
+        th, td { border:1px solid #1f2937; padding:4px; font-size:10px; background:#fffdf5; }
         th { background:#A97E34; color:#000; }
-        .buyers { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-        .buyer { border:1px solid #ead9bd; border-radius:8px; padding:8px; background:#fff; }
-        .foot { margin-top:12px; font-size:10px; color:#6b7280; }
+        .buyers { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+        .buyer { border:1px solid #ead9bd; border-radius:6px; padding:6px; background:#fff; font-size:10px; }
+        .foot { margin-top:10px; font-size:9px; color:#6b7280; }
       </style>
       `
 
@@ -927,7 +928,7 @@ router.post(
             </table>
           </div>
           <div class="section">
-            <h3>${rtl ? 'دفعة التعاقد' : 'Contract Down Payment'}</h3>
+            <h3>${rtl ? 'دفعة المقدم' : 'Down Payment'}</h3>
             <table>
               <tbody>
                 <tr>
@@ -945,17 +946,25 @@ router.post(
                 </tr>
                 <tr>
                   <th>
-                    ${rtl ? 'مبالغ مدفوعة من قيمة الدفعة' : 'Additional amounts paid from DP'}
+                    ${
+                      dpRemaining === 0 
+                        ? (rtl ? 'باقي دفعة المقدم' : 'Rest of Down Payment')
+                        : (rtl ? 'مبالغ مدفوعة من قيمة دفعة المقدم' : 'Amounts paid from Down Payment value')
+                    }
                     ${paidDateStr ? (rtl ? ` (تم سدادها بتاريخ ${paidDateStr})` : ` (Paid on ${paidDateStr})`) : ''}
                   </th>
                   <td>${fmtNum(paidDpAmount)} ${currency}</td>
                   <td>${paidDpWords}</td>
                 </tr>
-                <tr>
-                  <th>${rtl ? 'المتبقي من قيمة الدفعة' : 'Remaining from Down Payment'}</th>
-                  <td>${fmtNum(dpRemaining)} ${currency}</td>
-                  <td>${remainingDpWords}</td>
-                </tr>
+                ${
+                  dpRemaining > 0
+                    ? `<tr>
+                        <th>${rtl ? 'المتبقي من قيمة دفعة المقدم' : 'Remaining from Down Payment value'}</th>
+                        <td>${fmtNum(dpRemaining)} ${currency}</td>
+                        <td>${remainingDpWords}</td>
+                      </tr>`
+                    : ''
+                }
               </tbody>
             </table>
           </div>
@@ -1024,11 +1033,6 @@ router.post(
           </div>
 
           <div class="foot">
-            ${
-              rtl
-                ? 'هذا النموذج يعكس الشروط المالية المتفق عليها للحجز، ويُعد جزءًا من ملف التعاقد النهائي.'
-                : 'This form reflects the agreed financial terms for the reservation and forms part of the final contract file.'
-            }
           </div>
         </body>
       </html>

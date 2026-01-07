@@ -437,8 +437,13 @@ router.get('/:id/financial-summary', authMiddleware, async (req, res) => {
     const rf = rfRes.rows[0]
     const details = rf.details || {}
     const dp = details.dp || {}
+    // RF stores calculator at details.calculator, so we need to check there too
+    const calc = details.calculator || {}
     const unitPricingBreakdown =
-      details.unitPricingBreakdown || details.unit_pricing_breakdown || {}
+      details.unitPricingBreakdown ||
+      details.unit_pricing_breakdown ||
+      calc.unitPricingBreakdown ||
+      {}
 
     const totalExcl = Number(
       unitPricingBreakdown.totalExclMaintenance ||

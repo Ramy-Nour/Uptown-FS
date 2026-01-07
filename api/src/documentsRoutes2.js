@@ -845,19 +845,19 @@ router.post(
       const css = `
       <style>
         @page { size: A4; margin: 10mm; }
-        body { font-family: "Noto Naskh Arabic","Amiri","DejaVu Sans",Arial,sans-serif; direction:${dir}; font-size:11px; }
-        h1,h2 { margin:0 0 6px; font-size:18px; }
-        h3 { margin:0 0 5px; font-size:13px; }
+        body { font-family: "Noto Naskh Arabic","Amiri","DejaVu Sans",Arial,sans-serif; direction:${dir}; font-size:12px; }
+        h1,h2 { margin:0 0 6px; font-size:20px; }
+        h3 { margin:0 0 5px; font-size:14px; }
         .header { display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:10px; }
-        .brand { font-size:15px; color:#A97E34; font-weight:700; }
-        .meta { font-size:10px; color:#6b7280; }
+        .brand { font-size:16px; color:#A97E34; font-weight:700; }
+        .meta { font-size:11px; color:#6b7280; }
         .section { margin:8px 0; }
         table { width:100%; border-collapse:collapse; }
-        th, td { border:1px solid #1f2937; padding:5px; font-size:11px; background:#fffdf5; }
+        th, td { border:1px solid #1f2937; padding:5px; font-size:12px; background:#fffdf5; }
         th { background:#A97E34; color:#000; }
         .buyers { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-        .buyer { border:1px solid #ead9bd; border-radius:6px; padding:6px; background:#fff; font-size:11px; }
-        .foot { margin-top:10px; font-size:10px; color:#6b7280; }
+        .buyer { border:1px solid #ead9bd; border-radius:6px; padding:6px; background:#fff; font-size:12px; }
+        .foot { margin-top:10px; font-size:11px; color:#6b7280; }
       </style>
       `
 

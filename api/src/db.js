@@ -97,6 +97,7 @@ export async function initDb() {
     );
 
     -- Deals
+    CREATE TABLE IF NOT EXISTS deals (
       id SERIAL PRIMARY KEY,
       title TEXT NOT NULL,
       amount NUMERIC(18,2) NOT NULL DEFAULT 0,

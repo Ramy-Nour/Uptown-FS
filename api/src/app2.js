@@ -274,7 +274,8 @@ app.post('/api/generate-document', authMiddleware, validate(generateDocumentSche
             docData['ثمن بالأرقام'] = totalPrice
             docData['ثمن الوحدة والجراج وغرفة التخزين'] = 'ثمن الوحدة شامل الجراج وغرفة التخزين'
             docData['مصاريف الصيانة بالأرقام'] = maintenanceDeposit
-            docData['مصاريف الصيانة كتابتا'] = convertToWords(maintenanceDeposit, lang || 'ar', { currency: currency || 'EGP' })
+            // Force Arabic for the Arabic contract field
+            docData['مصاريف الصيانة كتابتا'] = convertToWords(maintenanceDeposit, 'ar', { currency: 'EGP' })
 
             // === CONTRACT LOGISTICS (Arabic placeholders) ===
             // === CONTRACT LOGISTICS (Arabic placeholders) ===
@@ -341,36 +342,42 @@ app.post('/api/generate-document', authMiddleware, validate(generateDocumentSche
 
             docData['الدفعة التعاقد بالأرقام'] = total
 
-            const totalDpWordsForContract = convertToWords(total, lang, { currency })
+            const totalDpWordsForContract = convertToWords(total, 'ar', { currency: 'EGP' })
             docData['الدفعة التعاقد كتابتا'] = totalDpWordsForContract
+            
+            // Total Price in Words (Added as per request)
+            docData['ثمن كتابتا'] = convertToWords(totalPrice, 'ar', { currency: 'EGP' })
 
             if (lang === 'ar') {
-              if (remaining > 0) {
-                docData['بيان الباقي من دفعة التعاقد'] =
-                  `دفعة التعاقد المتفق عليها هي مبلغ ${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} جم، ` +
-                  `تم سداد مبلغ ${paidSoFar.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} جم من قيمة دفعة التعاقد حتى تاريخه، ` +
-                  `ويتبقى مبلغ ${remaining.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} جم يسدد عند توقيع العقد.`
-              } else {
-                let completionDateText = ''
-                try {
-                  const srcDate =
-                    dp.paid_date ||
-                    dp.preliminary_date ||
-                    row.reservation_date ||
-                    null
-                  if (srcDate) {
-                    const d = new Date(srcDate)
-                    if (!Number.isNaN(d.getTime())) {
-                      const dd = String(d.getDate()).padStart(2, '0')
-                      const mm = String(d.getMonth() + 1).padStart(2, '0')
-                      const yyyy = d.getFullYear()
-                      completionDateText = `${dd}/${mm}/${yyyy}`
-                    }
+              const paidWords = convertToWords(paidSoFar, 'ar', { currency: 'EGP' })
+              const remainingWords = convertToWords(remaining, 'ar', { currency: 'EGP' })
+              
+              // Get Payment Date (Paid Date or today if missing? Prefer source date)
+              let paymentDateStr = ''
+              try {
+                const srcDate = dp.paid_date || dp.preliminary_date || row.reservation_date || null
+                if (srcDate) {
+                  const d = new Date(srcDate)
+                  if (!Number.isNaN(d.getTime())) {
+                    const dd = String(d.getDate()).padStart(2, '0')
+                    const mm = String(d.getMonth() + 1).padStart(2, '0')
+                    const yyyy = d.getFullYear()
+                    paymentDateStr = `${dd}/${mm}/${yyyy}`
                   }
-                } catch {}
-                docData['بيان الباقي من دفعة التعاقد'] =
-                  `دفعة التعاقد المتفق عليها هي مبلغ ${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} جم، تم سداده بالكامل` +
-                  (completionDateText ? ` بتاريخ ${completionDateText}.` : '.')
+                }
+              } catch {}
+
+              if (remaining > 0) {
+                 // Partial Payment Scenario
+                 docData['بيان الباقي من دفعة التعاقد'] = 
+                   `قيمة الدفعة المقدمة مبلغ وقدره ${total.toLocaleString('en-US')} جنيه مصري ( ${totalDpWordsForContract} ) ` +
+                   `تم سداد مبلغ وقدره ${paidSoFar.toLocaleString('en-US')} جنيه مصري ( ${paidWords} ) ` +
+                   `على ان يتم سداد باقي المقدم وقدره ${remaining.toLocaleString('en-US')} جنيه مصري ( ${remainingWords} ) تسدد بموجب شيكات بنكية مسطرة تسلم للطرف الأول عند التعاقد.`
+              } else {
+                 // Full Payment Scenario
+                 docData['بيان الباقي من دفعة التعاقد'] = 
+                   `قيمة الدفعة المقدمة مبلغ وقدره ${total.toLocaleString('en-US')} جنيه مصري ( ${totalDpWordsForContract} ) ` +
+                   `تم سدادها بتاريخ ${paymentDateStr || '..................'}`
               }
             } else {
               if (remaining > 0) {

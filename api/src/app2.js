@@ -37,6 +37,11 @@ import { validate, generateDocumentSchema } from './validation.js'
 const require = createRequire(import.meta.url)
 const libre = require('libreoffice-convert')
 
+// Derive __dirname equivalent for ES modules (file-relative path resolution)
+import { fileURLToPath } from 'url'
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
 const app = express()
 
 // Behind Docker/network proxies, enable trust proxy so express-rate-limit can read X-Forwarded-For safely
@@ -201,7 +206,8 @@ app.post('/api/generate-document', authMiddleware, validate(generateDocumentSche
 
     const lang = String(language || 'en').toLowerCase().startsWith('ar') ? 'ar' : 'en'
 
-    const templatesDir = path.join(process.cwd(), 'api', 'templates')
+    // Resolve template path safely - use __dirname to avoid cwd dependency
+    const templatesDir = path.join(__dirname, '..', 'templates')
     const requestedPath = path.join(templatesDir, templateName)
     if (!requestedPath.startsWith(templatesDir)) {
       return bad(res, 400, 'Invalid template path')

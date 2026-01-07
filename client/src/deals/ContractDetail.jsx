@@ -198,6 +198,10 @@ export default function ContractDetail() {
   const calculatorData = contract.details?.calculator || {}
   const generatedPlan = calculatorData.generatedPlan || {}
   const inputs = calculatorData.inputs || {}
+  // Get financial data from dpSummary (loaded from API) or fallback to calculator
+  const totalPrice = dpSummary?.total_excl || dpSummary?.total_price || generatedPlan.totalNominal || contract.amount || null
+  const planDuration = inputs.planDurationYears || dpSummary?.plan_duration_years || null
+  const frequency = inputs.installmentFrequency || dpSummary?.installment_frequency || null
   const contractDataFields = [
     { label: 'Buyer Name', value: clientInfo.buyer_name || buyerName },
     { label: 'Nationality', value: clientInfo.nationality || '-' },
@@ -209,11 +213,11 @@ export default function ContractDetail() {
     { label: 'Unit Type', value: unitInfo.unit_type || '-' },
     { label: 'Unit Area', value: unitInfo.unit_area || unitInfo.area || '-' },
     { label: 'Building / Block', value: `${unitInfo.building_number || '-'} / ${unitInfo.block_sector || '-'}` },
-    { label: 'Total Price', value: generatedPlan.totalNominal ? Number(generatedPlan.totalNominal).toLocaleString() : '-' },
+    { label: 'Total Price', value: totalPrice ? Number(totalPrice).toLocaleString() : '-' },
     { label: 'Down Payment', value: dpSummary?.dp_total ? Number(dpSummary.dp_total).toLocaleString() : (generatedPlan.downPaymentAmount ? Number(generatedPlan.downPaymentAmount).toLocaleString() : '-') },
     { label: 'Handover Year', value: handoverYear ? `Year ${handoverYear}` : '-' },
-    { label: 'Plan Duration', value: inputs.planDurationYears ? `${inputs.planDurationYears} years` : '-' },
-    { label: 'Installment Frequency', value: inputs.installmentFrequency || '-' }
+    { label: 'Plan Duration', value: planDuration ? `${planDuration} years` : '-' },
+    { label: 'Installment Frequency', value: frequency || '-' }
   ]
 
   return renderWithShell(
@@ -590,7 +594,8 @@ export default function ContractDetail() {
                 setPreviewLoading(true)
                 const body = {
                   documentType: 'contract',
-                  deal_id: Number(dealId)
+                  deal_id: Number(dealId),
+                  data: {} // Required by validation schema
                 }
                 const resp = await fetchWithAuth(`${API_URL}/api/generate-document`, {
                   method: 'POST',

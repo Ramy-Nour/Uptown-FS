@@ -475,6 +475,7 @@ router.get('/:id/financial-summary', authMiddleware, async (req, res) => {
     const summary = {
       // Core totals
       total_excl: totalExcl,
+      total_price: totalExcl, // alias for contract preview
       maintenance, // original name used by DealDetail
       maintenance_deposit: maintenance, // alias used by ContractDetail
       total_incl: totalIncl,
@@ -499,7 +500,11 @@ router.get('/:id/financial-summary', authMiddleware, async (req, res) => {
 
       // Remaining price after Down Payment
       remaining_price_after_dp: remainingPriceAfterDp,
-      remaining_after_dp: remainingPriceAfterDp
+      remaining_after_dp: remainingPriceAfterDp,
+
+      // Plan structure (from calculator snapshot)
+      plan_duration_years: calc.inputs?.planDurationYears || calc.generatedPlan?.planDurationYears || null,
+      installment_frequency: calc.inputs?.installmentFrequency || calc.generatedPlan?.installmentFrequency || null
     }
 
     return res.json({ ok: true, summary })

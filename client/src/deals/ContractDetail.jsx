@@ -632,6 +632,7 @@ export default function ContractDetail() {
                 const body = {
                   documentType: 'contract',
                   deal_id: Number(dealId),
+                  language: 'ar',
                   data: {
                     contractDate,
                     poaStatement

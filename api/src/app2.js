@@ -204,7 +204,9 @@ app.post('/api/generate-document', authMiddleware, validate(generateDocumentSche
       }
     }
 
-    const lang = String(language || 'en').toLowerCase().startsWith('ar') ? 'ar' : 'en'
+    // Default to 'ar' for contracts if not specified
+    const defaultLang = type === 'contract' ? 'ar' : 'en'
+    const lang = String(language || defaultLang).toLowerCase().startsWith('ar') ? 'ar' : 'en'
 
     // Resolve template path safely - use __dirname to avoid cwd dependency
     const templatesDir = path.join(__dirname, '..', 'templates')

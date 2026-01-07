@@ -51,6 +51,11 @@ export default function ContractDetail() {
   const [viewingReservationError, setViewingReservationError] = useState('')
   const [generatingContractPdf, setGeneratingContractPdf] = useState(false)
   const [historyRows, setHistoryRows] = useState([])
+  // Preview feature state
+  const [showDataPreview, setShowDataPreview] = useState(false)
+  const [showPdfPreview, setShowPdfPreview] = useState(false)
+  const [previewPdfUrl, setPreviewPdfUrl] = useState(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
 
   const user = JSON.parse(localStorage.getItem('auth_user') || '{}')
   const role = user?.role || 'user'
@@ -182,6 +187,34 @@ export default function ContractDetail() {
     role === 'contract_person' &&
     !!dealId &&
     ['DRAFT', 'PENDING_CM', 'PENDING_TM', 'APPROVED', 'EXECUTED'].includes(status)
+
+  // Contract Admin can preview draft before submitting
+  const canPreviewDraft =
+    role === 'contract_person' &&
+    status === 'DRAFT' &&
+    !!dealId
+
+  // Build the contract data for preview panel
+  const calculatorData = contract.details?.calculator || {}
+  const generatedPlan = calculatorData.generatedPlan || {}
+  const inputs = calculatorData.inputs || {}
+  const contractDataFields = [
+    { label: 'Buyer Name', value: clientInfo.buyer_name || buyerName },
+    { label: 'Nationality', value: clientInfo.nationality || '-' },
+    { label: 'ID/Passport', value: clientInfo.id_or_passport || '-' },
+    { label: 'Phone', value: clientInfo.phone_primary || '-' },
+    { label: 'Email', value: clientInfo.email || '-' },
+    { label: 'Address', value: clientInfo.address || '-' },
+    { label: 'Unit Code', value: unitCode },
+    { label: 'Unit Type', value: unitInfo.unit_type || '-' },
+    { label: 'Unit Area', value: unitInfo.unit_area || unitInfo.area || '-' },
+    { label: 'Building / Block', value: `${unitInfo.building_number || '-'} / ${unitInfo.block_sector || '-'}` },
+    { label: 'Total Price', value: generatedPlan.totalNominal ? Number(generatedPlan.totalNominal).toLocaleString() : '-' },
+    { label: 'Down Payment', value: dpSummary?.dp_total ? Number(dpSummary.dp_total).toLocaleString() : (generatedPlan.downPaymentAmount ? Number(generatedPlan.downPaymentAmount).toLocaleString() : '-') },
+    { label: 'Handover Year', value: handoverYear ? `Year ${handoverYear}` : '-' },
+    { label: 'Plan Duration', value: inputs.planDurationYears ? `${inputs.planDurationYears} years` : '-' },
+    { label: 'Installment Frequency', value: inputs.installmentFrequency || '-' }
+  ]
 
   return renderWithShell(
     <div>
@@ -339,8 +372,262 @@ export default function ContractDetail() {
         </div>
       </div>
 
+      {/* Contract Data Preview Panel - Collapsible */}
+      {canPreviewDraft && (
+        <div style={{ marginBottom: 16 }}>
+          <button
+            type="button"
+            onClick={() => setShowDataPreview(!showDataPreview)}
+            style={{
+              padding: '8px 12px',
+              borderRadius: 8,
+              border: '1px solid #6366f1',
+              background: showDataPreview ? '#6366f1' : '#fff',
+              color: showDataPreview ? '#fff' : '#6366f1',
+              cursor: 'pointer',
+              fontWeight: 500,
+              marginBottom: showDataPreview ? 12 : 0
+            }}
+          >
+            {showDataPreview ? '▲ Hide Contract Data' : '▼ View Contract Data'}
+          </button>
+          {showDataPreview && (
+            <div
+              style={{
+                background: '#f9fafb',
+                border: '1px solid #e5e7eb',
+                borderRadius: 10,
+                padding: 16,
+                marginTop: 8
+              }}
+            >
+              <h4 style={{ margin: '0 0 12px 0', color: '#374151' }}>Contract Data Preview</h4>
+              <p style={{ fontSize: 12, color: '#6b7280', marginBottom: 12 }}>
+                These values will be inserted into the contract template:
+              </p>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+                  gap: 8
+                }}
+              >
+                {contractDataFields.map((field, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      display: 'flex',
+                      padding: '6px 10px',
+                      background: '#fff',
+                      borderRadius: 6,
+                      border: '1px solid #e5e7eb'
+                    }}
+                  >
+                    <span style={{ fontWeight: 500, color: '#374151', minWidth: 140 }}>
+                      {field.label}:
+                    </span>
+                    <span style={{ color: '#111827' }}>{field.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* PDF Preview Modal */}
+      {showPdfPreview && previewPdfUrl && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.6)',
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 20
+          }}
+          onClick={() => {
+            setShowPdfPreview(false)
+            if (previewPdfUrl) URL.revokeObjectURL(previewPdfUrl)
+            setPreviewPdfUrl(null)
+          }}
+        >
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: 12,
+              width: '90%',
+              maxWidth: 900,
+              height: '85vh',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '12px 16px',
+                borderBottom: '1px solid #e5e7eb',
+                background: '#f9fafb'
+              }}
+            >
+              <h3 style={{ margin: 0, fontSize: 16 }}>Contract Draft Preview</h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPdfPreview(false)
+                  if (previewPdfUrl) URL.revokeObjectURL(previewPdfUrl)
+                  setPreviewPdfUrl(null)
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: 20,
+                  cursor: 'pointer',
+                  color: '#6b7280'
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            <iframe
+              src={previewPdfUrl}
+              title="Contract PDF Preview"
+              style={{
+                flex: 1,
+                border: 'none',
+                width: '100%'
+              }}
+            />
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: 8,
+                padding: '12px 16px',
+                borderTop: '1px solid #e5e7eb',
+                background: '#f9fafb'
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPdfPreview(false)
+                  if (previewPdfUrl) URL.revokeObjectURL(previewPdfUrl)
+                  setPreviewPdfUrl(null)
+                }}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: 8,
+                  border: '1px solid #d1d5db',
+                  background: '#fff',
+                  cursor: 'pointer'
+                }}
+              >
+                Close
+              </button>
+              {canSubmitToCm && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      setActionLoading(true)
+                      const resp = await fetchWithAuth(
+                        `${API_URL}/api/contracts/${contract.id}/submit`,
+                        {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' }
+                        }
+                      )
+                      const data = await resp.json().catch(() => ({}))
+                      if (!resp.ok) throw new Error(data?.error?.message || 'Failed to submit')
+                      notifySuccess('Contract submitted to Contract Manager.')
+                      setShowPdfPreview(false)
+                      if (previewPdfUrl) URL.revokeObjectURL(previewPdfUrl)
+                      setPreviewPdfUrl(null)
+                      await load()
+                    } catch (e) {
+                      notifyError(e, 'Failed to submit contract')
+                    } finally {
+                      setActionLoading(false)
+                    }
+                  }}
+                  disabled={actionLoading}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: 8,
+                    border: '1px solid #16a34a',
+                    background: '#16a34a',
+                    color: '#fff',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {actionLoading ? 'Submitting…' : 'Submit to CM'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Actions bar – Phase 2: status transitions and PDF generation */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+        {/* Preview Draft PDF button */}
+        {canPreviewDraft && (
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                setPreviewLoading(true)
+                const body = {
+                  documentType: 'contract',
+                  deal_id: Number(dealId)
+                }
+                const resp = await fetchWithAuth(`${API_URL}/api/generate-document`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(body)
+                })
+                if (!resp.ok) {
+                  let errMsg = 'Failed to generate preview'
+                  try {
+                    const j = await resp.json()
+                    errMsg = j?.error?.message || errMsg
+                  } catch {}
+                  throw new Error(errMsg)
+                }
+                const blob = await resp.blob()
+                const url = URL.createObjectURL(blob)
+                setPreviewPdfUrl(url)
+                setShowPdfPreview(true)
+              } catch (e) {
+                notifyError(e, 'Failed to preview contract PDF')
+              } finally {
+                setPreviewLoading(false)
+              }
+            }}
+            disabled={previewLoading}
+            style={{
+              padding: '8px 12px',
+              borderRadius: 8,
+              border: '1px solid #0ea5e9',
+              background: '#0ea5e9',
+              color: '#fff',
+              cursor: 'pointer'
+            }}
+          >
+            {previewLoading ? 'Loading Preview…' : 'Preview Draft PDF'}
+          </button>
+        )}
         {canSubmitToCm && (
           <button
             type="button"

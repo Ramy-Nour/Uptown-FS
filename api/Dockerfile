@@ -4,9 +4,10 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 
-# Development stage (with Chromium for Puppeteer)
+# Development stage (with Chromium for Puppeteer + LibreOffice for DOCX→PDF)
 FROM base AS development
 RUN apk add --no-cache \
+    libreoffice \
     chromium \
     nss \
     freetype \

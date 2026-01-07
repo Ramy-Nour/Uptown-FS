@@ -102,6 +102,7 @@ export default function ContractDetail() {
       // Load contracts history
       try {
         const hResp = await fetchWithAuth(`${API_URL}/api/contracts/${c.id}/history`)
+        const hData = await hResp.json().catch(() => ({}))
         if (hResp.ok && Array.isArray(hData.history)) {
           setHistoryRows(hData.history)
         } else {
@@ -659,13 +660,13 @@ export default function ContractDetail() {
                 try {
                   const res = await fetch(`/api/deals/${dealId}/contract-settings`, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('auth_token')}` },
                     body: JSON.stringify({ contractDate, poaStatement })
                   })
                   if (res.ok) {
                     alert('Settings saved!')
                     // reload deal?
-                    fetchDeal() 
+                    load() 
                   } else {
                     alert('Failed to save settings')
                   }
@@ -687,11 +688,11 @@ export default function ContractDetail() {
                 try {
                    const res = await fetch(`/api/deals/${dealId}/lock-contract-settings`, {
                     method: 'POST',
-                    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+                    headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` }
                   })
                   if (res.ok) {
                     alert('Settings locked!')
-                    fetchDeal()
+                    load()
                   } else {
                     alert('Failed to lock settings')
                   }

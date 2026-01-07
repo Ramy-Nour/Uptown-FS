@@ -60,6 +60,10 @@ export default function ContractDetail() {
   const user = JSON.parse(localStorage.getItem('auth_user') || '{}')
   const role = user?.role || 'user'
 
+  // Contract configuration state
+  const [contractDate, setContractDate] = useState(new Date().toISOString().split('T')[0])
+  const [poaStatement, setPoaStatement] = useState('')
+
   async function load() {
     try {
       setLoading(true)
@@ -583,6 +587,39 @@ export default function ContractDetail() {
         </div>
       )}
 
+
+      
+      {/* Contract Settings Panel */}
+      <div style={{ background: '#fff', borderRadius: 8, padding: 16, marginBottom: 20, border: '1px solid #e5e7eb' }}>
+        <h3 style={{ margin: '0 0 16px 0', fontSize: 16, fontWeight: 600 }}>Contract Settings (عدادات العقد)</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 13, marginBottom: 6, fontWeight: 500 }}>Contract Date (تاريخ العقد)</label>
+            <input 
+              type="date" 
+              value={contractDate} 
+              onChange={e => setContractDate(e.target.value)}
+              style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #d1d5db' }}
+            />
+            <p style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>Day of week will be auto-calculated.</p>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 13, marginBottom: 6, fontWeight: 500 }}>Power of Attorney Statement (بيان التوكيل)</label>
+            <input 
+              type="text" 
+              value={poaStatement} 
+              onChange={e => setPoaStatement(e.target.value)}
+              placeholder="e.g. بموجب توكيل رقم ..."
+              style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #d1d5db', direction: 'rtl' }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {loading && <div>Loading...</div>}
+      
+      {/* ... existing contract info ... */}
+
       {/* Actions bar – Phase 2: status transitions and PDF generation */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
         {/* Preview Draft PDF button */}
@@ -595,7 +632,10 @@ export default function ContractDetail() {
                 const body = {
                   documentType: 'contract',
                   deal_id: Number(dealId),
-                  data: {} // Required by validation schema
+                  data: {
+                    contractDate,
+                    poaStatement
+                  }
                 }
                 const resp = await fetchWithAuth(`${API_URL}/api/generate-document`, {
                   method: 'POST',

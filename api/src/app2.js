@@ -244,6 +244,62 @@ app.post('/api/generate-document', authMiddleware, validate(generateDocumentSche
             const row = rf.rows[0]
             const details = row.details || {}
             const dp = details.dp || {}
+            const calc = details.calculator || {}
+            const clientInfo = calc.clientInfo || details.clientInfo || {}
+            const unitInfo = calc.unitInfo || details.unitInfo || {}
+            const inputs = calc.inputs || {}
+            const generatedPlan = calc.generatedPlan || {}
+            const unitPricing = calc.unitPricingBreakdown || details.unitPricingBreakdown || {}
+
+            // === CUSTOMER INFORMATION (Arabic placeholders) ===
+            docData['اسم المشترى'] = clientInfo.buyer_name || clientInfo.name || ''
+            docData['الجنسية'] = clientInfo.nationality || ''
+            docData['رقم قومي/ رقم جواز'] = clientInfo.id_or_passport || clientInfo.id_number || ''
+            docData['العنوان'] = clientInfo.address || ''
+            docData['رقم الهاتف'] = clientInfo.phone_primary || clientInfo.phone || ''
+            docData['البريد الالكتروني'] = clientInfo.email || ''
+
+            // === UNIT DETAILS (Arabic placeholders) ===
+            docData['نوع الوحدة'] = unitInfo.unit_type || ''
+            docData['كود الوحدة'] = unitInfo.unit_code || ''
+            docData['وحدة رقم'] = unitInfo.unit_number || unitInfo.unit_code || ''
+            docData['الدور'] = unitInfo.floor || ''
+            docData['مبنى رقم'] = unitInfo.building_number || unitInfo.building || ''
+            docData['قطاع'] = unitInfo.block_sector || unitInfo.block || ''
+            docData['مجاورة'] = unitInfo.zone || unitInfo.neighborhood || ''
+
+            // === PRICING INFORMATION (Arabic placeholders) ===
+            const totalPrice = unitPricing.totalExclMaintenance || unitPricing.total_excl || generatedPlan.totalNominal || 0
+            const maintenanceDeposit = unitPricing.maintenance || unitPricing.maintenance_fee || 0
+            docData['ثمن بالأرقام'] = totalPrice
+            docData['ثمن الوحدة والجراج وغرفة التخزين'] = 'ثمن الوحدة شامل الجراج وغرفة التخزين'
+            docData['مصاريف الصيانة بالأرقام'] = maintenanceDeposit
+            docData['مصاريف الصيانة كتابتا'] = convertToWords(maintenanceDeposit, lang || 'ar', { currency: currency || 'EGP' })
+
+            // === CONTRACT LOGISTICS (Arabic placeholders) ===
+            // === CONTRACT LOGISTICS (Arabic placeholders) ===
+            let contractDateObj = new Date()
+            if (data.contractDate) {
+              // expect YYYY-MM-DD or valid date string
+              const validDate = new Date(data.contractDate)
+              if (!isNaN(validDate.getTime())) {
+                contractDateObj = validDate
+              }
+            }
+            
+            const arabicDays = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت']
+            docData['يوم تاريخ العقد'] = arabicDays[contractDateObj.getDay()]
+            docData['تاريخ العقد'] = `${String(contractDateObj.getDate()).padStart(2, '0')}/${String(contractDateObj.getMonth() + 1).padStart(2, '0')}/${contractDateObj.getFullYear()}`
+            docData['مدة التسليم'] = inputs.handoverYear ? `${inputs.handoverYear} سنوات` : ''
+            docData['بيان التوكيل'] = data.poaStatement || '' // Manual entry from frontend
+
+            // Keep English versions for backward compatibility  
+            docData.buyer_name = clientInfo.buyer_name || clientInfo.name || ''
+            docData.unit_code = unitInfo.unit_code || ''
+            docData.total_price = totalPrice
+            docData.maintenance_deposit = maintenanceDeposit
+            docData.down_payment_amount = generatedPlan.downPaymentAmount || dp.total || 0
+
 
             let dpTotal = null
             let dpRemaining = null

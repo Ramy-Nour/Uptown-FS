@@ -181,7 +181,7 @@ app.post('/api/generate-document', authMiddleware, validate(generateDocumentSche
           return bad(res, 400, 'deal_id must be a positive number')
         }
         const dq = await pool.query(
-          'SELECT status, needs_override, override_approved_at FROM deals WHERE id=$1',
+          'SELECT status, needs_override, override_approved_at, contract_date, poa_statement, contract_settings_locked FROM deals WHERE id=$1',
           [id]
         )
         if (dq.rows.length === 0) {
@@ -283,9 +283,21 @@ app.post('/api/generate-document', authMiddleware, validate(generateDocumentSche
             // === CONTRACT LOGISTICS (Arabic placeholders) ===
             // === CONTRACT LOGISTICS (Arabic placeholders) ===
             let contractDateObj = new Date()
-            if (data.contractDate) {
-              // expect YYYY-MM-DD or valid date string
-              const validDate = new Date(data.contractDate)
+            
+            // Prioritize DB value if locked, otherwise request value, otherwise DB value, otherwise Today
+            const dbContractDate = dq.rows[0].contract_date
+            const dbPoa = dq.rows[0].poa_statement
+            const isLocked = dq.rows[0].contract_settings_locked === true
+
+            let dateSource = data.contractDate
+            if (isLocked && dbContractDate) {
+               dateSource = dbContractDate
+            } else if (!dateSource && dbContractDate) {
+               dateSource = dbContractDate
+            }
+
+            if (dateSource) {
+              const validDate = new Date(dateSource)
               if (!isNaN(validDate.getTime())) {
                 contractDateObj = validDate
               }
@@ -295,7 +307,15 @@ app.post('/api/generate-document', authMiddleware, validate(generateDocumentSche
             docData['يوم تاريخ العقد'] = arabicDays[contractDateObj.getDay()]
             docData['تاريخ العقد'] = `${String(contractDateObj.getDate()).padStart(2, '0')}/${String(contractDateObj.getMonth() + 1).padStart(2, '0')}/${contractDateObj.getFullYear()}`
             docData['مدة التسليم'] = inputs.handoverYear ? `${inputs.handoverYear} سنوات` : ''
-            docData['بيان التوكيل'] = data.poaStatement || '' // Manual entry from frontend
+            
+            // POA Logic: If locked -> use DB. Else use request || DB.
+            let finalPoa = data.poaStatement
+            if (isLocked) {
+               finalPoa = dbPoa
+            } else if (!finalPoa && dbPoa) {
+               finalPoa = dbPoa
+            }
+            docData['بيان التوكيل'] = finalPoa || ''
 
             // Keep English versions for backward compatibility  
             docData.buyer_name = clientInfo.buyer_name || clientInfo.name || ''

@@ -1284,4 +1284,69 @@ router.post(
   }
 )
 
+// -----------------------------
+// Contract Settings (POA / Date)
+// -----------------------------
+
+router.put('/:id/contract-settings', authMiddleware, async (req, res) => {
+  try {
+    const id = Number(req.params.id)
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ error: { message: 'Invalid deal id' } })
+    }
+
+    const { contractDate, poaStatement } = req.body
+
+    const existing = await pool.query('SELECT contract_settings_locked FROM deals WHERE id=$1', [id])
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ error: { message: 'Deal not found' } })
+    }
+
+    const locked = existing.rows[0].contract_settings_locked === true
+    // If locked, prevent editing unless user has elevated role? 
+    // User requested: "locked cant be changed by the contract person unless by a request"
+    // We'll enforce strict lock for now. Admins can unlock via direct DB or valid endpoints if added.
+    if (locked) {
+       // Allow overriding if specific role? E.g. 'financial_admin'
+       const isSuper = ['admin', 'superadmin', 'financial_admin'].includes(req.user?.role)
+       if (!isSuper) {
+         return res.status(403).json({ error: { message: 'Contract settings are locked.' } })
+       }
+    }
+
+    await pool.query(
+      'UPDATE deals SET contract_date=$1, poa_statement=$2 WHERE id=$3',
+      [contractDate || null, poaStatement || '', id]
+    )
+
+    // Log logic if needed?
+    return res.json({ ok: true })
+  } catch (e) {
+    console.error('PUT /:id/contract-settings error', e)
+    return res.status(500).json({ error: { message: 'Internal error' } })
+  }
+})
+
+router.post('/:id/lock-contract-settings', authMiddleware, async (req, res) => {
+  try {
+    const id = Number(req.params.id)
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ error: { message: 'Invalid deal id' } })
+    }
+
+    // Role check? Any user with access to the deal can lock it? 
+    // Let's assume yes for now as it's a workflow step.
+    
+    await pool.query(
+      'UPDATE deals SET contract_settings_locked=TRUE WHERE id=$1',
+      [id]
+    )
+    return res.json({ ok: true })
+  } catch (e) {
+    console.error('POST /:id/lock-contract-settings error', e)
+    return res.status(500).json({ error: { message: 'Internal error' } })
+  }
+})
+
 export default router
+

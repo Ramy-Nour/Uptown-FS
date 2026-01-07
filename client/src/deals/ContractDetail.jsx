@@ -41,6 +41,7 @@ export default function ContractDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const [contract, setContract] = useState(null)
+  const [deal, setDeal] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
@@ -101,7 +102,6 @@ export default function ContractDetail() {
       // Load contracts history
       try {
         const hResp = await fetchWithAuth(`${API_URL}/api/contracts/${c.id}/history`)
-        const hData = await hResp.json().catch(() => ({}))
         if (hResp.ok && Array.isArray(hData.history)) {
           setHistoryRows(hData.history)
         } else {
@@ -109,6 +109,19 @@ export default function ContractDetail() {
         }
       } catch {
         setHistoryRows([])
+      }
+
+      // Load Deal details (for contract settings)
+      if (dealIdNum) {
+        try {
+          const dResp = await fetchWithAuth(`${API_URL}/api/deals/${dealIdNum}`)
+          const dData = await dResp.json().catch(() => null)
+          if (dResp.ok && dData?.deal) {
+            setDeal(dData.deal)
+          }
+        } catch (e) {
+          console.error('Failed to load deal', e)
+        }
       }
     } catch (e) {
       const msg = e.message || String(e)
@@ -122,6 +135,18 @@ export default function ContractDetail() {
   useEffect(() => {
     load()
   }, [id])
+
+  // Sync state when deal is loaded (if existing settings found)
+  useEffect(() => {
+    if (deal) {
+      if (deal.contract_date) {
+        setContractDate(deal.contract_date.split('T')[0])
+      }
+      if (deal.poa_statement) {
+        setPoaStatement(deal.poa_statement)
+      }
+    }
+  }, [deal])
 
   if (loading && !contract) {
     return renderWithShell(<p>Loading…</p>)
@@ -598,8 +623,13 @@ export default function ContractDetail() {
             <input 
               type="date" 
               value={contractDate} 
+              disabled={deal?.contract_settings_locked}
               onChange={e => setContractDate(e.target.value)}
-              style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #d1d5db' }}
+              style={{ 
+                width: '100%', padding: '8px 12px', borderRadius: 6, 
+                border: '1px solid #d1d5db',
+                backgroundColor: deal?.contract_settings_locked ? '#f3f4f6' : '#fff'
+              }}
             />
             <p style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>Day of week will be auto-calculated.</p>
           </div>
@@ -608,11 +638,78 @@ export default function ContractDetail() {
             <input 
               type="text" 
               value={poaStatement} 
+              disabled={deal?.contract_settings_locked}
               onChange={e => setPoaStatement(e.target.value)}
               placeholder="e.g. بموجب توكيل رقم ..."
-              style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #d1d5db', direction: 'rtl' }}
+              style={{ 
+                width: '100%', padding: '8px 12px', borderRadius: 6, 
+                border: '1px solid #d1d5db', direction: 'rtl',
+                backgroundColor: deal?.contract_settings_locked ? '#f3f4f6' : '#fff'
+              }}
             />
           </div>
+        </div>
+        
+        {/* Save/Lock Controls */}
+        <div style={{ marginTop: 16, display: 'flex', gap: 12, alignItems: 'center' }}>
+          {!deal?.contract_settings_locked && (
+            <button
+              onClick={async () => {
+                try {
+                  const res = await fetch(`/api/deals/${dealId}/contract-settings`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
+                    body: JSON.stringify({ contractDate, poaStatement })
+                  })
+                  if (res.ok) {
+                    alert('Settings saved!')
+                    // reload deal?
+                    fetchDeal() 
+                  } else {
+                    alert('Failed to save settings')
+                  }
+                } catch (e) {
+                  console.error(e)
+                  alert('Error saving settings')
+                }
+              }}
+              style={{ padding: '6px 12px', fontSize: 13, borderRadius: 6, border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer' }}
+            >
+              Save Settings
+            </button>
+          )}
+
+          {!deal?.contract_settings_locked && (
+            <button
+              onClick={async () => {
+                if (!confirm('Are you sure you want to LOCK these settings? They cannot be changed afterwards.')) return
+                try {
+                   const res = await fetch(`/api/deals/${dealId}/lock-contract-settings`, {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+                  })
+                  if (res.ok) {
+                    alert('Settings locked!')
+                    fetchDeal()
+                  } else {
+                    alert('Failed to lock settings')
+                  }
+                } catch (e) {
+                  console.error(e)
+                  alert('Error locking settings')
+                }
+              }}
+              style={{ padding: '6px 12px', fontSize: 13, borderRadius: 6, border: '1px solid #ef4444', background: '#ef4444', color: '#fff', cursor: 'pointer' }}
+            >
+              Lock Settings
+            </button>
+          )}
+
+          {deal?.contract_settings_locked && (
+             <span style={{ fontSize: 12, color: '#ef4444', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+               🔒 Locked
+             </span>
+          )}
         </div>
       </div>
 

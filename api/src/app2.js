@@ -274,7 +274,8 @@ app.post('/api/generate-document', authMiddleware, validate(generateDocumentSche
             const totalPrice = unitPricing.totalExclMaintenance || unitPricing.total_excl || generatedPlan.totalNominal || 0
             const maintenanceDeposit = unitPricing.maintenance || unitPricing.maintenance_fee || 0
             docData['ثمن بالأرقام'] = totalPrice
-            docData['ثمن الوحدة والجراج وغرفة التخزين'] = 'ثمن الوحدة شامل الجراج وغرفة التخزين'
+            // Map strictly to the Arabic words for the total price, as requested
+            docData['ثمن الوحدة والجراج وغرفة التخزين'] = convertToWords(totalPrice, 'ar', { currency: 'EGP' })
             docData['مصاريف الصيانة بالأرقام'] = maintenanceDeposit
             // Force Arabic for the Arabic contract field
             docData['مصاريف الصيانة كتابتا'] = convertToWords(maintenanceDeposit, 'ar', { currency: 'EGP' })
@@ -369,17 +370,22 @@ app.post('/api/generate-document', authMiddleware, validate(generateDocumentSche
                 }
               } catch {}
 
+              // Recurring Clause for Remaining Price (Installments)
+              const remainingPriceClause = '، أما باقي الثمن فقد التزم الطرف الثاني بسداده للطرف الأول على أقساط (تسدد بموجب شيكات بنكية مسطرة تسلم للطرف الأول عند التعاقد او تحويل بنكي لحساب الطرف الأول) وتستحق الدفع بمجرد حلول الأجل الواردة قرين كل منها على النحو الموضح تفصيلاً بالملحق رقم (2) المرفق بهذا العقد، ولا تبرأ ذمة الطرف الثاني الا بتمام صرف الشيك أو وصول التحويل الى حساب الطرف الأول.'
+
               if (remaining > 0) {
                  // Partial Payment Scenario
                  docData['بيان الباقي من دفعة التعاقد'] = 
                    `قيمة الدفعة المقدمة مبلغ وقدره ${total.toLocaleString('en-US')} جنيه مصري ( ${totalDpWordsForContract} ) ` +
                    `تم سداد مبلغ وقدره ${paidSoFar.toLocaleString('en-US')} جنيه مصري ( ${paidWords} ) ` +
-                   `على ان يتم سداد باقي المقدم وقدره ${remaining.toLocaleString('en-US')} جنيه مصري ( ${remainingWords} ) تسدد بموجب شيكات بنكية مسطرة تسلم للطرف الأول عند التعاقد.`
+                   `على ان يتم سداد باقي المقدم وقدره ${remaining.toLocaleString('en-US')} جنيه مصري ( ${remainingWords} ) طبقا للملحق المالي.. ` + 
+                   remainingPriceClause
               } else {
                  // Full Payment Scenario
                  docData['بيان الباقي من دفعة التعاقد'] = 
                    `قيمة الدفعة المقدمة مبلغ وقدره ${total.toLocaleString('en-US')} جنيه مصري ( ${totalDpWordsForContract} ) ` +
-                   `تم سدادها بتاريخ ${paymentDateStr || '..................'}`
+                   `تم سدادها بتاريخ ${paymentDateStr || '..................'}. ` + 
+                   remainingPriceClause
               }
             } else {
               if (remaining > 0) {

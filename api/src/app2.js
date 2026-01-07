@@ -284,10 +284,23 @@ app.post('/api/generate-document', authMiddleware, validate(generateDocumentSche
             // === CONTRACT LOGISTICS (Arabic placeholders) ===
             let contractDateObj = new Date()
             
-            // Prioritize DB value if locked, otherwise request value, otherwise DB value, otherwise Today
-            const dbContractDate = dq.rows[0].contract_date
-            const dbPoa = dq.rows[0].poa_statement
-            const isLocked = dq.rows[0].contract_settings_locked === true
+            // Fetch contract settings from deals table
+            let dbContractDate = null
+            let dbPoa = null
+            let isLocked = false
+            try {
+              const dealSettings = await pool.query(
+                'SELECT contract_date, poa_statement, contract_settings_locked FROM deals WHERE id=$1',
+                [id]
+              )
+              if (dealSettings.rows.length > 0) {
+                dbContractDate = dealSettings.rows[0].contract_date
+                dbPoa = dealSettings.rows[0].poa_statement
+                isLocked = dealSettings.rows[0].contract_settings_locked === true
+              }
+            } catch (e) {
+              console.log('Could not fetch deal contract settings:', e.message)
+            }
 
             let dateSource = data.contractDate
             if (isLocked && dbContractDate) {

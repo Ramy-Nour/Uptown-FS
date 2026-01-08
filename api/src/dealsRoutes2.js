@@ -1295,7 +1295,7 @@ router.put('/:id/contract-settings', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: { message: 'Invalid deal id' } })
     }
 
-    const { contractDate, poaStatement } = req.body
+    const { contractDate, poaNumber, poaLetter, poaYear, poaOffice } = req.body
 
     const existing = await pool.query('SELECT contract_settings_locked FROM deals WHERE id=$1', [id])
     if (existing.rows.length === 0) {
@@ -1315,8 +1315,14 @@ router.put('/:id/contract-settings', authMiddleware, async (req, res) => {
     }
 
     await pool.query(
-      'UPDATE deals SET contract_date=$1, poa_statement=$2 WHERE id=$3',
-      [contractDate || null, poaStatement || '', id]
+      `UPDATE deals SET 
+        contract_date=$1, 
+        poa_number=$2, 
+        poa_letter=$3, 
+        poa_year=$4, 
+        poa_office=$5 
+      WHERE id=$6`,
+      [contractDate || null, poaNumber || '', poaLetter || '', poaYear || '', poaOffice || '', id]
     )
 
     // Log logic if needed?

@@ -284,18 +284,24 @@ app.post('/api/generate-document', authMiddleware, validate(generateDocumentSche
             // === CONTRACT LOGISTICS (Arabic placeholders) ===
             let contractDateObj = new Date()
             
-            // Fetch contract settings from deals table
+            // Fetch contract settings from deals table (including 4 POA fields)
             let dbContractDate = null
-            let dbPoa = null
+            let dbPoaNumber = ''
+            let dbPoaLetter = ''
+            let dbPoaYear = ''
+            let dbPoaOffice = ''
             let isLocked = false
             try {
               const dealSettings = await pool.query(
-                'SELECT contract_date, poa_statement, contract_settings_locked FROM deals WHERE id=$1',
+                'SELECT contract_date, poa_number, poa_letter, poa_year, poa_office, contract_settings_locked FROM deals WHERE id=$1',
                 [id]
               )
               if (dealSettings.rows.length > 0) {
                 dbContractDate = dealSettings.rows[0].contract_date
-                dbPoa = dealSettings.rows[0].poa_statement
+                dbPoaNumber = dealSettings.rows[0].poa_number || ''
+                dbPoaLetter = dealSettings.rows[0].poa_letter || ''
+                dbPoaYear = dealSettings.rows[0].poa_year || ''
+                dbPoaOffice = dealSettings.rows[0].poa_office || ''
                 isLocked = dealSettings.rows[0].contract_settings_locked === true
               }
             } catch (e) {
@@ -321,14 +327,20 @@ app.post('/api/generate-document', authMiddleware, validate(generateDocumentSche
             docData['تاريخ العقد'] = `${String(contractDateObj.getDate()).padStart(2, '0')}/${String(contractDateObj.getMonth() + 1).padStart(2, '0')}/${contractDateObj.getFullYear()}`
             docData['مدة التسليم'] = inputs.handoverYear ? `${inputs.handoverYear} سنوات` : ''
             
-            // POA Logic: If locked -> use DB. Else use request || DB.
-            let finalPoa = data.poaStatement
-            if (isLocked) {
-               finalPoa = dbPoa
-            } else if (!finalPoa && dbPoa) {
-               finalPoa = dbPoa
+            // POA Logic: Combine 4 fields into Arabic format
+            // Format: "والوكالة رقم [رقم] حرف [حرف] لسنة [سنة] مكتب توثيق [مكتب]"
+            // If locked -> use DB values. Else use request values if provided, fallback to DB.
+            let poaNum = isLocked ? dbPoaNumber : (data.poaNumber || dbPoaNumber)
+            let poaLet = isLocked ? dbPoaLetter : (data.poaLetter || dbPoaLetter)
+            let poaYr = isLocked ? dbPoaYear : (data.poaYear || dbPoaYear)
+            let poaOff = isLocked ? dbPoaOffice : (data.poaOffice || dbPoaOffice)
+            
+            // Only generate the statement if at least one field has a value
+            let poaStatement = ''
+            if (poaNum || poaLet || poaYr || poaOff) {
+              poaStatement = `والوكالة رقم ${poaNum} حرف ${poaLet} لسنة ${poaYr} مكتب توثيق ${poaOff}`
             }
-            docData['بيان التوكيل'] = finalPoa || ''
+            docData['بيان التوكيل'] = poaStatement
 
             // Keep English versions for backward compatibility  
             docData.buyer_name = clientInfo.buyer_name || clientInfo.name || ''

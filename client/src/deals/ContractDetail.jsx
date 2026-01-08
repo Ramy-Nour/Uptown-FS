@@ -63,7 +63,11 @@ export default function ContractDetail() {
 
   // Contract configuration state
   const [contractDate, setContractDate] = useState(new Date().toISOString().split('T')[0])
-  const [poaStatement, setPoaStatement] = useState('')
+  // POA multi-field state (4 separate inputs)
+  const [poaNumber, setPoaNumber] = useState('')
+  const [poaLetter, setPoaLetter] = useState('')
+  const [poaYear, setPoaYear] = useState('')
+  const [poaOffice, setPoaOffice] = useState('')
 
   async function load() {
     try {
@@ -143,9 +147,11 @@ export default function ContractDetail() {
       if (deal.contract_date) {
         setContractDate(deal.contract_date.split('T')[0])
       }
-      if (deal.poa_statement) {
-        setPoaStatement(deal.poa_statement)
-      }
+      // Load 4 POA fields
+      if (deal.poa_number) setPoaNumber(deal.poa_number)
+      if (deal.poa_letter) setPoaLetter(deal.poa_letter)
+      if (deal.poa_year) setPoaYear(deal.poa_year)
+      if (deal.poa_office) setPoaOffice(deal.poa_office)
     }
   }, [deal])
 
@@ -635,21 +641,82 @@ export default function ContractDetail() {
             />
             <p style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>Day of week will be auto-calculated.</p>
           </div>
-          <div>
-            <label style={{ display: 'block', fontSize: 13, marginBottom: 6, fontWeight: 500 }}>Power of Attorney Statement (بيان التوكيل)</label>
-            <input 
-              type="text" 
-              value={poaStatement} 
-              disabled={deal?.contract_settings_locked}
-              onChange={e => setPoaStatement(e.target.value)}
-              placeholder="e.g. بموجب توكيل رقم ..."
-              style={{ 
-                width: '100%', padding: '8px 12px', borderRadius: 6, 
-                border: '1px solid #d1d5db', direction: 'rtl',
-                backgroundColor: deal?.contract_settings_locked ? '#f3f4f6' : '#fff'
-              }}
-            />
+        </div>
+        
+        {/* POA Multi-Field Inputs */}
+        <div style={{ marginTop: 16 }}>
+          <label style={{ display: 'block', fontSize: 13, marginBottom: 8, fontWeight: 500 }}>Power of Attorney (بيان التوكيل)</label>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 11, color: '#6b7280', marginBottom: 4 }}>رقم التوكيل</label>
+              <input 
+                type="text" 
+                value={poaNumber} 
+                disabled={deal?.contract_settings_locked}
+                onChange={e => setPoaNumber(e.target.value)}
+                placeholder="12345"
+                style={{ 
+                  width: '100%', padding: '8px 12px', borderRadius: 6, 
+                  border: '1px solid #d1d5db', direction: 'rtl', textAlign: 'center',
+                  backgroundColor: deal?.contract_settings_locked ? '#f3f4f6' : '#fff'
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 11, color: '#6b7280', marginBottom: 4 }}>حرف التوكيل</label>
+              <input 
+                type="text" 
+                value={poaLetter} 
+                disabled={deal?.contract_settings_locked}
+                onChange={e => setPoaLetter(e.target.value)}
+                placeholder="ك"
+                style={{ 
+                  width: '100%', padding: '8px 12px', borderRadius: 6, 
+                  border: '1px solid #d1d5db', direction: 'rtl', textAlign: 'center',
+                  backgroundColor: deal?.contract_settings_locked ? '#f3f4f6' : '#fff'
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 11, color: '#6b7280', marginBottom: 4 }}>سنة التوكيل</label>
+              <input 
+                type="text" 
+                value={poaYear} 
+                disabled={deal?.contract_settings_locked}
+                onChange={e => setPoaYear(e.target.value)}
+                placeholder="2025"
+                style={{ 
+                  width: '100%', padding: '8px 12px', borderRadius: 6, 
+                  border: '1px solid #d1d5db', direction: 'rtl', textAlign: 'center',
+                  backgroundColor: deal?.contract_settings_locked ? '#f3f4f6' : '#fff'
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 11, color: '#6b7280', marginBottom: 4 }}>مكتب توثيق</label>
+              <input 
+                type="text" 
+                value={poaOffice} 
+                disabled={deal?.contract_settings_locked}
+                onChange={e => setPoaOffice(e.target.value)}
+                placeholder="الدقي"
+                style={{ 
+                  width: '100%', padding: '8px 12px', borderRadius: 6, 
+                  border: '1px solid #d1d5db', direction: 'rtl', textAlign: 'center',
+                  backgroundColor: deal?.contract_settings_locked ? '#f3f4f6' : '#fff'
+                }}
+              />
+            </div>
           </div>
+          {/* Live Preview */}
+          {(poaNumber || poaLetter || poaYear || poaOffice) && (
+            <div style={{ marginTop: 12, padding: 12, background: '#fef3c7', borderRadius: 6, direction: 'rtl', textAlign: 'right' }}>
+              <span style={{ fontSize: 12, color: '#92400e', fontWeight: 500 }}>معاينة: </span>
+              <span style={{ fontSize: 13 }}>
+                والوكالة رقم {poaNumber} حرف {poaLetter} لسنة {poaYear} مكتب توثيق {poaOffice}
+              </span>
+            </div>
+          )}
         </div>
         
         {/* Save/Lock Controls */}
@@ -658,10 +725,10 @@ export default function ContractDetail() {
             <button
               onClick={async () => {
                 try {
-                  const res = await fetch(`/api/deals/${dealId}/contract-settings`, {
+                  const res = await fetch(`${API_URL}/api/deals/${dealId}/contract-settings`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('auth_token')}` },
-                    body: JSON.stringify({ contractDate, poaStatement })
+                    body: JSON.stringify({ contractDate, poaNumber, poaLetter, poaYear, poaOffice })
                   })
                   if (res.ok) {
                     alert('Settings saved!')
@@ -686,7 +753,7 @@ export default function ContractDetail() {
               onClick={async () => {
                 if (!confirm('Are you sure you want to LOCK these settings? They cannot be changed afterwards.')) return
                 try {
-                   const res = await fetch(`/api/deals/${dealId}/lock-contract-settings`, {
+                   const res = await fetch(`${API_URL}/api/deals/${dealId}/lock-contract-settings`, {
                     method: 'POST',
                     headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` }
                   })
@@ -734,7 +801,10 @@ export default function ContractDetail() {
                   language: 'ar',
                   data: {
                     contractDate,
-                    poaStatement
+                    poaNumber,
+                    poaLetter,
+                    poaYear,
+                    poaOffice
                   }
                 }
                 const resp = await fetchWithAuth(`${API_URL}/api/generate-document`, {

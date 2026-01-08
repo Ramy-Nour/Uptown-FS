@@ -280,6 +280,36 @@ router.get('/by-unit/:unitId', authMiddleware, async (req, res) => {
   }
 })
 
+// List pending unlock requests (for Contract Manager/TM)
+// NOTE: This must come BEFORE /:id route to avoid matching 'settings-unlock-requests' as an id
+router.get('/settings-unlock-requests', authMiddleware, async (req, res) => {
+  try {
+    const allowedRoles = ['admin', 'superadmin', 'contract_manager', 'ceo', 'chairman', 'vice_chairman', 'top_management']
+    if (!allowedRoles.includes(req.user?.role)) {
+      return res.status(403).json({ error: { message: 'Forbidden' } })
+    }
+
+    const status = req.query.status || 'pending'
+    const rows = await pool.query(
+      `SELECT r.*, 
+              d.title AS deal_title,
+              u.email AS requested_by_email,
+              COALESCE(u.meta->>'name', u.email) AS requested_by_name
+       FROM contract_settings_requests r
+       LEFT JOIN deals d ON d.id = r.deal_id
+       LEFT JOIN users u ON u.id = r.requested_by
+       WHERE r.status = $1
+       ORDER BY r.created_at DESC`,
+      [status]
+    )
+
+    return res.json({ ok: true, requests: rows.rows })
+  } catch (e) {
+    console.error('GET /settings-unlock-requests error', e)
+    return res.status(500).json({ error: { message: 'Internal error' } })
+  }
+})
+
 // Get single deal
 router.get('/:id', authMiddleware, async (req, res) => {
   try {
@@ -1401,39 +1431,10 @@ router.post('/:id/request-settings-unlock', authMiddleware, async (req, res) => 
   }
 })
 
-// List pending unlock requests (for Contract Manager)
-router.get('/settings-unlock-requests', authMiddleware, async (req, res) => {
-  try {
-    const allowedRoles = ['admin', 'superadmin', 'contract_manager']
-    if (!allowedRoles.includes(req.user?.role)) {
-      return res.status(403).json({ error: { message: 'Forbidden' } })
-    }
-
-    const status = req.query.status || 'pending'
-    const rows = await pool.query(
-      `SELECT r.*, 
-              d.title AS deal_title,
-              u.email AS requested_by_email,
-              COALESCE(u.meta->>'name', u.email) AS requested_by_name
-       FROM contract_settings_requests r
-       LEFT JOIN deals d ON d.id = r.deal_id
-       LEFT JOIN users u ON u.id = r.requested_by
-       WHERE r.status = $1
-       ORDER BY r.created_at DESC`,
-      [status]
-    )
-
-    return res.json({ ok: true, requests: rows.rows })
-  } catch (e) {
-    console.error('GET /settings-unlock-requests error', e)
-    return res.status(500).json({ error: { message: 'Internal error' } })
-  }
-})
-
 // Approve unlock request (unlocks the deal settings)
 router.post('/settings-unlock-requests/:requestId/approve', authMiddleware, async (req, res) => {
   try {
-    const allowedRoles = ['admin', 'superadmin', 'contract_manager']
+    const allowedRoles = ['admin', 'superadmin', 'contract_manager', 'ceo', 'chairman', 'vice_chairman', 'top_management']
     if (!allowedRoles.includes(req.user?.role)) {
       return res.status(403).json({ error: { message: 'Forbidden' } })
     }
@@ -1477,7 +1478,7 @@ router.post('/settings-unlock-requests/:requestId/approve', authMiddleware, asyn
 // Reject unlock request
 router.post('/settings-unlock-requests/:requestId/reject', authMiddleware, async (req, res) => {
   try {
-    const allowedRoles = ['admin', 'superadmin', 'contract_manager']
+    const allowedRoles = ['admin', 'superadmin', 'contract_manager', 'ceo', 'chairman', 'vice_chairman', 'top_management']
     if (!allowedRoles.includes(req.user?.role)) {
       return res.status(403).json({ error: { message: 'Forbidden' } })
     }

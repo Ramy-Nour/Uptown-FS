@@ -222,6 +222,7 @@ export default function BrandHeader({ title, onLogout }) {
           { label: 'Unit Model Queue', href: '/deals/queues' },
           { label: 'Pricing Queue', href: '/admin/standard-pricing-approvals' },
           { label: 'Contracts', href: '/contracts' },
+          { label: 'Settings Requests', href: '/contracts/settings-unlock-requests' },
           { label: 'Inventory Drafts', href: '/admin/inventory-drafts' },
           { label: 'Unit History', href: '/admin/unit-history' },
           { label: 'Payment Threshold Approvals', href: '/admin/payment-thresholds' },

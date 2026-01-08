@@ -218,6 +218,10 @@ createRoot(document.getElementById('root')).render(
               <RoleBasedRoute
                 allowedRoles={[
                   'contract_manager',
+                  'ceo',
+                  'chairman',
+                  'vice_chairman',
+                  'top_management',
                   'admin',
                   'superadmin'
                 ]}

@@ -161,7 +161,7 @@ app.post('/api/generate-document', authMiddleware, validate(generateDocumentSche
         defaultTemplate: 'Pricing Form G.docx'
       },
       contract: {
-        allowedRoles: ['contract_person'],
+        allowedRoles: ['contract_person', 'contract_manager', 'ceo', 'chairman', 'vice_chairman', 'top_management', 'admin', 'superadmin'],
         defaultTemplate: 'Uptown Residence Contract.docx'
       }
     }

@@ -36,6 +36,7 @@ import ContractDetail from './deals/ContractDetail.jsx'
 import ReservationFormDetail from './deals/ReservationFormDetail.jsx'
 import SettingsUnlockRequests from './deals/SettingsUnlockRequests.jsx'
 import BulkUnitCreation from './units/BulkUnitCreation.jsx'
+import MainLayout from './components/layout/MainLayout.jsx'
 
 function RoleBasedRoute({ children, allowedRoles }) {
   const token = localStorage.getItem('auth_token');
@@ -100,14 +101,14 @@ createRoot(document.getElementById('root')).render(
               </PrivateRoute>
             }
           />
-          <Route
-            path="/admin/users"
-            element={
-              <RoleBasedRoute allowedRoles={['admin', 'superadmin']}>
-                <Users />
-              </RoleBasedRoute>
-            }
-          />
+        <Route
+          path="/admin/users"
+          element={
+            <RoleBasedRoute allowedRoles={['admin', 'superadmin']}>
+              <MainLayout title="User Management"><Users /></MainLayout>
+            </RoleBasedRoute>
+          }
+        />
           <Route
             path="/admin/users/:id"
             element={
@@ -116,14 +117,14 @@ createRoot(document.getElementById('root')).render(
               </RoleBasedRoute>
             }
           />
-          <Route
-            path="/admin/standard-pricing"
-            element={
-              <RoleBasedRoute allowedRoles={['financial_manager', 'ceo']}>
-                <StandardPricing />
-              </RoleBasedRoute>
-            }
-          />
+        <Route
+          path="/admin/standard-pricing"
+          element={
+            <RoleBasedRoute allowedRoles={['financial_manager', 'ceo']}>
+              <MainLayout title="Standard Pricing"><StandardPricing /></MainLayout>
+            </RoleBasedRoute>
+          }
+        />
            {/* --- THIS IS THE NEW ROUTE --- */}
           <Route
             path="/admin/standard-pricing-approvals"

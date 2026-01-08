@@ -1,8 +1,10 @@
 import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import BrandHeader from './lib/BrandHeader.jsx'
+import { Form, Input, Button, Card, Typography, Space, Divider, ConfigProvider } from 'antd'
+import { UserOutlined, LockOutlined, LoginOutlined } from '@ant-design/icons'
 import { notifyError, notifySuccess } from './lib/notifications.js'
 
+const { Title, Text } = Typography
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
 const BRAND = {
@@ -10,19 +12,16 @@ const BRAND = {
 }
 
 export default function Login() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
 
-  async function onSubmit(e) {
-    e.preventDefault()
+  const onFinish = async (values) => {
     setLoading(true)
     try {
       const resp = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify(values)
       })
       const data = await resp.json()
       if (!resp.ok) {
@@ -47,29 +46,85 @@ export default function Login() {
   }
 
   return (
-    <div>
-      <BrandHeader />
-      <div style={{ minHeight: 'calc(100vh - 64px)', display: 'grid', placeItems: 'center', background: '#f7f9fb' }}>
-        <form onSubmit={onSubmit} style={{ background: '#fff', border: '1px solid #e6eaf0', borderRadius: 12, padding: 24, width: 360, boxShadow: '0 2px 6px rgba(21,24,28,0.04)' }}>
-          <h2 style={{ marginTop: 0 }}>Login</h2>
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Email</label>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid #dfe5ee' }} />
+    <ConfigProvider
+      theme={{
+        token: {
+          colorPrimary: BRAND.primary,
+          borderRadius: 12,
+        },
+      }}
+    >
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-8">
+            <img 
+              src="/logo.svg" 
+              alt="Logo" 
+              className="h-16 mx-auto mb-4" 
+              onError={(e) => { e.target.src = 'https://via.placeholder.com/150?text=Uptown'; }}
+            />
+            <Title level={2} className="m-0">Welcome Back</Title>
+            <Text type="secondary">Please enter your details to sign in</Text>
           </div>
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Password</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid #dfe5ee' }} />
+
+          <Card className="shadow-xl border-none rounded-2xl">
+            <Form
+              name="login"
+              layout="vertical"
+              onFinish={onFinish}
+              autoComplete="off"
+              size="large"
+            >
+              <Form.Item
+                label="Email"
+                name="email"
+                rules={[
+                  { required: true, message: 'Please input your email!' },
+                  { type: 'email', message: 'Please enter a valid email!' }
+                ]}
+              >
+                <Input prefix={<UserOutlined className="text-gray-400" />} placeholder="your@email.com" />
+              </Form.Item>
+
+              <Form.Item
+                label="Password"
+                name="password"
+                rules={[{ required: true, message: 'Please input your password!' }]}
+              >
+                <Input.Password prefix={<LockOutlined className="text-gray-400" />} placeholder="••••••••" />
+              </Form.Item>
+
+              <Form.Item className="mb-0">
+                <Button 
+                  type="primary" 
+                  htmlType="submit" 
+                  loading={loading} 
+                  block 
+                  icon={<LoginOutlined />}
+                  className="h-12 text-lg font-semibold"
+                >
+                  Sign In
+                </Button>
+              </Form.Item>
+            </Form>
+
+            <Divider plain><Text type="secondary" className="text-xs">OR</Text></Divider>
+
+            <div className="text-center">
+              <Text type="secondary">Don't have an account? </Text>
+              <Link to="/register" className="font-semibold text-primary hover:underline">
+                Register Now
+              </Link>
+            </div>
+          </Card>
+          
+          <div className="text-center mt-8">
+            <Text type="secondary" className="text-xs">
+              © {new Date().getFullYear()} Uptown Financial System. All rights reserved.
+            </Text>
           </div>
-          <button type="submit" disabled={loading} style={{ padding: '10px 14px', borderRadius: 10, border: `1px solid ${BRAND.primary}`, background: BRAND.primary, color: '#fff', fontWeight: 600, width: '100%' }}>
-            {loading ? 'Logging in...' : 'Login'}
-          </button>
-          <div style={{ marginTop: 12, textAlign: 'center' }}>
-            <small>
-              No account? <Link to="/register">Register</Link>
-            </small>
-          </div>
-        </form>
+        </div>
       </div>
-    </div>
+    </ConfigProvider>
   )
 }

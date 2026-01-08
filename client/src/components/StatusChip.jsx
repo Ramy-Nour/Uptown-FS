@@ -1,4 +1,5 @@
 import React from 'react'
+import { Tag } from 'antd'
 
 /**
  * Reusable status chip for payment plan workflow statuses.
@@ -6,16 +7,17 @@ import React from 'react'
  */
 export default function StatusChip({ status }) {
   const map = {
-    pending_sm: { color: '#9a3412', bg: '#fff7ed', label: 'Waiting for Sales Manager' }, // orange
-    pending_fm: { color: '#1e3a8a', bg: '#eff6ff', label: 'With Finance' }, // blue
-    pending_tm: { color: '#991b1b', bg: '#fef2f2', label: 'Executive Approval' }, // red
-    approved:   { color: '#166534', bg: '#ecfdf5', label: 'Approved' }, // green
-    rejected:   { color: '#991b1b', bg: '#fef2f2', label: 'Rejected' } // red
+    pending_sm: { color: 'orange', label: 'Waiting for Sales Manager' },
+    pending_fm: { color: 'blue', label: 'With Finance' },
+    pending_tm: { color: 'volcano', label: 'Executive Approval' },
+    approved:   { color: 'success', label: 'Approved' },
+    rejected:   { color: 'error', label: 'Rejected' }
   }
-  const s = map[status] || { color: '#334155', bg: '#f1f5f9', label: status }
+  const s = map[status] || { color: 'default', label: status }
+  
   return (
-    <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: 999, background: s.bg, color: s.color, fontSize: 12, fontWeight: 600 }}>
+    <Tag color={s.color} className="font-semibold rounded-full px-3">
       {s.label}
-    </span>
+    </Tag>
   )
 }

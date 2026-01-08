@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import BrandHeader from '../lib/BrandHeader'
+import MainLayout from '../components/layout/MainLayout'
 import { fetchWithAuth } from '../lib/apiClient'
 import { notifyError, notifySuccess } from '../lib/notifications'
 const APP_TITLE = import.meta.env.VITE_APP_TITLE || 'Uptown Financial System'
@@ -134,10 +134,8 @@ export default function BulkUnitCreation() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f8fafc', fontFamily: 'sans-serif' }}>
-      <BrandHeader title={APP_TITLE} onLogout={handleLogout} />
-      
-      <div style={{ padding: 24, maxWidth: 1000, margin: '0 auto' }}>
+    <MainLayout title="Bulk Unit Draft Creation">
+      <div style={{ maxWidth: 1000, margin: '0 auto' }}>
         <h1 style={{ fontSize: 24, marginBottom: 20, color: '#1e293b' }}>Bulk Unit Draft Creation</h1>
         
         <div style={{ background: '#fff', padding: 24, borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
@@ -269,6 +267,6 @@ export default function BulkUnitCreation() {
           </div>
         )}
       </div>
-    </div>
+    </MainLayout>
   )
 }

@@ -31,6 +31,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 const LS_KEY = 'uptown_calc_form_state_v2'
 
 import styles from './styles/calculatorStyles.js'
+import MainLayout from './components/layout/MainLayout.jsx'
 
 // moved DiscountHint to components/DiscountHint.jsx
 
@@ -609,32 +610,8 @@ export default function App(props) {
   const onChange = (setter) => (e) => setter(e.target.value)
 
   return (
-    <div style={styles.page}>
+    <MainLayout title={t('calculator_title', 'Financial Calculator')}>
       <div style={styles.container}>
-        {!embedded && (
-          <div style={{ marginBottom: 16 }}>
-            <BrandHeader
-              title={import.meta.env.VITE_APP_TITLE || 'Uptown Financial System — Calculator'}
-              onLogout={async () => {
-                try {
-                  const rt = localStorage.getItem('refresh_token')
-                  if (rt) {
-                    await fetch(`${API_URL}/api/auth/logout`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ refreshToken: rt })
-                    }).catch(() => {})
-                  }
-                } finally {
-                  localStorage.removeItem('auth_token')
-                  localStorage.removeItem('refresh_token')
-                  localStorage.removeItem('auth_user')
-                  window.location.href = '/login'
-                }
-              }}
-            />
-          </div>
-        )}
 
         
 
@@ -959,6 +936,6 @@ export default function App(props) {
           />
         )}
       </div>
-    </div>
+    </MainLayout>
   )
 }

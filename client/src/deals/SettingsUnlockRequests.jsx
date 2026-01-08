@@ -2,6 +2,27 @@ import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { fetchWithAuth, API_URL } from '../lib/apiClient.js'
 import { notifyError, notifySuccess } from '../lib/notifications.js'
+import BrandHeader from '../lib/BrandHeader.jsx'
+
+const APP_TITLE = import.meta.env.VITE_APP_TITLE || 'Uptown Financial System'
+
+async function handleLogout() {
+  try {
+    const rt = localStorage.getItem('refresh_token')
+    if (rt) {
+      await fetch(`${API_URL}/api/auth/logout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken: rt })
+      }).catch(() => {})
+    }
+  } finally {
+    localStorage.removeItem('auth_token')
+    localStorage.removeItem('refresh_token')
+    localStorage.removeItem('auth_user')
+    window.location.href = '/login'
+  }
+}
 
 export default function SettingsUnlockRequests() {
   const [requests, setRequests] = useState([])
@@ -73,8 +94,10 @@ export default function SettingsUnlockRequests() {
   }
 
   return (
-    <div style={{ padding: 24, maxWidth: 1200, margin: '0 auto' }}>
-      <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 20 }}>Contract Settings Unlock Requests</h1>
+    <div>
+      <BrandHeader title={APP_TITLE} onLogout={handleLogout} />
+      <div style={{ padding: 24, maxWidth: 1200, margin: '0 auto' }}>
+        <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 20 }}>Contract Settings Unlock Requests</h1>
 
       {/* Filter tabs */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
@@ -184,6 +207,7 @@ export default function SettingsUnlockRequests() {
           ))}
         </div>
       )}
+      </div>
     </div>
   )
 }

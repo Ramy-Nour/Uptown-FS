@@ -34,6 +34,7 @@ import UnitHistory from './admin/UnitHistory.jsx'
 import ContractsList from './deals/ContractsList.jsx'
 import ContractDetail from './deals/ContractDetail.jsx'
 import ReservationFormDetail from './deals/ReservationFormDetail.jsx'
+import SettingsUnlockRequests from './deals/SettingsUnlockRequests.jsx'
 
 function RoleBasedRoute({ children, allowedRoles }) {
   const token = localStorage.getItem('auth_token');
@@ -208,6 +209,20 @@ createRoot(document.getElementById('root')).render(
                 ]}
               >
                 <ContractDetail />
+              </RoleBasedRoute>
+            }
+          />
+          <Route
+            path="/contracts/settings-unlock-requests"
+            element={
+              <RoleBasedRoute
+                allowedRoles={[
+                  'contract_manager',
+                  'admin',
+                  'superadmin'
+                ]}
+              >
+                <SettingsUnlockRequests />
               </RoleBasedRoute>
             }
           />

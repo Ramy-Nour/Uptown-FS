@@ -68,6 +68,8 @@ export default function ContractDetail() {
   const [poaLetter, setPoaLetter] = useState('')
   const [poaYear, setPoaYear] = useState('')
   const [poaOffice, setPoaOffice] = useState('')
+  // Unlock request state
+  const [pendingUnlockRequest, setPendingUnlockRequest] = useState(null)
 
   async function load() {
     try {
@@ -152,6 +154,16 @@ export default function ContractDetail() {
       if (deal.poa_letter) setPoaLetter(deal.poa_letter)
       if (deal.poa_year) setPoaYear(deal.poa_year)
       if (deal.poa_office) setPoaOffice(deal.poa_office)
+      
+      // Check for pending unlock request
+      if (deal.contract_settings_locked) {
+        fetchWithAuth(`${API_URL}/api/deals/${deal.id}/settings-unlock-request`)
+          .then(r => r.json())
+          .then(d => setPendingUnlockRequest(d?.request || null))
+          .catch(() => setPendingUnlockRequest(null))
+      } else {
+        setPendingUnlockRequest(null)
+      }
     }
   }, [deal])
 
@@ -775,9 +787,45 @@ export default function ContractDetail() {
           )}
 
           {deal?.contract_settings_locked && (
-             <span style={{ fontSize: 12, color: '#ef4444', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
-               🔒 Locked
-             </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 12, color: '#ef4444', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                🔒 Locked
+              </span>
+              
+              {/* Show pending request status OR request button */}
+              {pendingUnlockRequest ? (
+                <span style={{ fontSize: 12, color: '#f59e0b', fontWeight: 500 }}>
+                  ⏳ Unlock Requested (pending)
+                </span>
+              ) : (
+                <button
+                  onClick={async () => {
+                    const reason = prompt('Enter reason for requesting settings change:')
+                    if (reason === null) return // cancelled
+                    try {
+                      const res = await fetch(`${API_URL}/api/deals/${dealId}/request-settings-unlock`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('auth_token')}` },
+                        body: JSON.stringify({ reason })
+                      })
+                      const data = await res.json()
+                      if (res.ok) {
+                        alert('Unlock request submitted! Waiting for Contract Manager approval.')
+                        setPendingUnlockRequest(data.request)
+                      } else {
+                        alert(data?.error?.message || 'Failed to submit request')
+                      }
+                    } catch (e) {
+                      console.error(e)
+                      alert('Error submitting request')
+                    }
+                  }}
+                  style={{ padding: '4px 10px', fontSize: 12, borderRadius: 5, border: '1px solid #f59e0b', background: '#fef3c7', color: '#92400e', cursor: 'pointer' }}
+                >
+                  Request Change
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>

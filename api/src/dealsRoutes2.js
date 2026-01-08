@@ -1347,9 +1347,188 @@ router.post('/:id/lock-contract-settings', authMiddleware, async (req, res) => {
       'UPDATE deals SET contract_settings_locked=TRUE WHERE id=$1',
       [id]
     )
-    return res.json({ ok: true })
+  return res.json({ ok: true })
   } catch (e) {
     console.error('POST /:id/lock-contract-settings error', e)
+    return res.status(500).json({ error: { message: 'Internal error' } })
+  }
+})
+
+// -----------------------------
+// Contract Settings Unlock Requests
+// -----------------------------
+
+// Request unlock of locked contract settings
+router.post('/:id/request-settings-unlock', authMiddleware, async (req, res) => {
+  try {
+    const dealId = Number(req.params.id)
+    if (!Number.isFinite(dealId) || dealId <= 0) {
+      return res.status(400).json({ error: { message: 'Invalid deal id' } })
+    }
+
+    const { reason } = req.body
+
+    // Check deal exists and is locked
+    const dealCheck = await pool.query('SELECT contract_settings_locked FROM deals WHERE id=$1', [dealId])
+    if (dealCheck.rows.length === 0) {
+      return res.status(404).json({ error: { message: 'Deal not found' } })
+    }
+    if (!dealCheck.rows[0].contract_settings_locked) {
+      return res.status(400).json({ error: { message: 'Settings are not locked' } })
+    }
+
+    // Check for existing pending request
+    const existing = await pool.query(
+      'SELECT id FROM contract_settings_requests WHERE deal_id=$1 AND status=$2',
+      [dealId, 'pending']
+    )
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ error: { message: 'A pending request already exists for this deal' } })
+    }
+
+    // Create request
+    const ins = await pool.query(
+      `INSERT INTO contract_settings_requests (deal_id, requested_by, reason, status)
+       VALUES ($1, $2, $3, 'pending')
+       RETURNING *`,
+      [dealId, req.user.id, reason || null]
+    )
+
+    return res.json({ ok: true, request: ins.rows[0] })
+  } catch (e) {
+    console.error('POST /:id/request-settings-unlock error', e)
+    return res.status(500).json({ error: { message: 'Internal error' } })
+  }
+})
+
+// List pending unlock requests (for Contract Manager)
+router.get('/settings-unlock-requests', authMiddleware, async (req, res) => {
+  try {
+    const allowedRoles = ['admin', 'superadmin', 'contract_manager']
+    if (!allowedRoles.includes(req.user?.role)) {
+      return res.status(403).json({ error: { message: 'Forbidden' } })
+    }
+
+    const status = req.query.status || 'pending'
+    const rows = await pool.query(
+      `SELECT r.*, 
+              d.title AS deal_title,
+              u.email AS requested_by_email,
+              COALESCE(u.meta->>'name', u.email) AS requested_by_name
+       FROM contract_settings_requests r
+       LEFT JOIN deals d ON d.id = r.deal_id
+       LEFT JOIN users u ON u.id = r.requested_by
+       WHERE r.status = $1
+       ORDER BY r.created_at DESC`,
+      [status]
+    )
+
+    return res.json({ ok: true, requests: rows.rows })
+  } catch (e) {
+    console.error('GET /settings-unlock-requests error', e)
+    return res.status(500).json({ error: { message: 'Internal error' } })
+  }
+})
+
+// Approve unlock request (unlocks the deal settings)
+router.post('/settings-unlock-requests/:requestId/approve', authMiddleware, async (req, res) => {
+  try {
+    const allowedRoles = ['admin', 'superadmin', 'contract_manager']
+    if (!allowedRoles.includes(req.user?.role)) {
+      return res.status(403).json({ error: { message: 'Forbidden' } })
+    }
+
+    const requestId = Number(req.params.requestId)
+    if (!Number.isFinite(requestId) || requestId <= 0) {
+      return res.status(400).json({ error: { message: 'Invalid request id' } })
+    }
+
+    // Get request
+    const reqCheck = await pool.query('SELECT * FROM contract_settings_requests WHERE id=$1', [requestId])
+    if (reqCheck.rows.length === 0) {
+      return res.status(404).json({ error: { message: 'Request not found' } })
+    }
+    const request = reqCheck.rows[0]
+    if (request.status !== 'pending') {
+      return res.status(400).json({ error: { message: 'Request is no longer pending' } })
+    }
+
+    // Update request to approved
+    await pool.query(
+      `UPDATE contract_settings_requests 
+       SET status='approved', reviewed_by=$1, reviewed_at=now()
+       WHERE id=$2`,
+      [req.user.id, requestId]
+    )
+
+    // Unlock the deal settings
+    await pool.query(
+      'UPDATE deals SET contract_settings_locked=FALSE WHERE id=$1',
+      [request.deal_id]
+    )
+
+    return res.json({ ok: true, message: 'Request approved, settings unlocked' })
+  } catch (e) {
+    console.error('POST /settings-unlock-requests/:requestId/approve error', e)
+    return res.status(500).json({ error: { message: 'Internal error' } })
+  }
+})
+
+// Reject unlock request
+router.post('/settings-unlock-requests/:requestId/reject', authMiddleware, async (req, res) => {
+  try {
+    const allowedRoles = ['admin', 'superadmin', 'contract_manager']
+    if (!allowedRoles.includes(req.user?.role)) {
+      return res.status(403).json({ error: { message: 'Forbidden' } })
+    }
+
+    const requestId = Number(req.params.requestId)
+    if (!Number.isFinite(requestId) || requestId <= 0) {
+      return res.status(400).json({ error: { message: 'Invalid request id' } })
+    }
+
+    // Get request
+    const reqCheck = await pool.query('SELECT * FROM contract_settings_requests WHERE id=$1', [requestId])
+    if (reqCheck.rows.length === 0) {
+      return res.status(404).json({ error: { message: 'Request not found' } })
+    }
+    if (reqCheck.rows[0].status !== 'pending') {
+      return res.status(400).json({ error: { message: 'Request is no longer pending' } })
+    }
+
+    // Update request to rejected
+    await pool.query(
+      `UPDATE contract_settings_requests 
+       SET status='rejected', reviewed_by=$1, reviewed_at=now()
+       WHERE id=$2`,
+      [req.user.id, requestId]
+    )
+
+    return res.json({ ok: true, message: 'Request rejected' })
+  } catch (e) {
+    console.error('POST /settings-unlock-requests/:requestId/reject error', e)
+    return res.status(500).json({ error: { message: 'Internal error' } })
+  }
+})
+
+// Get pending request for a specific deal (for contract person to check status)
+router.get('/:id/settings-unlock-request', authMiddleware, async (req, res) => {
+  try {
+    const dealId = Number(req.params.id)
+    if (!Number.isFinite(dealId) || dealId <= 0) {
+      return res.status(400).json({ error: { message: 'Invalid deal id' } })
+    }
+
+    const rows = await pool.query(
+      `SELECT * FROM contract_settings_requests 
+       WHERE deal_id=$1 AND status='pending'
+       ORDER BY created_at DESC LIMIT 1`,
+      [dealId]
+    )
+
+    return res.json({ ok: true, request: rows.rows[0] || null })
+  } catch (e) {
+    console.error('GET /:id/settings-unlock-request error', e)
     return res.status(500).json({ error: { message: 'Internal error' } })
   }
 })

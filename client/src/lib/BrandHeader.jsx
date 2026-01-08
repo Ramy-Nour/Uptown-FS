@@ -208,6 +208,7 @@ export default function BrandHeader({ title, onLogout }) {
         return [
           ...baseWithoutCalc,
           { label: 'Contracts', href: '/contracts' },
+          { label: 'Settings Requests', href: '/contracts/settings-unlock-requests' },
           { label: 'Contracts Team', href: '/admin/contracts-team' },
           { label: 'Workflow Logs', href: '/admin/workflow-logs' },
           { label: 'Hold Approvals', href: '/admin/hold-approvals' }

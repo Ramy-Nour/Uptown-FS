@@ -340,7 +340,10 @@ app.post('/api/generate-document', authMiddleware, validate(generateDocumentSche
             if (poaNum || poaLet || poaYr || poaOff) {
               poaStatement = `والوكالة رقم ${poaNum} حرف ${poaLet} لسنة ${poaYr} مكتب توثيق ${poaOff}`
             }
+            // Set both versions in case template has spaces around the placeholder name
             docData['بيان التوكيل'] = poaStatement
+            docData[' بيان التوكيل '] = poaStatement
+            console.log('POA Statement:', poaStatement, '| POA Fields:', { poaNum, poaLet, poaYr, poaOff })
 
             // Keep English versions for backward compatibility  
             docData.buyer_name = clientInfo.buyer_name || clientInfo.name || ''

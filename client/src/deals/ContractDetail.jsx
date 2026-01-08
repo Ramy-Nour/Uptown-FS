@@ -1062,7 +1062,8 @@ export default function ContractDetail() {
                 setPdfLoading(true)
                 const body = {
                   documentType: 'contract',
-                  deal_id: Number(dealId)
+                  deal_id: Number(dealId),
+                  data: {}
                 }
                 const resp = await fetchWithAuth(`${API_URL}/api/generate-document`, {
                   method: 'POST',

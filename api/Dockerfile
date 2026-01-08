@@ -19,6 +19,11 @@ RUN apk add --no-cache \
     font-noto-cjk
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 COPY . .
+
+# Install custom fonts
+COPY ./fonts /usr/share/fonts/custom
+RUN fc-cache -f -v
+
 EXPOSE 3000
 CMD ["npm", "run", "dev"]
 
@@ -37,5 +42,10 @@ RUN apk add --no-cache \
     font-noto-cjk
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 COPY . .
+
+# Install custom fonts
+COPY ./fonts /usr/share/fonts/custom
+RUN fc-cache -f -v
+
 EXPOSE 3000
 CMD ["npm", "start"]

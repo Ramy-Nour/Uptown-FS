@@ -136,6 +136,7 @@ export default function BrandHeader({ title, onLogout }) {
       case 'superadmin':
         return [
           { label: 'Users', href: '/admin/users' },
+          { label: 'Bulk Units', href: '/admin/units/bulk-create' },
           { label: 'Unit History', href: '/admin/unit-history' },
           { label: 'Sales Team', href: '/admin/sales-team' },
           { label: 'Team Proposals', href: '/deals/team-proposals' },
@@ -145,6 +146,7 @@ export default function BrandHeader({ title, onLogout }) {
       case 'admin':
         return [
           { label: 'Users', href: '/admin/users' },
+          { label: 'Bulk Units', href: '/admin/units/bulk-create' },
           { label: 'Unit History', href: '/admin/unit-history' },
           { label: 'Sales Team', href: '/admin/sales' },
           { label: 'Contracts Team', href: '/admin/contracts-team' },
@@ -169,6 +171,7 @@ export default function BrandHeader({ title, onLogout }) {
           { label: 'Expired Blocks', href: '/deals/block-requests?expired=1' },
           { label: 'Current Blocks', href: '/deals/current-blocks' },
           { label: 'Reservations', href: '/deals/reservations-queue' },
+          { label: 'Bulk Units', href: '/admin/units/bulk-create' },
           { label: 'Unit History', href: '/admin/unit-history' },
           { label: 'Inventory Changes', href: '/admin/inventory-changes' },
           { label: 'Rejected Requests', href: '/admin/rejected-pricings' },
@@ -189,6 +192,7 @@ export default function BrandHeader({ title, onLogout }) {
         return [
           ...baseWithCalc,
           { label: 'Inventory', href: '/admin/inventory' },
+          { label: 'Bulk Units', href: '/admin/units/bulk-create' },
           { label: 'Unit History', href: '/admin/unit-history' },
           { label: 'My Inventory Requests', href: '/admin/inventory-change-history' }
         ]

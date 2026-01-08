@@ -118,6 +118,98 @@ function requireAdminLike(req, res, next) {
   next()
 }
 
+// Bulk create units
+router.post('/bulk-create', authMiddleware, requireAdminLike, async (req, res) => {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const { zone, block, building, floors, unitsPerFloor, model_id, base_price, description_template } = req.body || {}
+    
+    // Validations
+    if (!zone || !block || !building) return res.status(400).json({ error: { message: 'Zone, Block, and Building are required' } })
+    if (!Array.isArray(floors) || floors.length === 0) return res.status(400).json({ error: { message: 'Floors list is required' } })
+    if (!Array.isArray(unitsPerFloor) || unitsPerFloor.length === 0) return res.status(400).json({ error: { message: 'Units list is required (unit numbers per floor)' } })
+
+    let mid = null
+    if (model_id) {
+      const m = await client.query('SELECT id FROM unit_models WHERE id=$1', [Number(model_id)])
+      if (m.rows.length === 0) {
+        await client.query('ROLLBACK')
+        return res.status(400).json({ error: { message: 'Invalid model_id' } })
+      }
+      mid = Number(model_id)
+    }
+
+    const createdUnits = []
+    const duplicates = []
+
+    // Pad Helper
+    const pad = (num, size) => String(num).padStart(size, '0')
+
+    // UR-BB-CC-DDD-EE-FF
+    // BB: Apt (2), CC: Floor (2), DDD: Bldg (3), EE: Block (2), FF: Zone (2)
+    
+    const zonePad = pad(zone, 2)
+    const blockPad = pad(block, 2)
+    const bldgPad = pad(building, 3)
+
+    for (const fl of floors) {
+      const floorPad = pad(fl, 2)
+      for (const apt of unitsPerFloor) {
+        const aptPad = pad(apt, 2)
+        
+        // Code Generation
+        // Ex: UR03010801003 => UR + Apt(03) + Fl(01) + Bldg(080) + Blk(10) + Zone(03)
+        // Wait, User Ex: UR03010801003
+        // UR (2 chars)
+        // 03 (Apt)
+        // 01 (Floor)
+        // 080 (Bldg - User wrote 080 in example "DDD: Building No" but example code has 080? No, example is UR03010801003. 
+        // Breakdown: UR 03(Apt) 01(Floor) 080(Bldg) 10(Block) 03(Zone) -> UR03010801003
+        // My code: UR + aptPad + floorPad + bldgPad + blockPad + zonePad
+        
+        const code = `UR${aptPad}${floorPad}${bldgPad}${blockPad}${zonePad}`
+        
+        const desc = description_template 
+          ? description_template.replace('{apt}', apt).replace('{floor}', fl).replace('{bldg}', building)
+          : `Apartment ${apt}, Floor ${fl}, Building ${building}`
+
+        // Check duplicate in DB (optional, but postgres will throw. checking here allows partial success or friendly report)
+        const check = await client.query('SELECT id FROM units WHERE code=$1', [code])
+        if (check.rows.length > 0) {
+          duplicates.push(code)
+          continue
+        }
+
+        const insertRes = await client.query(
+          `INSERT INTO units (
+             code, description, unit_type, base_price, currency, model_id, unit_status, created_by, available,
+             unit_number, floor, building_number, block_sector, zone
+           ) VALUES (
+             $1, $2, 'Apartment', $3, 'EGP', $4, 'AVAILABLE', $5, TRUE,
+             $6, $7, $8, $9, $10
+           ) RETURNING id, code`,
+          [
+            code, desc, Number(base_price || 0), mid, req.user.id,
+            String(apt), String(fl), String(building), String(block), String(zone)
+          ]
+        )
+        createdUnits.push(insertRes.rows[0])
+      }
+    }
+
+    await client.query('COMMIT')
+    return res.json({ ok: true, created: createdUnits.length, duplicates: duplicates.length, duplicateCodes: duplicates })
+
+  } catch (e) {
+    await client.query('ROLLBACK')
+    console.error('POST /api/units/bulk-create error', e)
+    return res.status(500).json({ error: { message: 'Internal error during bulk creation' } })
+  } finally {
+    client.release()
+  }
+})
+
 // Create unit
 router.post('/', authMiddleware, requireAdminLike, async (req, res) => {
   try {

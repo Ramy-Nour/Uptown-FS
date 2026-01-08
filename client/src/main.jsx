@@ -35,6 +35,7 @@ import ContractsList from './deals/ContractsList.jsx'
 import ContractDetail from './deals/ContractDetail.jsx'
 import ReservationFormDetail from './deals/ReservationFormDetail.jsx'
 import SettingsUnlockRequests from './deals/SettingsUnlockRequests.jsx'
+import BulkUnitCreation from './units/BulkUnitCreation.jsx'
 
 function RoleBasedRoute({ children, allowedRoles }) {
   const token = localStorage.getItem('auth_token');
@@ -304,7 +305,15 @@ createRoot(document.getElementById('root')).render(
             }
           />
           <Route
-            path="/admin/sales"
+            path="/admin/units/bulk-create"
+            element={
+              <RoleBasedRoute allowedRoles={['crm_admin', 'superadmin', 'admin', 'financial_manager', 'ceo', 'chairman', 'vice_chairman']}>
+                <BulkUnitCreation />
+              </RoleBasedRoute>
+            }
+          />
+           <Route
+             path="/admin/sales"
             element={
               <RoleBasedRoute allowedRoles={['admin', 'superadmin']}>
                 <SalesTeam />

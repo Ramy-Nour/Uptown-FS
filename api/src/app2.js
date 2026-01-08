@@ -169,15 +169,18 @@ app.post('/api/generate-document', authMiddleware, validate(generateDocumentSche
     if (type) {
       const rules = TYPE_RULES[type]
       if (!rules) {
+        console.log('generate-document: Unknown documentType:', type)
         return bad(res, 400, `Unknown documentType: ${type}`)
       }
       if (!rules.allowedRoles.includes(role)) {
+        console.log('generate-document: Forbidden role:', role, 'for type:', type)
         return bad(res, 403, `Forbidden: role ${role} cannot generate ${type}`)
       }
 
       if (deal_id != null && type !== 'pricing_form') {
         const id = Number(deal_id)
         if (!Number.isFinite(id) || id <= 0) {
+          console.log('generate-document: Invalid deal_id:', deal_id)
           return bad(res, 400, 'deal_id must be a positive number')
         }
         const dq = await pool.query(
@@ -185,12 +188,16 @@ app.post('/api/generate-document', authMiddleware, validate(generateDocumentSche
           [id]
         )
         if (dq.rows.length === 0) {
+          console.log('generate-document: Deal not found:', id)
           return bad(res, 404, 'Deal not found')
         }
+        console.log('generate-document: Deal status check:', { dealId: id, status: dq.rows[0].status, type })
         if (dq.rows[0].status !== 'approved') {
+          console.log('generate-document: Deal not approved:', id, 'status:', dq.rows[0].status)
           return bad(res, 400, 'Deal must be approved before generating this document')
         }
         if (dq.rows[0].needs_override === true && !dq.rows[0].override_approved_at) {
+          console.log('generate-document: Override required for deal:', id)
           return bad(res, 403, 'Top-Management override required before generating this document')
         }
       }

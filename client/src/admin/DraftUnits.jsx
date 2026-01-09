@@ -37,8 +37,8 @@ export default function DraftUnits() {
     try {
       setLoading(true)
       setError('')
-      // Load DRAFT units (no model assigned)
-      const resp = await fetchWithAuth(`${API_URL}/api/units?status=DRAFT&pageSize=500`)
+      // Load INVENTORY_DRAFT units (no model assigned)
+      const resp = await fetchWithAuth(`${API_URL}/api/units?status=INVENTORY_DRAFT&pageSize=500`)
       const data = await resp.json()
       if (!resp.ok) throw new Error(data?.error?.message || 'Failed to load drafts')
       setUnits(data.units || data.items || [])
@@ -78,7 +78,7 @@ export default function DraftUnits() {
       alert('Please select a model')
       return
     }
-    if (!confirm(`Link ${selectedIds.length} units to the selected model? This will require TM approval.`)) return
+    if (!confirm(`Link ${selectedIds.length} units to the selected model? TM approval will be required for them to become AVAILABLE.`)) return
 
     try {
       setLinking(true)
@@ -178,7 +178,7 @@ export default function DraftUnits() {
               ))}
               {units.length === 0 && !loading && (
                 <tr>
-                  <td style={td} colSpan={9}>No DRAFT units found. Create some using Bulk Unit Creation.</td>
+                  <td style={td} colSpan={9}>No INVENTORY_DRAFT units found. Create some using Bulk Unit Creation.</td>
                 </tr>
               )}
             </tbody>

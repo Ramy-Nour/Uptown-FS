@@ -181,7 +181,7 @@ router.post('/bulk-create', authMiddleware, requireAdminLike, async (req, res) =
              code, description, unit_type, base_price, currency, model_id, unit_status, created_by, available,
              unit_number, floor, building_number, block_sector, zone
            ) VALUES (
-             $1, $2, 'Custom Home', 0, 'EGP', NULL, 'DRAFT', $3, FALSE,
+             $1, $2, 'Custom Home', 0, 'EGP', NULL, 'INVENTORY_DRAFT', $3, FALSE,
              $4, NULL, $5, $6, $7
            ) RETURNING id, code`,
           [
@@ -230,7 +230,7 @@ router.post('/bulk-create', authMiddleware, requireAdminLike, async (req, res) =
                code, description, unit_type, base_price, currency, model_id, unit_status, created_by, available,
                unit_number, floor, building_number, block_sector, zone
              ) VALUES (
-               $1, $2, 'Apartment', 0, 'EGP', NULL, 'DRAFT', $3, FALSE,
+               $1, $2, 'Apartment', 0, 'EGP', NULL, 'INVENTORY_DRAFT', $3, FALSE,
                $4, $5, $6, $7, $8
              ) RETURNING id, code`,
             [
@@ -279,18 +279,18 @@ router.patch('/bulk-link-model', authMiddleware, requireAdminLike, async (req, r
       return res.status(400).json({ error: { message: 'Invalid modelId' } })
     }
 
-    // Update units to pending model approval
+    // Update units: link model but keep INVENTORY_DRAFT (TM must approve to make AVAILABLE)
     const updateRes = await client.query(
       `UPDATE units 
-       SET model_id = $1, unit_status = 'PENDING_MODEL_APPROVAL', updated_at = now()
-       WHERE id = ANY($2) AND unit_status = 'DRAFT'
+       SET model_id = $1, updated_at = now()
+       WHERE id = ANY($2) AND unit_status = 'INVENTORY_DRAFT'
        RETURNING id, code`,
       [Number(modelId), unitIds.map(Number)]
     )
 
     if (updateRes.rows.length === 0) {
       await client.query('ROLLBACK')
-      return res.status(400).json({ error: { message: 'No valid DRAFT units found to update' } })
+      return res.status(400).json({ error: { message: 'No valid INVENTORY_DRAFT units found to update' } })
     }
 
     await client.query('COMMIT')
@@ -298,7 +298,7 @@ router.patch('/bulk-link-model', authMiddleware, requireAdminLike, async (req, r
       ok: true,
       updated: updateRes.rows.length,
       units: updateRes.rows,
-      message: `${updateRes.rows.length} units linked to model and awaiting TM approval`
+      message: `${updateRes.rows.length} units linked to model. Awaiting TM approval to become AVAILABLE.`
     })
 
   } catch (e) {
@@ -331,7 +331,7 @@ router.patch('/approve-model-link', authMiddleware, async (req, res) => {
     const updateRes = await client.query(
       `UPDATE units 
        SET unit_status = 'AVAILABLE', available = TRUE, updated_at = now()
-       WHERE id = ANY($1) AND unit_status = 'PENDING_MODEL_APPROVAL'
+       WHERE id = ANY($1) AND unit_status = 'INVENTORY_DRAFT'
        RETURNING id, code`,
       [unitIds.map(Number)]
     )

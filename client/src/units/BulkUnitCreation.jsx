@@ -122,7 +122,7 @@ export default function BulkUnitCreation() {
       const data = await res.json()
       if (!res.ok) throw new Error(data?.error?.message || 'Creation failed')
 
-      notifySuccess(`Created ${data.created} DRAFT units. ${data.duplicates > 0 ? `Skipped ${data.duplicates} duplicates.` : ''} Link them to a model on the Inventory Drafts page.`)
+      notifySuccess(`Created ${data.created} INVENTORY_DRAFT units. ${data.duplicates > 0 ? `Skipped ${data.duplicates} duplicates.` : ''} Link them to a model on the Draft Units page.`)
       setPreviewItems([])
     } catch (e) {
       notifyError(e, 'Bulk creation failed')

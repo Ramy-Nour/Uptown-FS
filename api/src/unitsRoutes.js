@@ -118,26 +118,27 @@ function requireAdminLike(req, res, next) {
   next()
 }
 
-// Bulk create units
+// Bulk create units (supports UR and CH coding modes)
 router.post('/bulk-create', authMiddleware, requireAdminLike, async (req, res) => {
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
-    const { zone, block, building, floors, unitsPerFloor, model_id, base_price, description_template } = req.body || {}
-    
-    // Validations
-    if (!zone || !block || !building) return res.status(400).json({ error: { message: 'Zone, Block, and Building are required' } })
-    if (!Array.isArray(floors) || floors.length === 0) return res.status(400).json({ error: { message: 'Floors list is required' } })
-    if (!Array.isArray(unitsPerFloor) || unitsPerFloor.length === 0) return res.status(400).json({ error: { message: 'Units list is required (unit numbers per floor)' } })
+    const {
+      unitType = 'UR',       // 'UR' (Uptown Residence) or 'CH' (Custom Home)
+      zone,
+      block,
+      building,              // For UR: building number; For CH: plot number (maps to building_number in DB)
+      floors = [],           // UR only: array of floor numbers
+      unitsPerFloor = 2,     // UR only: number of units per floor (for incremental numbering)
+      plotStart,             // CH only: start of plot range
+      plotEnd,               // CH only: end of plot range
+      description_template
+    } = req.body || {}
 
-    let mid = null
-    if (model_id) {
-      const m = await client.query('SELECT id FROM unit_models WHERE id=$1', [Number(model_id)])
-      if (m.rows.length === 0) {
-        await client.query('ROLLBACK')
-        return res.status(400).json({ error: { message: 'Invalid model_id' } })
-      }
-      mid = Number(model_id)
+    // Common validations
+    if (!zone || !block) {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ error: { message: 'Zone and Block are required' } })
     }
 
     const createdUnits = []
@@ -146,35 +147,29 @@ router.post('/bulk-create', authMiddleware, requireAdminLike, async (req, res) =
     // Pad Helper
     const pad = (num, size) => String(num).padStart(size, '0')
 
-    // UR-BB-CC-DDD-EE-FF
-    // BB: Apt (2), CC: Floor (2), DDD: Bldg (3), EE: Block (2), FF: Zone (2)
-    
     const zonePad = pad(zone, 2)
     const blockPad = pad(block, 2)
-    const bldgPad = pad(building, 3)
 
-    for (const fl of floors) {
-      const floorPad = pad(fl, 2)
-      for (const apt of unitsPerFloor) {
-        const aptPad = pad(apt, 2)
-        
-        // Code Generation
-        // Ex: UR03010801003 => UR + Apt(03) + Fl(01) + Bldg(080) + Blk(10) + Zone(03)
-        // Wait, User Ex: UR03010801003
-        // UR (2 chars)
-        // 03 (Apt)
-        // 01 (Floor)
-        // 080 (Bldg - User wrote 080 in example "DDD: Building No" but example code has 080? No, example is UR03010801003. 
-        // Breakdown: UR 03(Apt) 01(Floor) 080(Bldg) 10(Block) 03(Zone) -> UR03010801003
-        // My code: UR + aptPad + floorPad + bldgPad + blockPad + zonePad
-        
-        const code = `UR${aptPad}${floorPad}${bldgPad}${blockPad}${zonePad}`
-        
-        const desc = description_template 
-          ? description_template.replace('{apt}', apt).replace('{floor}', fl).replace('{bldg}', building)
-          : `Apartment ${apt}, Floor ${fl}, Building ${building}`
+    if (unitType === 'CH') {
+      // Custom Home mode: CH-AAA-BB-CC (Plot-Block-Zone)
+      // plotStart and plotEnd define range of plots to create
+      const pStart = Number(plotStart) || 1
+      const pEnd = Number(plotEnd) || pStart
 
-        // Check duplicate in DB (optional, but postgres will throw. checking here allows partial success or friendly report)
+      if (pStart > pEnd) {
+        await client.query('ROLLBACK')
+        return res.status(400).json({ error: { message: 'plotStart must be <= plotEnd' } })
+      }
+
+      for (let plot = pStart; plot <= pEnd; plot++) {
+        const plotPad = pad(plot, 3)
+        const code = `CH${plotPad}${blockPad}${zonePad}`
+
+        const desc = description_template
+          ? description_template.replace('{plot}', plot).replace('{block}', block).replace('{zone}', zone)
+          : `Custom Home Plot ${plot}, Block ${block}, Zone ${zone}`
+
+        // Check duplicate
         const check = await client.query('SELECT id FROM units WHERE code=$1', [code])
         if (check.rows.length > 0) {
           duplicates.push(code)
@@ -186,25 +181,172 @@ router.post('/bulk-create', authMiddleware, requireAdminLike, async (req, res) =
              code, description, unit_type, base_price, currency, model_id, unit_status, created_by, available,
              unit_number, floor, building_number, block_sector, zone
            ) VALUES (
-             $1, $2, 'Apartment', $3, 'EGP', $4, 'AVAILABLE', $5, TRUE,
-             $6, $7, $8, $9, $10
+             $1, $2, 'Custom Home', 0, 'EGP', NULL, 'DRAFT', $3, FALSE,
+             $4, NULL, $5, $6, $7
            ) RETURNING id, code`,
           [
-            code, desc, Number(base_price || 0), mid, req.user.id,
-            String(apt), String(fl), String(building), String(block), String(zone)
+            code, desc, req.user.id,
+            String(plot), String(plot), String(block), String(zone)
           ]
         )
         createdUnits.push(insertRes.rows[0])
       }
+
+    } else {
+      // UR mode: UR-BB-CC-DDD-EE-FF (Apt-Floor-Bldg-Block-Zone)
+      if (!building) {
+        await client.query('ROLLBACK')
+        return res.status(400).json({ error: { message: 'Building is required for UR mode' } })
+      }
+      if (!Array.isArray(floors) || floors.length === 0) {
+        await client.query('ROLLBACK')
+        return res.status(400).json({ error: { message: 'Floors list is required for UR mode' } })
+      }
+
+      const bldgPad = pad(building, 3)
+      const perFloor = Number(unitsPerFloor) || 2
+      let aptCounter = 1 // Incremental apartment numbering
+
+      for (const fl of floors) {
+        const floorPad = pad(fl, 2)
+        for (let u = 0; u < perFloor; u++) {
+          const aptPad = pad(aptCounter, 2)
+          const code = `UR${aptPad}${floorPad}${bldgPad}${blockPad}${zonePad}`
+
+          const desc = description_template
+            ? description_template.replace('{apt}', aptCounter).replace('{floor}', fl).replace('{bldg}', building)
+            : `Apartment ${aptCounter}, Floor ${fl}, Building ${building}`
+
+          // Check duplicate
+          const check = await client.query('SELECT id FROM units WHERE code=$1', [code])
+          if (check.rows.length > 0) {
+            duplicates.push(code)
+            aptCounter++
+            continue
+          }
+
+          const insertRes = await client.query(
+            `INSERT INTO units (
+               code, description, unit_type, base_price, currency, model_id, unit_status, created_by, available,
+               unit_number, floor, building_number, block_sector, zone
+             ) VALUES (
+               $1, $2, 'Apartment', 0, 'EGP', NULL, 'DRAFT', $3, FALSE,
+               $4, $5, $6, $7, $8
+             ) RETURNING id, code`,
+            [
+              code, desc, req.user.id,
+              String(aptCounter), String(fl), String(building), String(block), String(zone)
+            ]
+          )
+          createdUnits.push(insertRes.rows[0])
+          aptCounter++
+        }
+      }
     }
 
     await client.query('COMMIT')
-    return res.json({ ok: true, created: createdUnits.length, duplicates: duplicates.length, duplicateCodes: duplicates })
+    return res.json({ ok: true, created: createdUnits.length, duplicates: duplicates.length, duplicateCodes: duplicates, units: createdUnits })
 
   } catch (e) {
     await client.query('ROLLBACK')
     console.error('POST /api/units/bulk-create error', e)
     return res.status(500).json({ error: { message: 'Internal error during bulk creation' } })
+  } finally {
+    client.release()
+  }
+})
+
+// Bulk link model to draft units (requires TM approval)
+router.patch('/bulk-link-model', authMiddleware, requireAdminLike, async (req, res) => {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const { unitIds, modelId } = req.body || {}
+
+    if (!Array.isArray(unitIds) || unitIds.length === 0) {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ error: { message: 'unitIds array is required' } })
+    }
+    if (!modelId) {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ error: { message: 'modelId is required' } })
+    }
+
+    // Verify model exists
+    const modelCheck = await client.query('SELECT id, model_name FROM unit_models WHERE id=$1', [Number(modelId)])
+    if (modelCheck.rows.length === 0) {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ error: { message: 'Invalid modelId' } })
+    }
+
+    // Update units to pending model approval
+    const updateRes = await client.query(
+      `UPDATE units 
+       SET model_id = $1, unit_status = 'PENDING_MODEL_APPROVAL', updated_at = now()
+       WHERE id = ANY($2) AND unit_status = 'DRAFT'
+       RETURNING id, code`,
+      [Number(modelId), unitIds.map(Number)]
+    )
+
+    if (updateRes.rows.length === 0) {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ error: { message: 'No valid DRAFT units found to update' } })
+    }
+
+    await client.query('COMMIT')
+    return res.json({
+      ok: true,
+      updated: updateRes.rows.length,
+      units: updateRes.rows,
+      message: `${updateRes.rows.length} units linked to model and awaiting TM approval`
+    })
+
+  } catch (e) {
+    await client.query('ROLLBACK')
+    console.error('PATCH /api/units/bulk-link-model error', e)
+    return res.status(500).json({ error: { message: 'Internal error during bulk model linking' } })
+  } finally {
+    client.release()
+  }
+})
+
+// Approve model linking (TM only)
+router.patch('/approve-model-link', authMiddleware, async (req, res) => {
+  const role = req.user?.role
+  const tmRoles = ['ceo', 'chairman', 'vice_chairman']
+  if (!tmRoles.includes(role)) {
+    return res.status(403).json({ error: { message: 'Only Top Management can approve model linking' } })
+  }
+
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const { unitIds } = req.body || {}
+
+    if (!Array.isArray(unitIds) || unitIds.length === 0) {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ error: { message: 'unitIds array is required' } })
+    }
+
+    const updateRes = await client.query(
+      `UPDATE units 
+       SET unit_status = 'AVAILABLE', available = TRUE, updated_at = now()
+       WHERE id = ANY($1) AND unit_status = 'PENDING_MODEL_APPROVAL'
+       RETURNING id, code`,
+      [unitIds.map(Number)]
+    )
+
+    await client.query('COMMIT')
+    return res.json({
+      ok: true,
+      approved: updateRes.rows.length,
+      units: updateRes.rows
+    })
+
+  } catch (e) {
+    await client.query('ROLLBACK')
+    console.error('PATCH /api/units/approve-model-link error', e)
+    return res.status(500).json({ error: { message: 'Internal error during approval' } })
   } finally {
     client.release()
   }

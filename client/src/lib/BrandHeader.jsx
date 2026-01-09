@@ -193,6 +193,7 @@ export default function BrandHeader({ title, onLogout }) {
           ...baseWithCalc,
           { label: 'Inventory', href: '/admin/inventory' },
           { label: 'Bulk Units', href: '/admin/units/bulk-create' },
+          { label: 'Draft Units', href: '/admin/draft-units' },
           { label: 'Unit History', href: '/admin/unit-history' },
           { label: 'My Inventory Requests', href: '/admin/inventory-change-history' }
         ]

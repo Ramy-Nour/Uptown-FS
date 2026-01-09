@@ -725,7 +725,7 @@ router.post(
 
       const remainingPriceAfterDp = Math.max(
         0,
-        Number(totalExcl) - Number(dpTotal)
+        Number(totalIncl) - Number(dpTotal)
       )
 
       // Buyer information

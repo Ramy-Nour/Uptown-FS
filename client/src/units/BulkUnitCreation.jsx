@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import BrandHeader from '../lib/BrandHeader'
-import { fetchWithAuth } from '../lib/apiClient'
+import { fetchWithAuth, API_URL } from '../lib/apiClient'
 import { notifyError, notifySuccess } from '../lib/notifications'
 const APP_TITLE = import.meta.env.VITE_APP_TITLE || 'Uptown Financial System'
 
@@ -114,7 +114,7 @@ export default function BulkUnitCreation() {
         payload.unitsPerFloor = Number(unitsPerFloor) || 2
       }
 
-      const res = await fetchWithAuth('/api/units/bulk-create', {
+      const res = await fetchWithAuth(`${API_URL}/api/units/bulk-create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

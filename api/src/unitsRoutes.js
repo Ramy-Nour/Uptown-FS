@@ -112,7 +112,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
 // Admin guard helper (inventory drafts for day-to-day go via /api/inventory; this path is reserved for core admins)
 function requireAdminLike(req, res, next) {
   const role = req.user?.role
-  if (!['admin', 'superadmin'].includes(role)) {
+  if (!['admin', 'superadmin', 'crm_admin', 'financial_manager'].includes(role)) {
     return res.status(403).json({ error: { message: 'Forbidden' } })
   }
   next()

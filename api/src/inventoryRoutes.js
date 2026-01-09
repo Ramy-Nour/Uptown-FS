@@ -1415,7 +1415,15 @@ router.patch('/units/changes/:id/approve', authMiddleware, requireRole(['ceo','c
     if (ch.action === 'delete') {
       await client.query('DELETE FROM units WHERE id=$1', [ch.unit_id])
     } else if (ch.action === 'update') {
-      const p = ch.payload || {}
+      // Ensure payload is parsed as object (may be stored as string)
+      let p = ch.payload
+      if (typeof p === 'string') {
+        try { p = JSON.parse(p) } catch { p = {} }
+      }
+      p = p || {}
+      
+      console.log('Approve update - payload:', p)
+      
       const allow = ['code','unit_number','floor','building_number','block_sector','zone']
       const fields = []
       const params = []
@@ -1426,10 +1434,16 @@ router.patch('/units/changes/:id/approve', authMiddleware, requireRole(['ceo','c
           params.push(p[k] == null ? null : p[k])
         }
       }
+      console.log('Approve update - fields:', fields, 'params:', params)
+      
       if (fields.length > 0) {
         const idPh = `$${c++}`
         params.push(ch.unit_id)
-        await client.query(`UPDATE units SET ${fields.join(', ')}, updated_at=now() WHERE id=${idPh}`, params)
+        const updateSql = `UPDATE units SET ${fields.join(', ')}, updated_at=now() WHERE id=${idPh}`
+        console.log('Approve update - SQL:', updateSql)
+        await client.query(updateSql, params)
+      } else {
+        console.log('Approve update - no fields to update!')
       }
     } else {
       await client.query('ROLLBACK'); client.release(); return bad(res, 400, 'Unknown action')

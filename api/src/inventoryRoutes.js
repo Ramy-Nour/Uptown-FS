@@ -1318,7 +1318,7 @@ router.post('/units/:id/change-request', authMiddleware, requireRole(['financial
     let safePayload = {}
     if (act === 'update') {
       const p = payload && typeof payload === 'object' ? payload : {}
-      const allow = ['code','unit_number','floor','building_number','block_sector','zone']
+      const allow = ['code','unit_number','floor','building_number','block_sector','zone','model_id']
       for (const k of allow) {
         if (Object.prototype.hasOwnProperty.call(p, k)) {
           safePayload[k] = p[k]
@@ -1424,17 +1424,63 @@ router.patch('/units/changes/:id/approve', authMiddleware, requireRole(['ceo','c
       
       console.log('Approve update - payload:', p)
       
-      const allow = ['code','unit_number','floor','building_number','block_sector','zone']
+      const allow = ['code','unit_number','floor','building_number','block_sector','zone','model_id']
       const fields = []
       const params = []
       let c = 1
+      
+      // Handle model_id change: copy model attributes and pricing
+      if (Object.prototype.hasOwnProperty.call(p, 'model_id') && p.model_id) {
+        const modelId = Number(p.model_id)
+        
+        // Fetch model attributes
+        const modelRes = await client.query(
+          `SELECT id, model_name, area, orientation, has_garden, garden_area, has_roof, roof_area, garage_area
+           FROM unit_models WHERE id=$1`,
+          [modelId]
+        )
+        if (modelRes.rows.length === 0) {
+          await client.query('ROLLBACK'); client.release()
+          return bad(res, 400, 'Invalid model_id')
+        }
+        const model = modelRes.rows[0]
+        
+        // Fetch approved pricing
+        const pricingRes = await client.query(
+          `SELECT price, maintenance_price, garage_price, garden_price, roof_price, storage_price
+           FROM unit_model_pricing
+           WHERE model_id = $1 AND status = 'approved'
+           ORDER BY id DESC LIMIT 1`,
+          [modelId]
+        )
+        const pricing = pricingRes.rows[0] || {}
+        
+        // Add model_id and all model attributes to update
+        fields.push(`model_id=$${c++}`); params.push(modelId)
+        fields.push(`area=$${c++}`); params.push(model.area || null)
+        fields.push(`orientation=$${c++}`); params.push(model.orientation || null)
+        fields.push(`has_garden=$${c++}`); params.push(model.has_garden || false)
+        fields.push(`garden_area=$${c++}`); params.push(model.garden_area || null)
+        fields.push(`has_roof=$${c++}`); params.push(model.has_roof || false)
+        fields.push(`roof_area=$${c++}`); params.push(model.roof_area || null)
+        fields.push(`garage_area=$${c++}`); params.push(model.garage_area || null)
+        fields.push(`base_price=$${c++}`); params.push(pricing.price || 0)
+        fields.push(`maintenance_price=$${c++}`); params.push(pricing.maintenance_price || 0)
+        fields.push(`garage_price=$${c++}`); params.push(pricing.garage_price || 0)
+        fields.push(`garden_price=$${c++}`); params.push(pricing.garden_price || 0)
+        fields.push(`roof_price=$${c++}`); params.push(pricing.roof_price || 0)
+        fields.push(`storage_price=$${c++}`); params.push(pricing.storage_price || 0)
+      }
+      
+      // Add other allowed fields
       for (const k of allow) {
+        if (k === 'model_id') continue // Already handled above
         if (Object.prototype.hasOwnProperty.call(p, k)) {
           fields.push(`${k}=$${c++}`)
           params.push(p[k] == null ? null : p[k])
         }
       }
-      console.log('Approve update - fields:', fields, 'params:', params)
+      console.log('Approve update - fields:', fields.length, 'params count:', params.length)
       
       if (fields.length > 0) {
         const idPh = `$${c++}`

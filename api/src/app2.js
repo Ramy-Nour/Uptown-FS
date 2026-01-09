@@ -426,21 +426,17 @@ app.post('/api/generate-document', authMiddleware, validate(generateDocumentSche
               } catch {}
 
               // Recurring Clause for Remaining Price (Installments)
-              const remainingPriceClause = '، أما باقي الثمن فقد التزم الطرف الثاني بسداده للطرف الأول على أقساط (تسدد بموجب شيكات بنكية مسطرة تسلم للطرف الأول عند التعاقد او تحويل بنكي لحساب الطرف الأول) وتستحق الدفع بمجرد حلول الأجل الواردة قرين كل منها على النحو الموضح تفصيلاً بالملحق رقم (2) المرفق بهذا العقد، ولا تبرأ ذمة الطرف الثاني الا بتمام صرف الشيك أو وصول التحويل الى حساب الطرف الأول.'
-
               if (remaining > 0) {
                  // Partial Payment Scenario
                  docData['بيان الباقي من دفعة التعاقد'] = 
                    `قيمة الدفعة المقدمة مبلغ وقدره ${total.toLocaleString('en-US')} جنيه مصري ( ${totalDpWordsForContract} ) ` +
                    `تم سداد مبلغ وقدره ${paidSoFar.toLocaleString('en-US')} جنيه مصري ( ${paidWords} ) ` +
-                   `على ان يتم سداد باقي المقدم وقدره ${remaining.toLocaleString('en-US')} جنيه مصري ( ${remainingWords} ) طبقا للملحق المالي.. ` + 
-                   remainingPriceClause
+                   `على ان يتم سداد باقي المقدم وقدره ${remaining.toLocaleString('en-US')} جنيه مصري ( ${remainingWords} ) طبقا للملحق المالي. `
               } else {
                  // Full Payment Scenario
                  docData['بيان الباقي من دفعة التعاقد'] = 
                    `قيمة الدفعة المقدمة مبلغ وقدره ${total.toLocaleString('en-US')} جنيه مصري ( ${totalDpWordsForContract} ) ` +
-                   `تم سدادها بتاريخ ${paymentDateStr || '..................'}. ` + 
-                   remainingPriceClause
+                   `تم سدادها بتاريخ ${paymentDateStr || '..................'}. `
               }
             } else {
               if (remaining > 0) {

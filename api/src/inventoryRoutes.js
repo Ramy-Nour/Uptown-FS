@@ -562,7 +562,7 @@ router.get('/units/drafts', authMiddleware, requireRole(['ceo','chairman','vice_
        FROM units u
        LEFT JOIN users ru ON ru.id = u.created_by
        LEFT JOIN unit_models m ON m.id = u.model_id
-       WHERE u.unit_status='INVENTORY_DRAFT'
+       WHERE u.unit_status='INVENTORY_DRAFT' AND u.model_id IS NOT NULL
        ORDER BY u.updated_at DESC, u.id DESC`
     )
     return ok(res, { units: r.rows })
@@ -826,7 +826,7 @@ router.patch('/units/:id/approve', authMiddleware, requireRole(['ceo','chairman'
 
     const r = await pool.query(
       `UPDATE units
-       SET unit_status='AVAILABLE', approved_by=$1, updated_at=now()
+       SET unit_status='AVAILABLE', available=TRUE, approved_by=$1, updated_at=now()
        WHERE id=$2
        RETURNING *`,
       [req.user.id, id]

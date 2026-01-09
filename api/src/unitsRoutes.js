@@ -30,6 +30,12 @@ router.get('/', authMiddleware, async (req, res) => {
       placeholderCount++
     }
 
+    // Filter for units without model (noModel=true for Coded Units)
+    const noModel = req.query.noModel === 'true'
+    if (noModel) {
+      where.push(`u.model_id IS NULL`)
+    }
+
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
 
     const countRes = await pool.query(`SELECT COUNT(*)::int AS c FROM units u ${whereSql}`, params)

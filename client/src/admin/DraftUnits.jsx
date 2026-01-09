@@ -37,8 +37,8 @@ export default function DraftUnits() {
     try {
       setLoading(true)
       setError('')
-      // Load INVENTORY_DRAFT units (no model assigned)
-      const resp = await fetchWithAuth(`${API_URL}/api/units?status=INVENTORY_DRAFT&pageSize=500`)
+      // Load CODED UNITS (INVENTORY_DRAFT without model assigned)
+      const resp = await fetchWithAuth(`${API_URL}/api/units?status=INVENTORY_DRAFT&noModel=true&pageSize=500`)
       const data = await resp.json()
       if (!resp.ok) throw new Error(data?.error?.message || 'Failed to load drafts')
       setUnits(data.units || data.items || [])

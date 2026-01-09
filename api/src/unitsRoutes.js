@@ -338,12 +338,12 @@ router.patch('/bulk-link-model', authMiddleware, requireAdminLike, async (req, r
         model.has_roof || false,
         model.roof_area || null,
         model.garage_area || null,
-        pricing.price || 0,
-        pricing.maintenance_price || 0,
-        pricing.garage_price || 0,
-        pricing.garden_price || 0,
-        pricing.roof_price || 0,
-        pricing.storage_price || 0,
+        Number(pricing.price) || 0,
+        Number(pricing.maintenance_price) || 0,
+        Number(pricing.garage_price) || 0,
+        Number(pricing.garden_price) || 0,
+        Number(pricing.roof_price) || 0,
+        Number(pricing.storage_price) || 0,
         unitIds.map(Number)
       ]
     )

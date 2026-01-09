@@ -1352,7 +1352,7 @@ router.get('/units/changes', authMiddleware, requireRole(['financial_manager','f
   }
 })
 
-router.patch('/units/changes/:id/approve', authMiddleware, requireRole(['financial_manager']), async (req, res) => {
+router.patch('/units/changes/:id/approve', authMiddleware, requireRole(['ceo','chairman','vice_chairman','top_management']), async (req, res) => {
   const client = await pool.connect()
   try {
     const id = Number(req.params.id)
@@ -1401,7 +1401,7 @@ router.patch('/units/changes/:id/approve', authMiddleware, requireRole(['financi
   }
 })
 
-router.patch('/units/changes/:id/reject', authMiddleware, requireRole(['financial_manager']), async (req, res) => {
+router.patch('/units/changes/:id/reject', authMiddleware, requireRole(['ceo','chairman','vice_chairman','top_management']), async (req, res) => {
   try {
     const id = Number(req.params.id)
     const { reason } = req.body || {}

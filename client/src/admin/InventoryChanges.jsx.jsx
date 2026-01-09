@@ -112,7 +112,7 @@ export default function InventoryChanges() {
     <div>
       <BrandHeader onLogout={handleLogout} />
       <div style={pageContainer}>
-        <h2 style={pageTitle}>Inventory Change Requests (Financial Manager)</h2>
+        <h2 style={pageTitle}>Inventory Change Requests (Top Management)</h2>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
           <label style={metaText}>Status</label>
           <select value={status} onChange={e => setStatus(e.target.value)} style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #e6eaf0' }}>

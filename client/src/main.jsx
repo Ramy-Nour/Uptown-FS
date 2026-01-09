@@ -300,7 +300,7 @@ createRoot(document.getElementById('root')).render(
           <Route
             path="/admin/inventory-changes"
             element={
-              <RoleBasedRoute allowedRoles={['financial_manager']}>
+              <RoleBasedRoute allowedRoles={['ceo', 'chairman', 'vice_chairman', 'top_management']}>
                 <InventoryChanges />
               </RoleBasedRoute>
             }

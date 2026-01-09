@@ -573,6 +573,54 @@ router.get('/units/drafts', authMiddleware, requireRole(['ceo','chairman','vice_
 })
 
 /**
+ * Top Management: list inventory change requests awaiting approval
+ * NOTE: must be defined BEFORE '/units/:id' to avoid route capture ('changes' being treated as :id).
+ */
+router.get('/units/changes', authMiddleware, requireRole(['financial_manager','financial_admin','crm_admin','ceo','chairman','vice_chairman','top_management']), async (req, res) => {
+  try {
+    const { status = 'pending_approval', mine, unit_id } = req.query || {}
+    const role = req.user?.role
+    const isInventoryAdmin = role === 'financial_admin' || role === 'crm_admin'
+
+    const params = []
+    let where = '1=1'
+
+    // status filter
+    if (String(status) !== 'all') {
+      where += ` AND c.status=$${params.length + 1}`
+      params.push(String(status))
+    }
+
+    const unitIdNum = unit_id ? Number(unit_id) : null
+    if (unitIdNum && Number.isFinite(unitIdNum) && unitIdNum > 0) {
+      where += ` AND c.unit_id=$${params.length + 1}`
+      params.push(unitIdNum)
+    } else if (isInventoryAdmin) {
+      if (String(mine) !== '1') {
+        return bad(res, 403, 'Inventory admins can only view their own change history (use mine=1) or provide unit_id')
+      }
+      where += ` AND c.requested_by=$${params.length + 1}`
+      params.push(req.user.id)
+    }
+
+    const r = await pool.query(
+      `SELECT c.*, u.code AS unit_code, u.unit_status, ru.email AS requested_by_email, au.email AS approved_by_email
+       FROM unit_inventory_changes c
+       LEFT JOIN units u ON u.id = c.unit_id
+       LEFT JOIN users ru ON ru.id = c.requested_by
+       LEFT JOIN users au ON au.id = c.approved_by
+       WHERE ${where}
+       ORDER BY c.id DESC`,
+      params
+    )
+    return ok(res, { changes: r.rows })
+  } catch (e) {
+    console.error('GET /api/inventory/units/changes error:', e)
+    return bad(res, 500, 'Internal error')
+  }
+})
+
+/**
  * Fetch a single AVAILABLE unit by id with embedded model and approved standard pricing.
  * Access: consultants and above.
  */
@@ -1304,7 +1352,7 @@ router.post('/units/:id/change-request', authMiddleware, requireRole(['financial
 // --------------------
 // Financial Manager: list/approve/reject change requests
 // --------------------
-router.get('/units/changes', authMiddleware, requireRole(['financial_manager','financial_admin','crm_admin']), async (req, res) => {
+router.get('/units/changes', authMiddleware, requireRole(['financial_manager','financial_admin','crm_admin','ceo','chairman','vice_chairman','top_management']), async (req, res) => {
   try {
     const { status = 'pending_approval', mine, unit_id } = req.query || {}
     const role = req.user?.role

@@ -141,6 +141,7 @@ export default function StandardPricing() {
           std_financial_rate_percent: Number(annualRate),
           plan_duration_years: Number(years),
           installment_frequency: String(frequency),
+          standard_down_payment_percent: Number(dpPercent) || 0,
           calculated_pv: Number(pv)
         })
       });

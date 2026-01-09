@@ -21,6 +21,7 @@ router.post('/unit-model', requireRole(['financial_manager']), async (req, res) 
       std_financial_rate_percent,
       plan_duration_years,
       installment_frequency,
+      standard_down_payment_percent,
       calculated_pv
     } = req.body || {};
     if (!model_id || !Number.isFinite(Number(price))) {
@@ -31,6 +32,8 @@ router.post('/unit-model', requireRole(['financial_manager']), async (req, res) 
     const rate = std_financial_rate_percent != null ? Number(std_financial_rate_percent) : null;
     const years = plan_duration_years != null ? Number(plan_duration_years) : null;
     const freq = installment_frequency != null ? String(installment_frequency).toLowerCase().trim() : null;
+    const stdDp = standard_down_payment_percent != null ? Number(standard_down_payment_percent) : null;
+
     if (rate != null && !Number.isFinite(rate)) {
       return res.status(400).json({ error: { message: 'std_financial_rate_percent must be numeric when provided' } });
     }
@@ -40,6 +43,10 @@ router.post('/unit-model', requireRole(['financial_manager']), async (req, res) 
     if (freq != null && !['monthly','quarterly','biannually','annually','bi-annually'].includes(freq)) {
       return res.status(400).json({ error: { message: 'installment_frequency must be one of monthly|quarterly|biannually|bi-annually|annually when provided' } });
     }
+    if (stdDp != null && (!Number.isFinite(stdDp) || stdDp < 0 || stdDp > 100)) {
+      return res.status(400).json({ error: { message: 'standard_down_payment_percent must be 0..100' } });
+    }
+
     const calcPv = calculated_pv != null ? Number(calculated_pv) : null;
     if (calcPv != null && (!Number.isFinite(calcPv) || calcPv < 0)) {
       return res.status(400).json({ error: { message: 'calculated_pv must be a non-negative number when provided' } });
@@ -60,20 +67,22 @@ router.post('/unit-model', requireRole(['financial_manager']), async (req, res) 
         `UPDATE unit_model_pricing
          SET price=$1, maintenance_price=$2, garage_price=$3, garden_price=$4, roof_price=$5, storage_price=$6,
              std_financial_rate_percent=$7, plan_duration_years=$8, installment_frequency=$9, calculated_pv=$10,
+             standard_down_payment_percent=$11,
              status='pending_approval', approved_by=NULL, updated_at=now()
-         WHERE model_id=$11
+         WHERE model_id=$12
          RETURNING *`,
-        [pr, mp, gp, gdp, rfp, stp, rate, years, freq === 'biannually' ? 'biannually' : freq, calcPv, pid]
+        [pr, mp, gp, gdp, rfp, stp, rate, years, freq === 'biannually' ? 'biannually' : freq, calcPv, stdDp, pid]
       );
       out = r.rows[0];
     } else {
       const r = await pool.query(
         `INSERT INTO unit_model_pricing (model_id, price, maintenance_price, garage_price, garden_price, roof_price, storage_price,
                                          std_financial_rate_percent, plan_duration_years, installment_frequency, calculated_pv,
+                                         standard_down_payment_percent,
                                          status, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending_approval', $12)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'pending_approval', $13)
          RETURNING *`,
-        [pid, pr, mp, gp, gdp, rfp, stp, rate, years, (freq === 'biannually' ? 'biannually' : freq), calcPv, req.user.id]
+        [pid, pr, mp, gp, gdp, rfp, stp, rate, years, (freq === 'biannually' ? 'biannually' : freq), calcPv, stdDp, req.user.id]
       );
       out = r.rows[0];
     }
@@ -92,7 +101,8 @@ router.post('/unit-model', requireRole(['financial_manager']), async (req, res) 
         std_financial_rate_percent: rate,
         plan_duration_years: years,
         installment_frequency: freq,
-        calculated_pv: calcPv
+        calculated_pv: calcPv,
+        standard_down_payment_percent: stdDp
       })]
     );
 

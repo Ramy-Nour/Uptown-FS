@@ -108,7 +108,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
       LEFT JOIN unit_types ut ON ut.id = u.unit_type_id
       LEFT JOIN unit_models m ON m.id = u.model_id
       LEFT JOIN LATERAL (
-        SELECT price, maintenance_price, garage_price, garden_price, roof_price, storage_price
+        SELECT price, maintenance_price, garage_price, garden_price, roof_price, storage_price, standard_down_payment_percent
         FROM unit_model_pricing
         WHERE model_id = u.model_id AND status = 'approved'
         ORDER BY id DESC

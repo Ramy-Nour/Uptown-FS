@@ -1,5 +1,6 @@
 import express from 'express'
 import { authMiddleware, requireRole } from './authRoutes.js'
+import { pool } from './db.js'
 
 const router = express.Router()
 
@@ -156,8 +157,16 @@ function buildStandardBaselineSchedule(unit, standardPlan, baseDate) {
   const freq = standardPlan?.installment_frequency || 'monthly'
   const schedule = []
 
-  // No explicit down payment in standard baseline; all nominal spread equally unless business rules dictate otherwise
-  const eq = buildEqualSchedule(totalNominal, years, freq, baseDate)
+  // Apply standard down payment if configured in unit model pricing
+  const stdDpPct = Number(sp?.standard_down_payment_percent) || 0
+  let remaining = totalNominal
+  if (stdDpPct > 0) {
+    const dpAmt = totalNominal * (stdDpPct / 100)
+    schedule.push({ label: 'Down Payment (Standard)', month: 0, amount: dpAmt, date: computeDueDate(baseDate, 0) })
+    remaining = Math.max(0, remaining - dpAmt)
+  }
+
+  const eq = buildEqualSchedule(remaining, years, freq, baseDate)
   schedule.push(...eq)
   schedule.sort((a, b) => (a.month - b.month) || a.label.localeCompare(b.label))
   return schedule
@@ -256,6 +265,7 @@ router.post('/calculate', authMiddleware, requireRole(['property_consultant','sa
   try {
     const { unit, standardPlan, proposal } = req.body || {}
 
+    // Validation
     if (!isObject(unit) || !isObject(unit.approved_standard_pricing) || !isObject(unit.model)) {
       return bad(res, 400, 'unit must include embedded model and approved_standard_pricing')
     }
@@ -264,6 +274,17 @@ router.post('/calculate', authMiddleware, requireRole(['property_consultant','sa
     }
     if (!isObject(proposal)) {
       return bad(res, 400, 'proposal is required')
+    }
+
+    // Refresh standard pricing configuration from DB to ensure latest down payment % is used
+    if (unit.model?.id) {
+      const spRes = await pool.query(
+        `SELECT standard_down_payment_percent FROM unit_model_pricing WHERE model_id=$1 AND status='approved' ORDER BY id DESC LIMIT 1`,
+        [unit.model.id]
+      )
+      if (spRes.rows.length > 0 && spRes.rows[0].standard_down_payment_percent != null) {
+        unit.approved_standard_pricing.standard_down_payment_percent = Number(spRes.rows[0].standard_down_payment_percent)
+      }
     }
 
     // Build proposal schedule

@@ -43,7 +43,10 @@ export async function fetchWithAuth(input, init = {}, retry = true) {
       if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
         window.location.href = '/login'
       }
-      notifyError(e, 'Session expired, please login again.')
+      // Suppress "No refresh token" error (harmless race condition on logout)
+      if (e.message !== 'No refresh token') {
+        notifyError(e, 'Session expired, please login again.')
+      }
       throw e
     }
   }

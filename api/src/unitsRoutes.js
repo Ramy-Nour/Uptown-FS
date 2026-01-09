@@ -287,12 +287,17 @@ router.patch('/bulk-link-model', authMiddleware, requireAdminLike, async (req, r
       return res.status(400).json({ error: { message: 'modelId is required' } })
     }
 
-    // Verify model exists
-    const modelCheck = await client.query('SELECT id, model_name FROM unit_models WHERE id=$1', [Number(modelId)])
+    // Verify model exists and get model attributes
+    const modelCheck = await client.query(
+      `SELECT id, model_name, area, orientation, has_garden, garden_area, has_roof, roof_area, garage_area
+       FROM unit_models WHERE id=$1`,
+      [Number(modelId)]
+    )
     if (modelCheck.rows.length === 0) {
       await client.query('ROLLBACK')
       return res.status(400).json({ error: { message: 'Invalid modelId' } })
     }
+    const model = modelCheck.rows[0]
 
     // Fetch approved standard pricing for this model
     const pricingRes = await client.query(
@@ -304,21 +309,35 @@ router.patch('/bulk-link-model', authMiddleware, requireAdminLike, async (req, r
     )
     const pricing = pricingRes.rows[0] || {}
 
-    // Update units: link model and copy pricing (TM must still approve to make AVAILABLE)
+    // Update units: link model, copy model attributes and pricing
     const updateRes = await client.query(
       `UPDATE units 
        SET model_id = $1,
-           base_price = COALESCE($2, 0),
-           maintenance_price = COALESCE($3, 0),
-           garage_price = COALESCE($4, 0),
-           garden_price = COALESCE($5, 0),
-           roof_price = COALESCE($6, 0),
-           storage_price = COALESCE($7, 0),
+           area = $2,
+           orientation = $3,
+           has_garden = $4,
+           garden_area = $5,
+           has_roof = $6,
+           roof_area = $7,
+           garage_area = $8,
+           base_price = COALESCE($9, 0),
+           maintenance_price = COALESCE($10, 0),
+           garage_price = COALESCE($11, 0),
+           garden_price = COALESCE($12, 0),
+           roof_price = COALESCE($13, 0),
+           storage_price = COALESCE($14, 0),
            updated_at = now()
-       WHERE id = ANY($8) AND unit_status = 'INVENTORY_DRAFT'
+       WHERE id = ANY($15) AND unit_status = 'INVENTORY_DRAFT'
        RETURNING id, code`,
       [
         Number(modelId),
+        model.area || null,
+        model.orientation || null,
+        model.has_garden || false,
+        model.garden_area || null,
+        model.has_roof || false,
+        model.roof_area || null,
+        model.garage_area || null,
         pricing.price || 0,
         pricing.maintenance_price || 0,
         pricing.garage_price || 0,
@@ -339,7 +358,7 @@ router.patch('/bulk-link-model', authMiddleware, requireAdminLike, async (req, r
       ok: true,
       updated: updateRes.rows.length,
       units: updateRes.rows,
-      message: `${updateRes.rows.length} units linked to model with pricing. Awaiting TM approval to become AVAILABLE.`
+      message: `${updateRes.rows.length} units linked to model with attributes and pricing. Awaiting TM approval.`
     })
 
   } catch (e) {

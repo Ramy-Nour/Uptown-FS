@@ -17,17 +17,26 @@ router.get('/', authMiddleware, async (req, res) => {
     let placeholderCount = 1
 
     if (search) {
-      const searchPlaceholder = `${placeholderCount++}`
-      where.push(`(LOWER(u.code) LIKE ${searchPlaceholder} OR LOWER(u.description) LIKE ${searchPlaceholder})`)
+      where.push(`(LOWER(u.code) LIKE $${placeholderCount} OR LOWER(u.description) LIKE $${placeholderCount})`)
       params.push(`%${search}%`)
+      placeholderCount++
     }
+
+    // Filter by status (e.g., status=INVENTORY_DRAFT)
+    const status = (req.query.status || '').toString().trim()
+    if (status) {
+      where.push(`u.unit_status = $${placeholderCount}`)
+      params.push(status)
+      placeholderCount++
+    }
+
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
 
     const countRes = await pool.query(`SELECT COUNT(*)::int AS c FROM units u ${whereSql}`, params)
     const total = countRes.rows[0]?.c || 0
 
-    const limitPlaceholder = `${placeholderCount++}`
-    const offsetPlaceholder = `${placeholderCount++}`
+    const limitPlaceholder = `$${placeholderCount++}`
+    const offsetPlaceholder = `$${placeholderCount++}`
     params.push(pageSize)
     params.push(offset)
 

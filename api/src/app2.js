@@ -431,7 +431,7 @@ app.post('/api/generate-document', authMiddleware, validate(generateDocumentSche
                  docData['بيان الباقي من دفعة التعاقد'] = 
                    `قيمة الدفعة المقدمة مبلغ وقدره ${total.toLocaleString('en-US')} جنيه مصري ( ${totalDpWordsForContract} ) ` +
                    `تم سداد مبلغ وقدره ${paidSoFar.toLocaleString('en-US')} جنيه مصري ( ${paidWords} ) ` +
-                   `على ان يتم سداد باقي المقدم وقدره ${remaining.toLocaleString('en-US')} جنيه مصري ( ${remainingWords} ) طبقا للملحق المالي. `
+                   `على ان يتم سداد باقي المقدم وقدره ${remaining.toLocaleString('en-US')} جنيه مصري ( ${remainingWords} ) طبقا للملحق المالي `
               } else {
                  // Full Payment Scenario
                  docData['بيان الباقي من دفعة التعاقد'] = 

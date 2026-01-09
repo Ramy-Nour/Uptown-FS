@@ -181,7 +181,7 @@ router.get('/unit-model', requireRole(['financial_manager', 'ceo', 'chairman', '
     const r = await pool.query(
       `SELECT
          p.id, p.model_id, p.price, p.maintenance_price, p.garage_price, p.garden_price, p.roof_price, p.storage_price,
-         p.std_financial_rate_percent, p.plan_duration_years, p.installment_frequency, p.calculated_pv,
+         p.std_financial_rate_percent, p.plan_duration_years, p.installment_frequency, p.calculated_pv, p.standard_down_payment_percent,
          p.status, p.created_at, p.updated_at,
          m.model_name,
          m.model_code,
@@ -207,7 +207,7 @@ router.get('/unit-model/pending', requireRole(['ceo', 'chairman', 'vice_chairman
     const r = await pool.query(
       `SELECT
          p.id, p.model_id, p.price, p.maintenance_price, p.garage_price, p.garden_price, p.roof_price, p.storage_price,
-         p.std_financial_rate_percent, p.plan_duration_years, p.installment_frequency, p.calculated_pv,
+         p.std_financial_rate_percent, p.plan_duration_years, p.installment_frequency, p.calculated_pv, p.standard_down_payment_percent,
          p.status,
          m.model_name,
          m.model_code,

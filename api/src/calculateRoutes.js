@@ -60,6 +60,7 @@ function presentValue(schedule, ratePercent) {
   if (r <= 0) return sum(schedule.map(e => Number(e.amount) || 0))
   let pv = 0
   for (const e of schedule) {
+    if (e.excludeFromPV) continue
     const m = Number(e.month) || 0
     const tYears = m / 12
     const amt = Number(e.amount) || 0
@@ -75,7 +76,7 @@ function buildProposalSchedule(proposal, unit, standardPlan) {
 
   // Determine total nominal price from unit (approved standard pricing)
   const sp = unit?.approved_standard_pricing || {}
-  const totalNominalStd = ['price','maintenance_price','garage_price','garden_price','roof_price','storage_price']
+  const totalNominalStd = ['price','garage_price','garden_price','roof_price','storage_price']
     .map(k => Number(sp?.[k]) || 0)
     .reduce((a, b) => a + b, 0)
 
@@ -119,8 +120,10 @@ function buildProposalSchedule(proposal, unit, standardPlan) {
   }
 
   // Remaining to be scheduled as equal installments
+  // Remaining to be scheduled as equal installments (deduct separately paid garage amount if included in nominal)
   const allocated = sum(schedule.map(s => s.amount))
-  const remaining = Math.max(0, totalNominal - allocated)
+  const garageDed = Number(proposal.garagePaymentAmount) || 0
+  const remaining = Math.max(0, totalNominal - allocated - garageDed)
 
   const years = proposal.planDurationYears != null ? Number(proposal.planDurationYears) : Number(standardPlan?.plan_duration_years) || 1
   const freq = proposal.installmentFrequency || standardPlan?.installment_frequency || 'monthly'
@@ -137,7 +140,13 @@ function buildProposalSchedule(proposal, unit, standardPlan) {
     const amt = Number(proposal[ef.key]) || 0
     const month = Number(proposal[ef.monthKey]) || 0
     if (amt > 0) {
-      schedule.push({ label: ef.label, month, amount: amt, date: computeDueDate(baseDate, month) })
+      schedule.push({
+        label: ef.label,
+        month,
+        amount: amt,
+        date: computeDueDate(baseDate, month),
+        excludeFromPV: ef.key === 'maintenancePaymentAmount'
+      })
     }
   }
 
@@ -149,7 +158,7 @@ function buildProposalSchedule(proposal, unit, standardPlan) {
 // Build standard baseline schedule using standard plan settings and unit approved pricing
 function buildStandardBaselineSchedule(unit, standardPlan, baseDate) {
   const sp = unit?.approved_standard_pricing || {}
-  const totalNominal = ['price','maintenance_price','garage_price','garden_price','roof_price','storage_price']
+  const totalNominal = ['price','garage_price','garden_price','roof_price','storage_price']
     .map(k => Number(sp?.[k]) || 0)
     .reduce((a, b) => a + b, 0)
 

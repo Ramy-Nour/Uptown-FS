@@ -653,6 +653,7 @@ export default function StandardPricing() {
                 <th style={th}>Storage</th>
                 <th style={th}>Garage</th>
                 <th style={th}>Maintenance</th>
+                <th style={th}>Down Payment (%)</th>
                 <th style={th}>Calculated PV</th>
                 <th style={th}>Annual Financial Rate (%)</th>
                 <th style={th}>Plan Duration (years)</th>
@@ -713,6 +714,7 @@ export default function StandardPricing() {
                     <td style={td}>{Number(p.storage_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     <td style={td}>{Number(p.garage_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     <td style={td}>{Number(p.maintenance_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td style={td}>{Number(p.standard_down_payment_percent || 0)}%</td>
                     <td style={td}>{Number(rowPvValue || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     <td style={td}>{Number(rowRate || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
                     <td style={td}>{rowYears}</td>
@@ -771,7 +773,7 @@ export default function StandardPricing() {
               })}
               {pricings.length === 0 && (
                 <tr>
-                  <td style={td} colSpan={15}><span style={metaText}>No unit model pricing entries.</span></td>
+                  <td style={td} colSpan={16}><span style={metaText}>No unit model pricing entries.</span></td>
                 </tr>
               )}
             </tbody>

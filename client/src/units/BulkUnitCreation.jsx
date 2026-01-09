@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { BrandHeader } from '../lib/BrandHeader'
+import BrandHeader from '../lib/BrandHeader'
 import { fetchWithAuth } from '../lib/apiClient'
 import { notifyError, notifySuccess } from '../lib/notifications'
 const APP_TITLE = import.meta.env.VITE_APP_TITLE || 'Uptown Financial System'

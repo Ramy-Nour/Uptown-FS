@@ -134,7 +134,8 @@ export default function Units() {
               floor: form.floor || null,
               building_number: form.building_number || null,
               block_sector: form.block_sector || null,
-              zone: form.zone || null
+              zone: form.zone || null,
+              model_id: form.model_id ? Number(form.model_id) : null
             }
             resp = await fetchWithAuth(`${API_URL}/api/inventory/units/${editingId}/change-request`, {
               method: 'POST',
@@ -143,7 +144,7 @@ export default function Units() {
             })
             const data = await resp.json()
             if (!resp.ok) throw new Error(data?.error?.message || 'Request failed')
-            notifySuccess('Edit request submitted to Financial Manager.')
+            notifySuccess('Edit request submitted to Top Management.')
           } else {
             // Update allowed fields on draft
             const body = {
@@ -467,7 +468,7 @@ export default function Units() {
                                   })
                                   const data = await resp.json()
                                   if (!resp.ok) throw new Error(data?.error?.message || 'Request failed')
-                                  notifySuccess('Delete request submitted to Financial Manager.')
+                                  notifySuccess('Delete request submitted to Top Management.')
                                 } catch (e) {
                                   notifyError(e, 'Delete request failed')
                                 }

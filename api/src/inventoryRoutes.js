@@ -1334,11 +1334,11 @@ router.post('/units/:id/change-request', authMiddleware, requireRole(['financial
       [id, act, JSON.stringify(safePayload || {}), req.user.id]
     )
 
-    // Notify Financial Managers
+    // Notify Top Management
     await pool.query(
       `INSERT INTO notifications (user_id, type, ref_table, ref_id, message)
        SELECT u.id, 'unit_inventory_change_request', 'unit_inventory_changes', $1, 'New unit inventory change request awaiting approval.'
-       FROM users u WHERE u.role='financial_manager' AND u.active=TRUE`,
+       FROM users u WHERE u.role IN ('ceo','chairman','vice_chairman','top_management') AND u.active=TRUE`,
       [ins.rows[0].id]
     )
 

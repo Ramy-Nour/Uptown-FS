@@ -294,13 +294,39 @@ router.patch('/bulk-link-model', authMiddleware, requireAdminLike, async (req, r
       return res.status(400).json({ error: { message: 'Invalid modelId' } })
     }
 
-    // Update units: link model but keep INVENTORY_DRAFT (TM must approve to make AVAILABLE)
+    // Fetch approved standard pricing for this model
+    const pricingRes = await client.query(
+      `SELECT price, maintenance_price, garage_price, garden_price, roof_price, storage_price
+       FROM unit_model_pricing
+       WHERE model_id = $1 AND status = 'approved'
+       ORDER BY id DESC LIMIT 1`,
+      [Number(modelId)]
+    )
+    const pricing = pricingRes.rows[0] || {}
+
+    // Update units: link model and copy pricing (TM must still approve to make AVAILABLE)
     const updateRes = await client.query(
       `UPDATE units 
-       SET model_id = $1, updated_at = now()
-       WHERE id = ANY($2) AND unit_status = 'INVENTORY_DRAFT'
+       SET model_id = $1,
+           base_price = COALESCE($2, 0),
+           maintenance_price = COALESCE($3, 0),
+           garage_price = COALESCE($4, 0),
+           garden_price = COALESCE($5, 0),
+           roof_price = COALESCE($6, 0),
+           storage_price = COALESCE($7, 0),
+           updated_at = now()
+       WHERE id = ANY($8) AND unit_status = 'INVENTORY_DRAFT'
        RETURNING id, code`,
-      [Number(modelId), unitIds.map(Number)]
+      [
+        Number(modelId),
+        pricing.price || 0,
+        pricing.maintenance_price || 0,
+        pricing.garage_price || 0,
+        pricing.garden_price || 0,
+        pricing.roof_price || 0,
+        pricing.storage_price || 0,
+        unitIds.map(Number)
+      ]
     )
 
     if (updateRes.rows.length === 0) {
@@ -313,7 +339,7 @@ router.patch('/bulk-link-model', authMiddleware, requireAdminLike, async (req, r
       ok: true,
       updated: updateRes.rows.length,
       units: updateRes.rows,
-      message: `${updateRes.rows.length} units linked to model. Awaiting TM approval to become AVAILABLE.`
+      message: `${updateRes.rows.length} units linked to model with pricing. Awaiting TM approval to become AVAILABLE.`
     })
 
   } catch (e) {
